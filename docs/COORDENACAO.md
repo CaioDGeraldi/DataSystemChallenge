@@ -126,7 +126,7 @@ O coordenador também é responsável por dizer "não agora".
 
 ## 8. GitHub Projects — Kanban
 
-O GitHub Projects será o painel operacional da equipe.
+O [DataSystem Kanban](https://github.com/users/CaioDGeraldi/projects/6/views/1) será o painel operacional da equipe.
 
 Use somente quatro colunas:
 
