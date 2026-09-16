@@ -1,0 +1,31 @@
+name: Decisão
+description: Registrar uma decisão relevante do projeto
+title: "[DECISÃO] "
+body:
+  - type: textarea
+    id: pergunta
+    attributes:
+      label: O que precisa ser decidido?
+    validations:
+      required: true
+
+  - type: textarea
+    id: contexto
+    attributes:
+      label: Contexto e restrições
+    validations:
+      required: true
+
+  - type: textarea
+    id: opcoes
+    attributes:
+      label: Opções consideradas
+    validations:
+      required: true
+
+  - type: textarea
+    id: decisao
+    attributes:
+      label: Decisão
+    validations:
+      required: true

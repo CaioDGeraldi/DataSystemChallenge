@@ -1,0 +1,27 @@
+name: Tarefa
+description: Registrar trabalho com resultado verificável
+title: "[TAREFA] "
+body:
+  - type: textarea
+    id: objetivo
+    attributes:
+      label: Objetivo
+      description: Qual resultado esta tarefa deve produzir?
+    validations:
+      required: true
+
+  - type: textarea
+    id: aceite
+    attributes:
+      label: Critérios de aceite
+      placeholder: |
+        - [ ] Critério 1
+        - [ ] Critério 2
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencias
+    attributes:
+      label: Dependências ou bloqueios
+      description: O que precisa acontecer antes ou pode impedir a tarefa?
