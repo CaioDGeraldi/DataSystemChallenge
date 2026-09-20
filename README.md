@@ -16,6 +16,11 @@ O conteúdo específico do desafio será definido somente após a divulgação o
 
 Estados oficiais: `Backlog` → `Em andamento` → `Revisão` → `Concluído`.
 
+## Modelos
+
+- [MVP](docs/modelos/MVP.md)
+- [Sprint](docs/modelos/SPRINT.md)
+
 Consulte:
 - [Coordenação da equipe](docs/COORDENACAO.md)
 - [Guia de contribuição](CONTRIBUTING.md)
