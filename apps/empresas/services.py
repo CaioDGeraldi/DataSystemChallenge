@@ -1,3 +1,5 @@
+from dataclasses import asdict
+
 import hashlib
 import secrets
 
@@ -15,6 +17,8 @@ from apps.usuarios.services import (
 
 from .models import AcessoLoja, ConviteAcessoLoja, ConviteMembro, Empresa, Loja, MembroEmpresa
 from .validators import normalizar_cnpj, validar_cnpj
+from .models import ConfiguracaoFidelidadeEmpresa, OverrideFidelidadeLoja
+from .parametros import ConfiguracaoEfetiva, PADROES_FIDELIDADE
 
 
 def gerar_slug_disponivel(nome):
@@ -254,3 +258,80 @@ def revogar_convite(request, convite_id):
         convite.revogado_em = timezone.now()
         convite.save(update_fields=["revogado_em"])
         return convite
+
+
+def resolver_configuracao(empresa, loja=None):
+    if empresa.pk is None or not Empresa.objects.filter(pk=empresa.pk).exists():
+        raise ValidationError("Informe uma Empresa persistida.")
+    if loja is not None:
+        if (loja.empresa_id != empresa.pk or loja.pk is None
+                or not Loja.objects.filter(pk=loja.pk, empresa_id=empresa.pk).exists()):
+            raise ValidationError("A Loja deve pertencer à Empresa informada.")
+    corporativa = ConfiguracaoFidelidadeEmpresa.objects.filter(empresa_id=empresa.pk).first()
+    valores = asdict(PADROES_FIDELIDADE)
+    if corporativa is not None:
+        valores = {campo: getattr(corporativa, campo) for campo in valores}
+    if loja is not None:
+        override = OverrideFidelidadeLoja.objects.filter(loja_id=loja.pk).first()
+        if override is not None:
+            valores["pontos_por_real"] = override.pontos_por_real
+    return ConfiguracaoEfetiva(empresa_id=empresa.pk, loja_id=loja.pk if loja is not None else None, **valores)
+
+
+def salvar_configuracao_empresa(request, *, pontos_por_real, validade_pontos_meses,
+                                resgate_minimo_pontos, incremento_resgate_pontos,
+                                valor_monetario_por_ponto, periodo_cliente_ativo_dias):
+    with transaction.atomic():
+        contexto = exigir_administrador(request)
+        # O lock da Empresa também serializa a primeira edição, sem linha prévia.
+        empresa = Empresa.objects.select_for_update(no_key=True).get(pk=contexto.empresa_id)
+        _administrador_bloqueado(request)
+        configuracao = ConfiguracaoFidelidadeEmpresa.objects.filter(empresa=empresa).first()
+        if configuracao is None:
+            configuracao = ConfiguracaoFidelidadeEmpresa(empresa=empresa)
+        configuracao.pontos_por_real = pontos_por_real
+        configuracao.validade_pontos_meses = validade_pontos_meses
+        configuracao.resgate_minimo_pontos = resgate_minimo_pontos
+        configuracao.incremento_resgate_pontos = incremento_resgate_pontos
+        configuracao.valor_monetario_por_ponto = valor_monetario_por_ponto
+        configuracao.periodo_cliente_ativo_dias = periodo_cliente_ativo_dias
+        configuracao.save()
+        return configuracao
+
+
+def loja_para_configuracao(request, loja_id):
+    membro = exigir_administrador(request)
+    loja = Loja.objects.filter(pk=loja_id, empresa_id=membro.empresa_id).select_related("empresa").first()
+    if loja is None:
+        raise PermissionDenied("Loja não autorizada neste contexto.")
+    return loja
+
+
+def salvar_override_loja(request, loja_id, *, pontos_por_real):
+    with transaction.atomic():
+        _administrador_bloqueado(request)
+        loja = loja_para_configuracao(request, loja_id)
+        Loja.objects.select_for_update().get(pk=loja.pk)
+        override = OverrideFidelidadeLoja.objects.filter(loja=loja).first()
+        if override is None:
+            override = OverrideFidelidadeLoja(loja=loja)
+        override.pontos_por_real = pontos_por_real
+        override.save()
+        return override
+
+
+def remover_override_loja(request, loja_id):
+    with transaction.atomic():
+        _administrador_bloqueado(request)
+        loja = loja_para_configuracao(request, loja_id)
+        Loja.objects.select_for_update().get(pk=loja.pk)
+        OverrideFidelidadeLoja.objects.filter(loja=loja).delete()
+
+
+def consultar_configuracao_loja(request, loja_id):
+    loja = loja_para_configuracao(request, loja_id)
+    return {
+        "loja": loja,
+        "configuracao": resolver_configuracao(loja.empresa, loja),
+        "tem_override": OverrideFidelidadeLoja.objects.filter(loja=loja).exists(),
+    }

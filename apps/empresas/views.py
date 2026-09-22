@@ -1,3 +1,5 @@
+from dataclasses import asdict
+
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
@@ -10,8 +12,19 @@ from django.urls import reverse
 
 from apps.usuarios.services import validar_contexto_ativo
 
-from .forms import AceitarConviteForm, ConviteMembroForm, LojaForm, OnboardingEmpresaForm
+from .forms import (
+    AceitarConviteForm,
+    ConfiguracaoFidelidadeEmpresaForm,
+    ConviteMembroForm,
+    LojaForm,
+    OnboardingEmpresaForm,
+    OverrideFidelidadeLojaForm,
+)
 from .models import ConviteMembro, MembroEmpresa
+from .services import (
+    consultar_configuracao_loja, remover_override_loja, resolver_configuracao,
+    salvar_configuracao_empresa, salvar_override_loja,
+)
 from .services import (
     aceitar_convite, concluir_onboarding, criar_convite, criar_loja_no_contexto,
     exigir_administrador, localizar_convite, resolver_lojas_visiveis, revogar_convite,
@@ -134,3 +147,55 @@ def revogar_convite_view(request, convite_id):
     else:
         messages.success(request, "Convite revogado.")
     return redirect("empresas:membros")
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def configuracao_empresa(request):
+    membro = exigir_administrador(request)
+    efetiva = resolver_configuracao(membro.empresa)
+    form = ConfiguracaoFidelidadeEmpresaForm(
+        request.POST if request.method == "POST" else None, initial=asdict(efetiva),
+    )
+    if request.method == "POST" and form.is_valid():
+        try:
+            salvar_configuracao_empresa(request, **form.cleaned_data)
+        except ValidationError as exc:
+            form.add_error(None, exc.messages)
+        else:
+            messages.success(request, "Configuração da Empresa salva.")
+            return redirect("empresas:configuracao_empresa")
+    return render(request, "datasystem/formulario.html", {
+        "form": form, "titulo": f"Configuração de fidelidade — {membro.empresa}", "botao": "Salvar configuração",
+    })
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def configuracao_loja(request, loja_id):
+    if "loja_id" in request.POST and request.POST["loja_id"] != str(loja_id):
+        raise PermissionDenied("Loja divergente da URL autorizada.")
+    contexto = consultar_configuracao_loja(request, loja_id)
+    form = OverrideFidelidadeLojaForm(
+        request.POST if request.method == "POST" else None,
+        initial={"pontos_por_real": contexto["configuracao"].pontos_por_real},
+    )
+    if request.method == "POST" and form.is_valid():
+        try:
+            salvar_override_loja(request, loja_id, **form.cleaned_data)
+        except ValidationError as exc:
+            form.add_error(None, exc.messages)
+        else:
+            messages.success(request, "Override da Loja salvo.")
+            return redirect("empresas:configuracao_loja", loja_id=loja_id)
+    return render(request, "datasystem/gestor/configuracao_loja.html", {**contexto, "form": form})
+
+
+@login_required
+@require_POST
+def remover_override_loja_view(request, loja_id):
+    if "loja_id" in request.POST and request.POST["loja_id"] != str(loja_id):
+        raise PermissionDenied("Loja divergente da URL autorizada.")
+    remover_override_loja(request, loja_id)
+    messages.success(request, "Override removido. A Loja voltou a herdar da Empresa.")
+    return redirect("empresas:configuracao_loja", loja_id=loja_id)

@@ -1,13 +1,16 @@
 from datetime import timedelta
+from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
 from apps.usuarios.validators import normalizar_cpf, validar_cpf
 
 from .validators import normalizar_cnpj, validar_cnpj
+from .parametros import PADROES_FIDELIDADE
 
 
 class Empresa(models.Model):
@@ -189,3 +192,88 @@ class ConviteAcessoLoja(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         return super().save(*args, **kwargs)
+
+
+def _validar_tipos_parametros(instancia, exclude):
+    erros = {}
+    for campo in instancia._meta.fields:
+        if campo.name in (exclude or ()):
+            continue
+        if not isinstance(campo, models.DecimalField) and type(campo) is not models.PositiveIntegerField:
+            continue
+        valor = getattr(instancia, campo.name)
+        if isinstance(campo, models.DecimalField) and type(valor) is int:
+            valor = Decimal(valor)
+            setattr(instancia, campo.name, valor)
+        if isinstance(campo, models.DecimalField) and not isinstance(valor, Decimal):
+            erros[campo.name] = "Informe um Decimal, sem conversão de float."
+        elif type(campo) is models.PositiveIntegerField and type(valor) is not int:
+            erros[campo.name] = "Informe um número inteiro."
+    if erros:
+        raise ValidationError(erros)
+
+
+class ConfiguracaoFidelidadeEmpresa(models.Model):
+    empresa = models.OneToOneField(Empresa, on_delete=models.PROTECT, related_name="configuracao_fidelidade")
+    pontos_por_real = models.DecimalField(max_digits=12, decimal_places=2, default=PADROES_FIDELIDADE.pontos_por_real, validators=[MinValueValidator(Decimal("0"))])
+    validade_pontos_meses = models.PositiveIntegerField(default=PADROES_FIDELIDADE.validade_pontos_meses, validators=[MinValueValidator(1)])
+    resgate_minimo_pontos = models.PositiveIntegerField(default=PADROES_FIDELIDADE.resgate_minimo_pontos, validators=[MinValueValidator(1)])
+    incremento_resgate_pontos = models.PositiveIntegerField(default=PADROES_FIDELIDADE.incremento_resgate_pontos, validators=[MinValueValidator(1)])
+    valor_monetario_por_ponto = models.DecimalField(max_digits=12, decimal_places=2, default=PADROES_FIDELIDADE.valor_monetario_por_ponto, validators=[MinValueValidator(Decimal("0.01"))])
+    periodo_cliente_ativo_dias = models.PositiveIntegerField(default=PADROES_FIDELIDADE.periodo_cliente_ativo_dias, validators=[MinValueValidator(1)])
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(pontos_por_real__gte=0), name="cfg_empresa_pontos_nao_negativos"),
+            models.CheckConstraint(condition=models.Q(validade_pontos_meses__gt=0), name="cfg_empresa_validade_positiva"),
+            models.CheckConstraint(condition=models.Q(resgate_minimo_pontos__gt=0), name="cfg_empresa_minimo_positivo"),
+            models.CheckConstraint(condition=models.Q(incremento_resgate_pontos__gt=0), name="cfg_empresa_incremento_positivo"),
+            models.CheckConstraint(condition=models.Q(valor_monetario_por_ponto__gt=0), name="cfg_empresa_valor_positivo"),
+            models.CheckConstraint(condition=models.Q(periodo_cliente_ativo_dias__gt=0), name="cfg_empresa_periodo_positivo"),
+        ]
+
+    def clean_fields(self, exclude=None):
+        _validar_tipos_parametros(self, exclude)
+        super().clean_fields(exclude=exclude)
+
+    def clean(self):
+        super().clean()
+        if self.pk:
+            original = type(self)._base_manager.using(self._state.db).filter(pk=self.pk).values_list("empresa_id", flat=True).first()
+            if original is not None and original != self.empresa_id:
+                raise ValidationError({"empresa": "A Empresa não pode ser alterada após a criação."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Configuração de fidelidade — {self.empresa}"
+
+
+class OverrideFidelidadeLoja(models.Model):
+    loja = models.OneToOneField(Loja, on_delete=models.PROTECT, related_name="override_fidelidade")
+    pontos_por_real = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal("0"))])
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(pontos_por_real__gte=0), name="override_loja_pontos_nao_negativos"),
+        ]
+
+    def clean_fields(self, exclude=None):
+        _validar_tipos_parametros(self, exclude)
+        super().clean_fields(exclude=exclude)
+
+    def clean(self):
+        super().clean()
+        if self.pk:
+            original = type(self)._base_manager.using(self._state.db).filter(pk=self.pk).values_list("loja_id", flat=True).first()
+            if original is not None and original != self.loja_id:
+                raise ValidationError({"loja": "A Loja não pode ser alterada após a criação."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Override de fidelidade — {self.loja}"

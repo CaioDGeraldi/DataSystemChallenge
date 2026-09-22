@@ -7,8 +7,8 @@
 <h2>Lojas</h2>
 <ul>
 {% for loja in lojas %}
-<li>{{ loja.nome }} — {{ loja.cidade }}</li>
+<li>{{ loja.nome }} — {{ loja.cidade }}{% if pode_criar_loja %} <a href="{% url 'empresas:configuracao_loja' loja.pk %}">Configuração</a>{% endif %}</li>
 {% empty %}<li>Nenhuma Loja disponível neste contexto.</li>{% endfor %}
 </ul>
-{% if pode_criar_loja %}<p><a href="{% url 'empresas:membros' %}">Membros e convites</a></p><p><a href="{% url 'empresas:criar_loja' %}">Criar Loja</a></p>{% endif %}
+{% if pode_criar_loja %}<p><a href="{% url 'empresas:configuracao_empresa' %}">Configuração de fidelidade da Empresa</a></p><p><a href="{% url 'empresas:membros' %}">Membros e convites</a></p><p><a href="{% url 'empresas:criar_loja' %}">Criar Loja</a></p>{% endif %}
 {% endblock %}

@@ -2,7 +2,7 @@ from django import forms
 
 from apps.usuarios.validators import normalizar_cpf, validar_cpf
 
-from .models import Loja, MembroEmpresa
+from .models import ConfiguracaoFidelidadeEmpresa, Loja, MembroEmpresa, OverrideFidelidadeLoja
 
 from .validators import normalizar_cnpj, validar_cnpj
 
@@ -79,3 +79,18 @@ class AceitarConviteForm(forms.Form):
                 self.fields.pop(campo)
         # Nomes e confirmação são exigidos pelo service apenas se a identidade
         # ainda não existir no momento da operação, inclusive após concorrência.
+
+
+class ConfiguracaoFidelidadeEmpresaForm(forms.ModelForm):
+    class Meta:
+        model = ConfiguracaoFidelidadeEmpresa
+        fields = (
+            "pontos_por_real", "validade_pontos_meses", "resgate_minimo_pontos",
+            "incremento_resgate_pontos", "valor_monetario_por_ponto", "periodo_cliente_ativo_dias",
+        )
+
+
+class OverrideFidelidadeLojaForm(forms.ModelForm):
+    class Meta:
+        model = OverrideFidelidadeLoja
+        fields = ("pontos_por_real",)
