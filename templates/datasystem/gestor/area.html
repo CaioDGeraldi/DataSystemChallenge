@@ -1,0 +1,7 @@
+{% extends "datasystem/base.html" %}
+{% block titulo %}Área de Gestão{% endblock %}
+{% block conteudo %}
+<h1>Área de Gestão — {{ membro.empresa }}</h1>
+<p>Olá, {{ user.get_full_name }}.</p>
+<p>Papel: {{ membro.get_papel_display }}</p>
+{% endblock %}

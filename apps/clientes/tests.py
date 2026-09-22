@@ -11,7 +11,7 @@ from .models import Cliente
 
 class ClienteTests(TestCase):
     def test_cliente_nao_pode_trocar_empresa_apos_criacao(self):
-        outra_empresa = Empresa.objects.create(nome="Empresa B", cnpj="11444777000161")
+        outra_empresa = Empresa.objects.create(nome="Empresa B", slug="empresa-b", cnpj="11444777000161")
         cliente = Cliente.objects.create(usuario=self.usuario, empresa=self.empresa)
         cliente.save()
         for parcial in (False, True):
@@ -26,7 +26,7 @@ class ClienteTests(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.empresa = Empresa.objects.create(nome="Empresa A", cnpj="11222333000181")
+        cls.empresa = Empresa.objects.create(nome="Empresa A", slug="empresa-a", cnpj="11222333000181")
         cls.usuario = get_user_model().objects.create_user(
             "52998224725", first_name="Ana", last_name="Silva"
         )
@@ -49,7 +49,7 @@ class ClienteTests(TestCase):
         self.assertEqual(gestor.usuario.cpf, "52998224725")
 
     def test_usuario_pode_ter_clientes_em_empresas_distintas(self):
-        outra_empresa = Empresa.objects.create(nome="Empresa B", cnpj="11444777000161")
+        outra_empresa = Empresa.objects.create(nome="Empresa B", slug="empresa-b", cnpj="11444777000161")
         Cliente.objects.create(usuario=self.usuario, empresa=self.empresa)
         Cliente.objects.create(usuario=self.usuario, empresa=outra_empresa)
         self.assertEqual(self.usuario.clientes.count(), 2)
