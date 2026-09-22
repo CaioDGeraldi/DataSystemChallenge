@@ -1,0 +1,12 @@
+{% extends "datasystem/base.html" %}
+{% block titulo %}Configuração — {{ loja }}{% endblock %}
+{% block conteudo %}
+<h1>Configuração — {{ loja }}</h1>
+<p>Pontos por real efetivos: {{ configuracao.pontos_por_real|floatformat:2 }}</p>
+<p>Origem: {% if tem_override %}Override da Loja{% else %}Empresa{% endif %}</p>
+<form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Definir/alterar override</button></form>
+{% if tem_override %}
+<form method="post" action="{% url 'empresas:remover_override_loja' loja.pk %}">{% csrf_token %}<button type="submit">Remover override e herdar da Empresa</button></form>
+{% endif %}
+<p><a href="{% url 'empresas:area' %}">Voltar à Gestão</a></p>
+{% endblock %}
