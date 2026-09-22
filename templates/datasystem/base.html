@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{% block titulo %}DataSystem{% endblock %}</title></head>
+<body>
+<main>
+{% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
+{% block conteudo %}{% endblock %}
+{% if user.is_authenticated %}
+<form method="post" action="{% url 'usuarios:logout' %}">{% csrf_token %}<button type="submit">Sair</button></form>
+{% else %}<p><a href="{% url 'usuarios:login' %}">Entrar</a></p>{% endif %}
+</main>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{% extends "datasystem/base.html" %}
+{% block titulo %}Área do Cliente{% endblock %}
+{% block conteudo %}
+<h1>Área do Cliente — {{ cliente.empresa }}</h1>
+<p>Olá, {{ user.get_full_name }}.</p>
+<p>Seu vínculo de Cliente está confirmado nesta Empresa.</p>
+{% endblock %}

@@ -7,12 +7,17 @@ from .validators import normalizar_cnpj, validar_cnpj
 
 class Empresa(models.Model):
     nome = models.CharField(max_length=255)
+    slug = models.SlugField(unique=True)
     cnpj = models.CharField("CNPJ", max_length=14, unique=True, validators=[validar_cnpj])
     criado_em = models.DateTimeField(auto_now_add=True)
 
     def clean(self):
         self.cnpj = normalizar_cnpj(self.cnpj)
         super().clean()
+        if self.pk is not None:
+            original = type(self)._base_manager.using(self._state.db).filter(pk=self.pk).values_list("slug", flat=True).first()
+            if original is not None and self.slug != original:
+                raise ValidationError({"slug": "O slug não pode ser alterado após a criação."})
 
     def save(self, *args, **kwargs):
         # Normalizar antes da validação de max_length e unicidade dos campos.
