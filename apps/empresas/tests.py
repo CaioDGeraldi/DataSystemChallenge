@@ -4,11 +4,28 @@ from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 from django.test import TestCase
 
-from .models import Empresa, Gestor, Loja
+from .models import AcessoLoja, Empresa, MembroEmpresa, Loja
 from .validators import validar_cnpj
 
 
 class EmpresaTests(TestCase):
+    def test_loja_nao_pode_trocar_empresa_apos_criacao(self):
+        empresa = Empresa.objects.create(nome="Empresa A", cnpj="11222333000181")
+        outra_empresa = Empresa.objects.create(nome="Empresa B", cnpj="11444777000161")
+        loja = Loja.objects.create(empresa=empresa, nome="Centro", cidade="Franca")
+        loja.nome = "Centro Novo"
+        loja.save(update_fields=["nome"])
+        for parcial in (False, True):
+            with self.subTest(parcial=parcial):
+                loja.empresa_id = outra_empresa.pk
+                with self.assertRaises(ValidationError):
+                    loja.clean()
+                with self.assertRaises(ValidationError):
+                    loja.save(**({"update_fields": ["empresa"]} if parcial else {}))
+                loja.refresh_from_db()
+                self.assertEqual(loja.empresa_id, empresa.pk)
+                self.assertEqual(loja.nome, "Centro Novo")
+
     def test_cria_empresa_com_cnpj_valido(self):
         empresa = Empresa.objects.create(nome="Empresa A", cnpj="11222333000181")
         empresa.refresh_from_db()
@@ -58,7 +75,25 @@ class EmpresaTests(TestCase):
             empresa.delete()
 
 
-class GestorTests(TestCase):
+class MembroEmpresaTests(TestCase):
+    def test_membro_nao_pode_trocar_empresa_apos_criacao(self):
+        outra_empresa = Empresa.objects.create(nome="Empresa B", cnpj="11444777000161")
+        membro = MembroEmpresa.objects.create(
+            usuario=self.usuario, empresa=self.empresa, papel=MembroEmpresa.Papel.GESTOR
+        )
+        membro.ativo = False
+        membro.save(update_fields=["ativo"])
+        for parcial in (False, True):
+            with self.subTest(parcial=parcial):
+                membro.empresa = outra_empresa
+                with self.assertRaises(ValidationError):
+                    membro.clean()
+                with self.assertRaises(ValidationError):
+                    membro.save(**({"update_fields": ["empresa"]} if parcial else {}))
+                membro.refresh_from_db()
+                self.assertEqual(membro.empresa_id, self.empresa.pk)
+                self.assertFalse(membro.ativo)
+
     @classmethod
     def setUpTestData(cls):
         cls.empresa = Empresa.objects.create(nome="Empresa A", cnpj="11222333000181")
@@ -66,20 +101,97 @@ class GestorTests(TestCase):
 
     def test_empresa_com_varios_gestores_ligados_aos_usuarios(self):
         outro_usuario = get_user_model().objects.create_user("11144477735")
-        gestor = Gestor.objects.create(usuario=self.usuario, empresa=self.empresa)
-        outro_gestor = Gestor.objects.create(usuario=outro_usuario, empresa=self.empresa)
-        self.assertCountEqual(self.empresa.gestores.all(), [gestor, outro_gestor])
-        self.assertEqual(self.usuario.gestor, gestor)
+        gestor = MembroEmpresa.objects.create(usuario=self.usuario, empresa=self.empresa, papel=MembroEmpresa.Papel.GESTOR)
+        outro_gestor = MembroEmpresa.objects.create(usuario=outro_usuario, empresa=self.empresa, papel=MembroEmpresa.Papel.GESTOR)
+        self.assertCountEqual(self.empresa.membros.all(), [gestor, outro_gestor])
+        self.assertIn(gestor, self.usuario.membros_empresas.all())
         self.assertEqual(gestor.usuario, self.usuario)
 
-    def test_usuario_nao_pode_ter_segundo_gestor_em_outra_empresa(self):
+    def test_usuario_pode_ser_membro_de_empresas_distintas(self):
         outra_empresa = Empresa.objects.create(nome="Empresa B", cnpj="11444777000161")
-        Gestor.objects.create(usuario=self.usuario, empresa=self.empresa)
-        with self.assertRaises(IntegrityError), transaction.atomic():
-            Gestor.objects.create(usuario=self.usuario, empresa=outra_empresa)
+        MembroEmpresa.objects.create(usuario=self.usuario, empresa=self.empresa, papel=MembroEmpresa.Papel.GESTOR)
+        MembroEmpresa.objects.create(usuario=self.usuario, empresa=outra_empresa, papel=MembroEmpresa.Papel.ADMINISTRADOR)
+        self.assertEqual(self.usuario.membros_empresas.count(), 2)
 
     def test_gestor_protege_usuario_e_empresa_contra_exclusao(self):
-        Gestor.objects.create(usuario=self.usuario, empresa=self.empresa)
+        MembroEmpresa.objects.create(usuario=self.usuario, empresa=self.empresa, papel=MembroEmpresa.Papel.GESTOR)
         for entidade in (self.usuario, self.empresa):
+            with self.subTest(entidade=type(entidade).__name__), self.assertRaises(ProtectedError):
+                entidade.delete()
+
+    def test_nao_duplica_membro_na_mesma_empresa(self):
+        MembroEmpresa.objects.create(usuario=self.usuario, empresa=self.empresa, papel=MembroEmpresa.Papel.GESTOR)
+        with self.assertRaises(ValidationError):
+            MembroEmpresa.objects.create(usuario=self.usuario, empresa=self.empresa, papel=MembroEmpresa.Papel.ADMINISTRADOR)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            MembroEmpresa.objects.bulk_create([
+                MembroEmpresa(usuario=self.usuario, empresa=self.empresa, papel=MembroEmpresa.Papel.GESTOR)
+            ])
+
+    def test_papel_explicito_e_valido_obrigatorio(self):
+        for papel in ("", "OUTRO", None):
+            with self.subTest(papel=papel), self.assertRaises(ValidationError):
+                MembroEmpresa.objects.create(usuario=self.usuario, empresa=self.empresa, papel=papel)
+        with self.assertRaises(ValidationError):
+            MembroEmpresa.objects.create(usuario=self.usuario, empresa=self.empresa)
+
+    def test_administrador_ativo_sem_vinculos_por_loja(self):
+        membro = MembroEmpresa.objects.create(
+            usuario=self.usuario, empresa=self.empresa, papel=MembroEmpresa.Papel.ADMINISTRADOR
+        )
+        Loja.objects.create(empresa=self.empresa, nome="Nova Loja", cidade="Franca")
+        membro.refresh_from_db()
+        self.assertTrue(membro.ativo)
+        self.assertEqual(membro.papel, MembroEmpresa.Papel.ADMINISTRADOR)
+        self.assertFalse(membro.acessos_lojas.exists())
+        membro.ativo = False
+        membro.save()
+        membro.refresh_from_db()
+        self.assertFalse(membro.ativo)
+
+
+class AcessoLojaTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.empresa = Empresa.objects.create(nome="Empresa A", cnpj="11222333000181")
+        cls.outra_empresa = Empresa.objects.create(nome="Empresa B", cnpj="11444777000161")
+        cls.usuario = get_user_model().objects.create_user("52998224725")
+        cls.membro = MembroEmpresa.objects.create(
+            usuario=cls.usuario, empresa=cls.empresa, papel=MembroEmpresa.Papel.GESTOR
+        )
+        cls.loja = Loja.objects.create(empresa=cls.empresa, nome="Centro", cidade="Franca")
+        cls.outra_loja = Loja.objects.create(empresa=cls.outra_empresa, nome="Centro", cidade="Franca")
+
+    def test_gestor_com_acesso_a_varias_lojas_da_empresa(self):
+        segunda_loja = Loja.objects.create(empresa=self.empresa, nome="Shopping", cidade="Franca")
+        for loja in (self.loja, segunda_loja):
+            AcessoLoja.objects.create(membro=self.membro, loja=loja)
+        self.assertCountEqual(self.membro.acessos_lojas.values_list("loja_id", flat=True), [self.loja.pk, segunda_loja.pk])
+
+    def test_rejeita_acesso_duplicado_no_model_e_banco(self):
+        AcessoLoja.objects.create(membro=self.membro, loja=self.loja)
+        with self.assertRaises(ValidationError):
+            AcessoLoja.objects.create(membro=self.membro, loja=self.loja)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            AcessoLoja.objects.bulk_create([AcessoLoja(membro=self.membro, loja=self.loja)])
+
+    def test_clean_e_create_rejeitam_cross_tenant(self):
+        with self.assertRaises(ValidationError):
+            AcessoLoja(membro=self.membro, loja=self.outra_loja).clean()
+        with self.assertRaises(ValidationError):
+            AcessoLoja.objects.create(membro_id=self.membro.pk, loja_id=self.outra_loja.pk)
+        self.assertFalse(AcessoLoja.objects.exists())
+
+    def test_save_rejeita_alteracao_cross_tenant(self):
+        acesso = AcessoLoja.objects.create(membro=self.membro, loja=self.loja)
+        acesso.loja = self.outra_loja
+        with self.assertRaises(ValidationError):
+            acesso.save(update_fields=["loja"])
+        acesso.refresh_from_db()
+        self.assertEqual(acesso.loja_id, self.loja.pk)
+
+    def test_acesso_protege_membro_e_loja(self):
+        AcessoLoja.objects.create(membro=self.membro, loja=self.loja)
+        for entidade in (self.membro, self.loja):
             with self.subTest(entidade=type(entidade).__name__), self.assertRaises(ProtectedError):
                 entidade.delete()
