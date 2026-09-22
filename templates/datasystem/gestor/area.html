@@ -10,5 +10,5 @@
 <li>{{ loja.nome }} — {{ loja.cidade }}</li>
 {% empty %}<li>Nenhuma Loja disponível neste contexto.</li>{% endfor %}
 </ul>
-{% if pode_criar_loja %}<p><a href="{% url 'empresas:criar_loja' %}">Criar Loja</a></p>{% endif %}
+{% if pode_criar_loja %}<p><a href="{% url 'empresas:membros' %}">Membros e convites</a></p><p><a href="{% url 'empresas:criar_loja' %}">Criar Loja</a></p>{% endif %}
 {% endblock %}

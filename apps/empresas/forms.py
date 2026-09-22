@@ -1,5 +1,9 @@
 from django import forms
 
+from apps.usuarios.validators import normalizar_cpf, validar_cpf
+
+from .models import Loja, MembroEmpresa
+
 from .validators import normalizar_cnpj, validar_cnpj
 
 
@@ -31,3 +35,47 @@ class OnboardingEmpresaForm(forms.Form):
 class LojaForm(forms.Form):
     nome = forms.CharField(label="Nome da Loja", max_length=255)
     cidade = forms.CharField(label="Cidade", max_length=255)
+
+
+class ConviteMembroForm(forms.Form):
+    cpf = forms.CharField(label="CPF", max_length=32)
+    papel = forms.ChoiceField(label="Papel", choices=MembroEmpresa.Papel.choices)
+    lojas = forms.ModelMultipleChoiceField(
+        label="Lojas", queryset=Loja.objects.none(), required=False,
+        help_text="Gestor: selecione uma ou mais Lojas. Administrador: deixe vazio.",
+    )
+
+    def __init__(self, *args, empresa, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["lojas"].queryset = Loja.objects.filter(empresa=empresa).order_by("nome", "pk")
+
+    def clean_cpf(self):
+        cpf = normalizar_cpf(self.cleaned_data["cpf"])
+        validar_cpf(cpf)
+        return cpf
+
+    def clean(self):
+        dados = super().clean()
+        lojas = dados.get("lojas")
+        if dados.get("papel") == MembroEmpresa.Papel.GESTOR and not lojas:
+            self.add_error("lojas", "Selecione ao menos uma Loja.")
+        if dados.get("papel") == MembroEmpresa.Papel.ADMINISTRADOR and lojas:
+            self.add_error("lojas", "Administrador não recebe escopo por Loja.")
+        return dados
+
+
+class AceitarConviteForm(forms.Form):
+    first_name = forms.CharField(label="Nome", max_length=150, required=False)
+    last_name = forms.CharField(label="Sobrenome", max_length=150, required=False)
+    senha = forms.CharField(label="Senha", strip=False, widget=forms.PasswordInput)
+    confirmacao = forms.CharField(label="Confirme a senha", strip=False, widget=forms.PasswordInput, required=False)
+
+    def __init__(self, *args, autenticado, identidade_existente, **kwargs):
+        super().__init__(*args, **kwargs)
+        if autenticado:
+            self.fields.clear()
+        elif identidade_existente:
+            for campo in ("first_name", "last_name", "confirmacao"):
+                self.fields.pop(campo)
+        # Nomes e confirmação são exigidos pelo service apenas se a identidade
+        # ainda não existir no momento da operação, inclusive após concorrência.
