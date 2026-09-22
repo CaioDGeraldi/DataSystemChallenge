@@ -1,13 +1,17 @@
 # DataSystem Challenge
 
-Repositório do desafio da Data System. A Issue #7 inicia a base executável com Django e PostgreSQL.
+Plataforma de fidelidade multiempresa desenvolvida para o desafio da Data System. O produto é tratado como ferramenta independente: Empresas podem possuir `1..N` Lojas, políticas configuráveis, overrides por Loja, eventos/campanhas temporárias e integrações por API.
+
+A FATECalçados é utilizada como cenário e conjunto de dados de demonstração, não como regra fixa do produto.
 
 O repositório reúne:
+- código da aplicação;
+- arquitetura e decisões de produto;
+- documentação da API;
 - coordenação da equipe;
 - convenções de trabalho no GitHub;
 - Issues, Pull Requests e histórico do projeto;
-- orientação para uso do GitHub Projects em formato Kanban;
-- código da aplicação.
+- orientação para uso do GitHub Projects em formato Kanban.
 
 ## Desenvolvimento local
 
@@ -20,19 +24,24 @@ Requisitos: `uv`, Docker com Compose e acesso ao repositório `FractawModulesInf
 
 Use `POSTGRES_HOST=127.0.0.1` e `POSTGRES_PORT=5434` para o acesso local conforme o exemplo. O projeto `datasystemchallenge` mantém o volume do PostgreSQL separado do projeto `fractawmodules`. Para validar a base, execute `uv run python manage.py check`, `uv run python manage.py makemigrations --check` e `uv run python manage.py test` após carregar as variáveis.
 
+## Arquitetura e API
+
+- [Arquitetura do produto](docs/ARQUITETURA_PRODUTO.md)
+- [Estratégia e convenções da API](docs/API.md)
+
+A direção arquitetural é manter um monólito modular Django, com PostgreSQL como banco de referência e API REST versionada como interface de primeira classe para integrações externas. Regras de domínio devem ser compartilhadas entre a interface web e a API.
+
 ## Kanban
 
 [DataSystem Kanban](https://github.com/users/CaioDGeraldi/projects/6/views/1)
 
 Estados oficiais: `Backlog` → `Em andamento` → `Revisão` → `Concluído`.
 
-## Modelos
+## Modelos e processo
 
 - [MVP](docs/modelos/MVP.md)
 - [Sprint](docs/modelos/SPRINT.md)
 - [Workflow de desenvolvimento](docs/workflow-desenvolvimento.md)
 - [Uso de IA](docs/USO_DE_IA.md)
-
-Consulte:
 - [Coordenação da equipe](docs/COORDENACAO.md)
 - [Guia de contribuição](CONTRIBUTING.md)
