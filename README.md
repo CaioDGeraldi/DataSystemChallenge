@@ -26,6 +26,7 @@ Use `POSTGRES_HOST=127.0.0.1` e `POSTGRES_PORT=5434` para o acesso local conform
 
 ## Arquitetura e API
 
+- [Roadmap do produto](docs/ROADMAP.md)
 - [Arquitetura do produto](docs/ARQUITETURA_PRODUTO.md)
 - [Estratégia e convenções da API](docs/API.md)
 
