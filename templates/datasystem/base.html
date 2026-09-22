@@ -3,6 +3,7 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{% block titulo %}DataSystem{% endblock %}</title></head>
 <body>
 <main>
+<p><a href="{% url 'empresas:onboarding' %}">Criar Empresa</a></p>
 {% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
 {% block conteudo %}{% endblock %}
 {% if user.is_authenticated %}
