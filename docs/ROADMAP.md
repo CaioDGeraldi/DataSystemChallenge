@@ -36,6 +36,8 @@ Motor de pontos
 ↓
 Evento/Campanha temporária
 ↓
+Níveis e Resgate
+↓
 Dashboard
 ```
 
@@ -260,7 +262,9 @@ Loja herda 1 ponto/R$1
 
 Para a entrega inicial, campanhas conflitantes sobre a mesma regra/Loja/período devem ser impedidas em vez de combinadas implicitamente.
 
-### F3.04 — Resgate e consumo de lotes ⏳ P0/P1
+### F3.04 — Resgate e consumo de lotes ⏳ P0
+
+O fluxo mínimo de resgate é obrigatório porque os indicadores exigem pontos resgatados, descontos e custo do programa.
 
 Direção:
 
@@ -272,21 +276,21 @@ Direção:
 - valor financeiro do desconto registrado historicamente;
 - endpoint de integração quando necessário.
 
-Se o prazo apertar, o fluxo mínimo de resgate vem após Compra + pontos + evento.
+Recursos sofisticados de resgate podem ficar em P1, mas o domínio necessário para demonstrar resgates reais precisa existir no P0.
 
-### F3.05 — Níveis configuráveis ⏳ P1
+### F3.05 — Níveis configuráveis ⏳ P0
 
-Bronze/Prata/Ouro não são enums obrigatórios do produto.
+A distribuição Bronze/Prata/Ouro faz parte dos indicadores esperados do cenário de demonstração, mas esses nomes não são enums obrigatórios do produto.
 
-Direção futura:
+Direção mínima P0:
 
 - níveis por Empresa;
 - nome;
 - ordem;
-- faixa;
-- benefício configurável dentro das capacidades suportadas.
+- faixa de pontos;
+- classificação do Cliente a partir da configuração.
 
-A regra exata do benefício Prata/Ouro do cenário de demonstração continua dependendo de definição inequívoca do requisito.
+Benefícios avançados e composição flexível podem ficar em P1. A regra exata do benefício Prata/Ouro do cenário de demonstração continua dependendo de definição inequívoca do requisito antes de ser codificada.
 
 ## Fase 4 — Dados e visualização
 
@@ -318,7 +322,7 @@ Indicadores essenciais:
 - ranking de pontos acumulados;
 - evolução temporal;
 - total de clientes;
-- distribuição por níveis quando implementados;
+- distribuição por níveis;
 - pontos acumulados x resgatados;
 - taxa de recompra, se disponível de forma coerente.
 
@@ -378,6 +382,8 @@ registrar Compra pela API
 ↓
 pontos são calculados pelo domínio
 ↓
+Cliente é classificado e pode resgatar
+↓
 resultado aparece no Dashboard
 ```
 
@@ -396,14 +402,16 @@ A equipe deve conseguir explicar arquitetura, parâmetros, segurança, API, uso 
 - Compra idempotente;
 - motor de pontos;
 - pelo menos um Evento/Campanha funcional;
+- níveis configuráveis mínimos para o cenário;
+- resgate mínimo funcional;
 - seed coerente;
 - dashboard com os requisitos essenciais;
 - testes dos fluxos críticos e isolamento entre Empresas.
 
 ### P1 — importante se P0 estiver seguro
 
-- resgate completo se não couber dentro do P0 temporal;
-- níveis totalmente configuráveis;
+- benefícios avançados dos níveis;
+- variações sofisticadas de resgate;
 - taxa de recompra;
 - área do Cliente mais completa;
 - acessibilidade ampliada;
@@ -425,4 +433,4 @@ A equipe deve conseguir explicar arquitetura, parâmetros, segurança, API, uso 
 
 Nova funcionalidade só entra no P0 se for necessária para completar a vertical principal ou atender requisito obrigatório da entrega.
 
-Se uma ideia nova colocar em risco Empresa → Loja → Configuração → API → Compra → Pontos → Evento → Dashboard, ela deve ser classificada como P1 ou P2.
+Se uma ideia nova colocar em risco Empresa → Loja → Configuração → API → Compra → Pontos → Evento → Níveis/Resgate → Dashboard, ela deve ser classificada como P1 ou P2.
