@@ -1,6 +1,11 @@
+from datetime import timedelta
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
+
+from apps.usuarios.validators import normalizar_cpf, validar_cpf
 
 from .validators import normalizar_cnpj, validar_cnpj
 
@@ -110,3 +115,77 @@ class AcessoLoja(models.Model):
 
     def __str__(self):
         return f"{self.membro} — {self.loja}"
+
+
+class ConviteMembro(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.PROTECT, related_name="convites")
+    cpf = models.CharField("CPF", max_length=11, validators=[validar_cpf])
+    papel = models.CharField(max_length=13, choices=MembroEmpresa.Papel.choices)
+    token_hash = models.CharField(max_length=64, unique=True)
+    criado_por = models.ForeignKey(MembroEmpresa, on_delete=models.PROTECT, related_name="convites_criados")
+    criado_em = models.DateTimeField(default=timezone.now, editable=False)
+    expira_em = models.DateTimeField(editable=False)
+    aceito_em = models.DateTimeField(null=True, blank=True)
+    revogado_em = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def estado(self):
+        if self.aceito_em is not None:
+            return "aceito"
+        if self.revogado_em is not None:
+            return "revogado"
+        if timezone.now() >= self.expira_em:
+            return "expirado"
+        return "pendente"
+
+    @property
+    def pode_revogar(self):
+        return self.estado == "pendente"
+
+    def clean(self):
+        super().clean()
+        self.cpf = normalizar_cpf(self.cpf)
+        if self.criado_por_id and self.empresa_id:
+            empresa = MembroEmpresa.objects.filter(pk=self.criado_por_id).values_list("empresa_id", flat=True).first()
+            if empresa is not None and empresa != self.empresa_id:
+                raise ValidationError({"criado_por": "O criador deve pertencer à Empresa do convite."})
+        if self.pk:
+            original = type(self).objects.filter(pk=self.pk).values_list("empresa_id", flat=True).first()
+            if original is not None and original != self.empresa_id:
+                raise ValidationError({"empresa": "A Empresa não pode ser alterada após a criação."})
+            if self.papel != MembroEmpresa.Papel.GESTOR and self.acessos_lojas.exists():
+                raise ValidationError({"papel": "Somente convites de Gestor podem possuir Lojas."})
+
+    def save(self, *args, **kwargs):
+        self.cpf = normalizar_cpf(self.cpf)
+        if self._state.adding and self.expira_em is None:
+            self.expira_em = self.criado_em + timedelta(days=7)
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Convite {self.pk} — {self.empresa} ({self.get_papel_display()})"
+
+
+class ConviteAcessoLoja(models.Model):
+    convite = models.ForeignKey(ConviteMembro, on_delete=models.PROTECT, related_name="acessos_lojas")
+    loja = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name="acessos_convites")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["convite", "loja"], name="convite_loja_unico")
+        ]
+
+    def clean(self):
+        super().clean()
+        convite = ConviteMembro.objects.filter(pk=self.convite_id).first()
+        loja_empresa = Loja.objects.filter(pk=self.loja_id).values_list("empresa_id", flat=True).first()
+        if convite is not None:
+            if convite.papel != MembroEmpresa.Papel.GESTOR:
+                raise ValidationError({"convite": "Somente convites de Gestor recebem Lojas."})
+            if loja_empresa is not None and loja_empresa != convite.empresa_id:
+                raise ValidationError({"loja": "A Loja deve pertencer à Empresa do convite."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)

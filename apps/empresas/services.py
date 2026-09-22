@@ -1,13 +1,19 @@
-from django.contrib.auth import get_user_model, login
+import hashlib
+import secrets
+
+from django.contrib.auth import authenticate, get_user_model, login
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.utils.text import slugify
+from django.utils import timezone
+
+from apps.usuarios.validators import normalizar_cpf, validar_cpf
 
 from apps.usuarios.services import (
     CONTEXTO_SESSAO, ativar_contexto, resolver_identidade, validar_contexto_ativo,
 )
 
-from .models import Empresa, Loja, MembroEmpresa
+from .models import AcessoLoja, ConviteAcessoLoja, ConviteMembro, Empresa, Loja, MembroEmpresa
 from .validators import normalizar_cnpj, validar_cnpj
 
 
@@ -88,7 +94,7 @@ def concluir_onboarding(request, *, nome_empresa, cnpj, nome_loja, cidade_loja,
 def exigir_administrador(request):
     membro = validar_contexto_ativo(request, "gestao")
     if membro.papel != MembroEmpresa.Papel.ADMINISTRADOR:
-        raise PermissionDenied("Somente Administradores podem criar Lojas.")
+        raise PermissionDenied("Esta operação exige um Administrador.")
     return membro
 
 
@@ -112,3 +118,139 @@ def resolver_lojas_visiveis(request):
     elif membro.papel != MembroEmpresa.Papel.ADMINISTRADOR:
         raise PermissionDenied("Papel não autorizado.")
     return lojas.order_by("nome", "pk")
+
+
+def hash_token(token):
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _administrador_bloqueado(request):
+    contexto = exigir_administrador(request)
+    membro = MembroEmpresa.objects.select_for_update().filter(
+        pk=contexto.pk, usuario_id=request.user.pk, empresa_id=contexto.empresa_id,
+        ativo=True, papel=MembroEmpresa.Papel.ADMINISTRADOR,
+    ).first()
+    if membro is None:
+        raise PermissionDenied("Vínculo administrativo indisponível.")
+    return membro
+
+
+def criar_convite(request, *, cpf, papel, lojas=()):
+    cpf = normalizar_cpf(cpf)
+    validar_cpf(cpf)
+    with transaction.atomic():
+        contexto = exigir_administrador(request)
+        # Serializa convites da Empresa, inclusive quando ainda não há convite
+        # para o CPF. NO KEY UPDATE permite inserções de FKs durante aceites.
+        Empresa.objects.select_for_update(no_key=True).get(pk=contexto.empresa_id)
+        criador = _administrador_bloqueado(request)
+        ids = {loja.pk for loja in lojas}
+        selecionadas = list(Loja.objects.filter(pk__in=ids, empresa_id=criador.empresa_id))
+        if len(selecionadas) != len(ids):
+            raise ValidationError("Todas as Lojas devem pertencer à Empresa ativa.")
+        if papel not in MembroEmpresa.Papel.values:
+            raise ValidationError("Papel inválido.")
+        if papel == MembroEmpresa.Papel.ADMINISTRADOR and ids:
+            raise ValidationError("Administrador não recebe escopo por Loja.")
+        if papel == MembroEmpresa.Papel.GESTOR and not ids:
+            raise ValidationError("Selecione ao menos uma Loja para o Gestor.")
+        if MembroEmpresa.objects.filter(empresa_id=criador.empresa_id, usuario__cpf=cpf).exists():
+            raise ValidationError("Este CPF já possui vínculo com a Empresa.")
+        if ConviteMembro.objects.filter(
+            empresa_id=criador.empresa_id, cpf=cpf, aceito_em__isnull=True,
+            revogado_em__isnull=True, expira_em__gt=timezone.now(),
+        ).exists():
+            raise ValidationError("Já existe convite pendente para este CPF nesta Empresa.")
+        token = secrets.token_urlsafe(32)
+        convite = ConviteMembro.objects.create(
+            empresa_id=criador.empresa_id, criado_por=criador, cpf=cpf,
+            papel=papel, token_hash=hash_token(token),
+        )
+        for loja in selecionadas:
+            ConviteAcessoLoja.objects.create(convite=convite, loja=loja)
+        return convite, token
+
+
+def _exigir_convite_pendente(convite):
+    if convite is None or convite.estado != "pendente":
+        raise PermissionDenied("Convite indisponível ou inválido.")
+    return convite
+
+
+def localizar_convite(token):
+    return _exigir_convite_pendente(
+        ConviteMembro.objects.select_related("empresa").filter(token_hash=hash_token(token)).first()
+    )
+
+
+def _identidade_do_convite(request, convite, *, senha="", confirmacao="", first_name="", last_name=""):
+    Usuario = get_user_model()
+    usuario = Usuario.objects.select_for_update().filter(cpf=convite.cpf).first()
+    if request.user.is_authenticated:
+        if (usuario is None or usuario.pk != request.user.pk
+                or request.user.cpf != convite.cpf or not usuario.is_active):
+            raise PermissionDenied("Entre com a identidade destinatária deste convite.")
+        return usuario
+    if usuario is not None:
+        # Aceite de identidade existente solicita somente senha, sem confirmação.
+        autenticado = authenticate(request, cpf=convite.cpf, password=senha)
+        if autenticado is None or autenticado.pk != usuario.pk:
+            raise ValidationError("Não foi possível autenticar com a senha informada.")
+        return autenticado
+    # Somente a criação usa a semântica de nome, senha e confirmação. O helper
+    # também trata uma identidade criada concorrentemente antes do INSERT.
+    return resolver_identidade(
+        request=request, cpf=convite.cpf, senha=senha, confirmacao=confirmacao,
+        first_name=first_name, last_name=last_name,
+    )
+
+
+def aceitar_convite(request, token, **identidade):
+    with transaction.atomic():
+        convite = _exigir_convite_pendente(
+            ConviteMembro.objects.select_for_update().filter(token_hash=hash_token(token)).first()
+        )
+        usuario = _identidade_do_convite(request, convite, **identidade)
+        if MembroEmpresa.objects.filter(usuario=usuario, empresa_id=convite.empresa_id).exists():
+            raise ValidationError("Esta identidade já possui vínculo com a Empresa.")
+        escopos = list(convite.acessos_lojas.select_related("loja"))
+        if convite.papel == MembroEmpresa.Papel.GESTOR:
+            if not escopos or any(e.loja.empresa_id != convite.empresa_id for e in escopos):
+                raise ValidationError("O convite deve possuir Lojas válidas da própria Empresa.")
+        elif convite.papel != MembroEmpresa.Papel.ADMINISTRADOR or escopos:
+            raise ValidationError("Papel ou escopo de convite inválido.")
+        membro = MembroEmpresa.objects.create(
+            usuario=usuario, empresa_id=convite.empresa_id, papel=convite.papel, ativo=True,
+        )
+        for escopo in escopos:
+            AcessoLoja.objects.create(membro=membro, loja=escopo.loja)
+        convite.aceito_em = timezone.now()
+        convite.save(update_fields=["aceito_em"])
+
+    # Exceção restrita ao vínculo que este aceite acabou de criar para o alvo.
+    if not request.user.is_authenticated:
+        login(request, usuario)
+    anterior = request.session.pop(CONTEXTO_SESSAO, None)
+    try:
+        ativar_contexto(request, "gestao", membro.pk)
+    except PermissionDenied:
+        if anterior is not None:
+            request.session[CONTEXTO_SESSAO] = anterior
+        raise
+    return membro
+
+
+def revogar_convite(request, convite_id):
+    with transaction.atomic():
+        contexto = exigir_administrador(request)
+        convite = ConviteMembro.objects.select_for_update().filter(
+            pk=convite_id, empresa_id=contexto.empresa_id,
+        ).first()
+        _administrador_bloqueado(request)
+        if convite is None:
+            raise PermissionDenied("Convite não autorizado.")
+        if not convite.pode_revogar:
+            raise ValidationError("Somente convites pendentes podem ser revogados.")
+        convite.revogado_em = timezone.now()
+        convite.save(update_fields=["revogado_em"])
+        return convite

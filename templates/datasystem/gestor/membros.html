@@ -1,0 +1,25 @@
+{% extends "datasystem/base.html" %}
+{% block titulo %}Membros — {{ empresa }}{% endblock %}
+{% block conteudo %}
+<h1>Membros — {{ empresa }}</h1>
+<p><a href="{% url 'empresas:convidar_membro' %}">Convidar membro</a></p>
+<table>
+<caption>Membros da Empresa</caption>
+<thead><tr><th>Nome</th><th>CPF</th><th>Papel</th><th>Ativo</th></tr></thead>
+<tbody>{% for membro in membros %}<tr>
+<td>{{ membro.usuario.get_full_name }}</td>
+<td>{{ membro.usuario.cpf|slice:':3' }}.{{ membro.usuario.cpf|slice:'3:6' }}.{{ membro.usuario.cpf|slice:'6:9' }}-{{ membro.usuario.cpf|slice:'9:' }}</td>
+<td>{{ membro.get_papel_display }}</td><td>{{ membro.ativo|yesno:'Sim,Não' }}</td>
+</tr>{% empty %}<tr><td colspan="4">Nenhum membro.</td></tr>{% endfor %}</tbody>
+</table>
+<table>
+<caption>Convites</caption>
+<thead><tr><th>CPF</th><th>Papel</th><th>Estado</th><th>Expiração</th><th>Ação</th></tr></thead>
+<tbody>{% for convite in convites %}<tr>
+<td>{{ convite.cpf|slice:':3' }}.{{ convite.cpf|slice:'3:6' }}.{{ convite.cpf|slice:'6:9' }}-{{ convite.cpf|slice:'9:' }}</td>
+<td>{{ convite.get_papel_display }}</td><td>{{ convite.estado|capfirst }}</td><td>{{ convite.expira_em }}</td>
+<td>{% if convite.pode_revogar %}<form method="post" action="{% url 'empresas:revogar_convite' convite.pk %}">{% csrf_token %}<button type="submit">Revogar</button></form>{% endif %}</td>
+</tr>{% empty %}<tr><td colspan="5">Nenhum convite.</td></tr>{% endfor %}</tbody>
+</table>
+<p><a href="{% url 'empresas:area' %}">Voltar à Gestão</a></p>
+{% endblock %}

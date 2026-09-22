@@ -1,0 +1,8 @@
+{% extends "datasystem/base.html" %}
+{% block titulo %}Aceitar convite{% endblock %}
+{% block conteudo %}
+<h1>Aceitar convite — {{ convite.empresa }}</h1>
+<p>Papel: {{ convite.get_papel_display }}</p>
+<p>CPF destinatário: {{ convite.cpf|slice:':3' }}.{{ convite.cpf|slice:'3:6' }}.{{ convite.cpf|slice:'6:9' }}-{{ convite.cpf|slice:'9:' }}</p>
+<form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Aceitar convite</button></form>
+{% endblock %}
