@@ -4,4 +4,11 @@
 <h1>Área de Gestão — {{ membro.empresa }}</h1>
 <p>Olá, {{ user.get_full_name }}.</p>
 <p>Papel: {{ membro.get_papel_display }}</p>
+<h2>Lojas</h2>
+<ul>
+{% for loja in lojas %}
+<li>{{ loja.nome }} — {{ loja.cidade }}</li>
+{% empty %}<li>Nenhuma Loja disponível neste contexto.</li>{% endfor %}
+</ul>
+{% if pode_criar_loja %}<p><a href="{% url 'empresas:criar_loja' %}">Criar Loja</a></p>{% endif %}
 {% endblock %}
