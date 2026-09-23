@@ -3,8 +3,14 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 
+PRECISOES_PONTOS = (0, 1, 2, 4)
+MODOS_ARREDONDAMENTO_PONTOS = ("HALF_UP", "DOWN", "UP")
+
+
 @dataclass(frozen=True)
 class ParametrosFidelidade:
+    precisao_pontos: int
+    modo_arredondamento_pontos: str
     pontos_por_real: Decimal
     validade_pontos_meses: int
     resgate_minimo_pontos: int
@@ -14,6 +20,8 @@ class ParametrosFidelidade:
 
 
 PADROES_FIDELIDADE = ParametrosFidelidade(
+    precisao_pontos=2,
+    modo_arredondamento_pontos="HALF_UP",
     pontos_por_real=Decimal("1.00"),
     validade_pontos_meses=12,
     resgate_minimo_pontos=100,

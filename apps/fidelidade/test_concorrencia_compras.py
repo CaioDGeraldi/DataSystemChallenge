@@ -6,7 +6,7 @@ from django.db import close_old_connections, connections
 from django.test import TransactionTestCase
 from rest_framework.test import APIClient
 
-from .models import Compra
+from .models import Compra, LotePontos
 from .test_compras import DadosCompras
 
 
@@ -39,15 +39,20 @@ class ConcorrenciaCompraTests(DadosCompras, TransactionTestCase):
         respostas = self.disputar(["199.90", "199.90"])
         self.assertCountEqual([status for status, _ in respostas], [201, 200])
         self.assertEqual(Compra.objects.count(), 1)
+        self.assertEqual(LotePontos.objects.count(), 1)
+        self.assertEqual(LotePontos.objects.get().compra_id, Compra.objects.get().pk)
         self.assertEqual(respostas[0][1], respostas[1][1])
 
     def test_requests_divergentes_criam_uma_compra_e_um_conflito(self):
         respostas = self.disputar(["199.90", "200.00"])
         self.assertCountEqual([status for status, _ in respostas], [201, 409])
         self.assertEqual(Compra.objects.count(), 1)
+        self.assertEqual(LotePontos.objects.count(), 1)
+        self.assertEqual(LotePontos.objects.get().compra_id, Compra.objects.get().pk)
         for status, dados in respostas:
             if status == 201:
                 self.assertEqual(str(Compra.objects.get().valor), dados["valor"])
+                self.assertEqual(str(LotePontos.objects.get().pontos_base), dados["fidelidade"]["pontos_base"])
             else:
                 self.assertEqual(dados, {"erro": {
                     "codigo": "idempotencia_conflitante",

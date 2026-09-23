@@ -48,8 +48,8 @@ class CompraView(APIView):
     @extend_schema(
         request=RegistrarCompraSerializer,
         responses={
-            201: OpenApiResponse(CompraSerializer, description="Compra criada."),
-            200: OpenApiResponse(CompraSerializer, description="Retry equivalente; Compra original preservada."),
+            201: OpenApiResponse(CompraSerializer, description="Compra e LotePontos criados atomicamente."),
+            200: OpenApiResponse(CompraSerializer, description="Retry preserva Compra e fidelidade originais; legado sem Lote retorna fidelidade null."),
             400: OpenApiResponse(EnvelopeErroSerializer, description="requisicao_invalida"),
             401: OpenApiResponse(EnvelopeErroSerializer, description="credencial_invalida"),
             403: OpenApiResponse(EnvelopeErroSerializer, description="loja_fora_do_escopo"),
@@ -57,7 +57,9 @@ class CompraView(APIView):
             409: OpenApiResponse(EnvelopeErroSerializer, description="idempotencia_conflitante"),
             405: OpenApiResponse(EnvelopeErroSerializer, description="metodo_nao_permitido"),
         },
-        description="Registra fatos da venda, sem pontos. Idempotência por Loja + identificador externo.",
+        description=("Registra Compra e fidelidade atomicamente. Idempotência por Loja + identificador externo. "
+                     "Aplica a configuração efetiva no processamento e preserva snapshots nos retries. "
+                     "Expiração não representável retorna 400 com rollback integral."),
     )
     def post(self, request):
         entrada = RegistrarCompraSerializer(data=request.data)

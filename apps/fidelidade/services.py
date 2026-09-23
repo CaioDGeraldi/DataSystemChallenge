@@ -3,11 +3,31 @@ from django.db import IntegrityError, transaction
 
 from apps.clientes.models import Cliente
 from apps.empresas.models import Loja
-from apps.empresas.services import exigir_loja_autorizada
+from apps.empresas.services import exigir_loja_autorizada, resolver_configuracao
 from apps.usuarios.validators import normalizar_cpf, validar_cpf
 
 from .exceptions import ClienteNaoEncontrado, IdempotenciaConflitante, LojaForaDoEscopo
-from .models import Compra
+from .calculos import calcular_expiracao, calcular_pontos
+from .models import Compra, LotePontos
+
+
+def _criar_lote_da_nova_compra(compra):
+    """Somente após vencer o INSERT, dentro da transação de registrar_compra."""
+    politica = resolver_configuracao(compra.loja.empresa, compra.loja)
+    base, concedidos = calcular_pontos(
+        compra.valor, politica.pontos_por_real, politica.precisao_pontos,
+        politica.modo_arredondamento_pontos,
+    )
+    return LotePontos.objects.create(
+        compra=compra, cliente_id=compra.cliente_id,
+        pontos_base=base, pontos_concedidos=concedidos,
+        pontos_por_real_aplicado=politica.pontos_por_real,
+        precisao_pontos_aplicada=politica.precisao_pontos,
+        modo_arredondamento_aplicado=politica.modo_arredondamento_pontos,
+        validade_pontos_meses_aplicada=politica.validade_pontos_meses,
+        adquiridos_em=compra.ocorrida_em,
+        expira_em=calcular_expiracao(compra.ocorrida_em, politica.validade_pontos_meses),
+    )
 
 
 def _comparar_fatos(existente, candidata):
@@ -53,4 +73,5 @@ def registrar_compra(*, credencial, loja_id, cliente_cpf, identificador_externo,
                 raise
             existente = Compra.objects.get(**chave)
             return _comparar_fatos(existente, candidata)
+        _criar_lote_da_nova_compra(candidata)
         return candidata, True

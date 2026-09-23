@@ -55,6 +55,7 @@ class ParametrosDominioTests(DadosParametros, TestCase):
         self.assertIsInstance(efetiva, ConfiguracaoEfetiva)
         self.assertEqual(asdict(efetiva), {
             "empresa_id": self.empresa.pk, "loja_id": None, "pontos_por_real": Decimal("1.00"),
+            "precisao_pontos": 2, "modo_arredondamento_pontos": "HALF_UP",
             "validade_pontos_meses": 12, "resgate_minimo_pontos": 100, "incremento_resgate_pontos": 100,
             "valor_monetario_por_ponto": Decimal("0.05"), "periodo_cliente_ativo_dias": 180,
         })
@@ -110,7 +111,8 @@ class ParametrosDominioTests(DadosParametros, TestCase):
     def test_constraints_numericas_no_banco(self):
         config = self.salvar()
         for campo in asdict(PADROES_FIDELIDADE):
-            invalido = -1 if campo == "pontos_por_real" else 0
+            invalido = {"pontos_por_real": -1, "precisao_pontos": 3,
+                        "modo_arredondamento_pontos": "INVALID"}.get(campo, 0)
             with self.subTest(campo=campo), self.assertRaises(IntegrityError), transaction.atomic():
                 # Bypass deliberado da validação para conferir a defesa SQL.
                 ConfiguracaoFidelidadeEmpresa.objects.filter(pk=config.pk).update(**{campo: invalido})
@@ -274,3 +276,56 @@ class ParametrosHTTPTests(DadosParametros, TestCase):
         resposta = self.client.get(reverse("empresas:area"))
         self.assertNotContains(resposta, self.urls()[0])
         self.assertNotContains(resposta, self.urls()[1])
+
+
+class PoliticaPontosTests(DadosParametros, TestCase):
+    def test_choices_persistidas_com_resolucao_corporativa_e_override_apenas_da_taxa(self):
+        from .forms import OverrideFidelidadeLojaForm
+
+        salvar_override_loja(self.request(), self.loja.pk, pontos_por_real=Decimal('1.25'))
+        for precisao in (0, 1, 2, 4):
+            for modo in ('HALF_UP', 'DOWN', 'UP'):
+                self.salvar(precisao_pontos=precisao, modo_arredondamento_pontos=modo)
+                efetiva = resolver_configuracao(self.empresa, self.loja)
+                self.assertEqual((efetiva.precisao_pontos, efetiva.modo_arredondamento_pontos), (precisao, modo))
+                self.assertEqual(efetiva.pontos_por_real, Decimal('1.25'))
+                outra = resolver_configuracao(self.outra)
+                self.assertEqual((outra.precisao_pontos, outra.modo_arredondamento_pontos), (2, 'HALF_UP'))
+        self.assertEqual(set(OverrideFidelidadeLojaForm().fields), {'pontos_por_real'})
+        self.assertNotIn('precisao_pontos', {f.name for f in OverrideFidelidadeLoja._meta.fields})
+        self.assertNotIn('modo_arredondamento_pontos', {f.name for f in OverrideFidelidadeLoja._meta.fields})
+
+    def test_choices_invalidas_rejeitadas_no_model_e_service(self):
+        for campo, valores in {
+            'precisao_pontos': (-1, 3, 5, True, '2', Decimal('2'), None),
+            'modo_arredondamento_pontos': ('half_up', 'HALF_EVEN', '', None, 1),
+        }.items():
+            for valor in valores:
+                for metodo in ('full_clean', 'save', 'service'):
+                    with self.subTest(campo=campo, valor=valor, metodo=metodo), self.assertRaises(ValidationError):
+                        if metodo == 'service':
+                            self.salvar(**{campo: valor})
+                        else:
+                            config = ConfiguracaoFidelidadeEmpresa(empresa=self.empresa, **self.valores(**{campo: valor}))
+                            getattr(config, metodo)()
+        self.assertFalse(ConfiguracaoFidelidadeEmpresa.objects.exists())
+
+    def test_form_admin_persiste_politica_e_post_loja_nao_sobrescreve(self):
+        self.autenticar()
+        url = reverse('empresas:configuracao_empresa')
+        resposta = self.client.get(url)
+        for campo in ('precisao_pontos', 'modo_arredondamento_pontos'):
+            self.assertIn(campo, resposta.context['form'].fields)
+        resposta = self.client.post(url, self.valores(precisao_pontos=0, modo_arredondamento_pontos='DOWN'))
+        self.assertEqual(resposta.status_code, 302)
+        self.assertEqual(resolver_configuracao(self.empresa).precisao_pontos, 0)
+        self.assertEqual(resolver_configuracao(self.empresa).modo_arredondamento_pontos, 'DOWN')
+        resposta = self.client.post(reverse('empresas:configuracao_loja', args=[self.loja.pk]), {
+            'pontos_por_real': '1.25', 'precisao_pontos': 4, 'modo_arredondamento_pontos': 'UP',
+        })
+        self.assertEqual(resposta.status_code, 302)
+        efetiva = resolver_configuracao(self.empresa, self.loja)
+        self.assertEqual((efetiva.precisao_pontos, efetiva.modo_arredondamento_pontos), (0, 'DOWN'))
+        for mudanca in ({'precisao_pontos': 3}, {'modo_arredondamento_pontos': 'HALF_EVEN'}):
+            resposta = self.client.post(url, self.valores(**mudanca))
+            self.assertTrue(resposta.context['form'].errors)

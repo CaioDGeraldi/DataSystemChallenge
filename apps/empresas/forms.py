@@ -87,7 +87,8 @@ class ConfiguracaoFidelidadeEmpresaForm(forms.ModelForm):
     class Meta:
         model = ConfiguracaoFidelidadeEmpresa
         fields = (
-            "pontos_por_real", "validade_pontos_meses", "resgate_minimo_pontos",
+            "pontos_por_real", "precisao_pontos", "modo_arredondamento_pontos",
+            "validade_pontos_meses", "resgate_minimo_pontos",
             "incremento_resgate_pontos", "valor_monetario_por_ponto", "periodo_cliente_ativo_dias",
         )
 

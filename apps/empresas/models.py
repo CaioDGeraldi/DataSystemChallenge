@@ -15,7 +15,7 @@ from django.utils import timezone
 from apps.usuarios.validators import normalizar_cpf, validar_cpf
 
 from .validators import normalizar_cnpj, validar_cnpj
-from .parametros import PADROES_FIDELIDADE
+from .parametros import PADROES_FIDELIDADE, PRECISOES_PONTOS, MODOS_ARREDONDAMENTO_PONTOS
 
 
 class Empresa(models.Model):
@@ -219,6 +219,13 @@ def _validar_tipos_parametros(instancia, exclude):
 
 
 class ConfiguracaoFidelidadeEmpresa(models.Model):
+    precisao_pontos = models.PositiveIntegerField(
+        choices=[(v, str(v)) for v in PRECISOES_PONTOS], default=PADROES_FIDELIDADE.precisao_pontos,
+    )
+    modo_arredondamento_pontos = models.CharField(
+        max_length=7, choices=[(v, v) for v in MODOS_ARREDONDAMENTO_PONTOS],
+        default=PADROES_FIDELIDADE.modo_arredondamento_pontos,
+    )
     empresa = models.OneToOneField(Empresa, on_delete=models.PROTECT, related_name="configuracao_fidelidade")
     pontos_por_real = models.DecimalField(max_digits=12, decimal_places=2, default=PADROES_FIDELIDADE.pontos_por_real, validators=[MinValueValidator(Decimal("0"))])
     validade_pontos_meses = models.PositiveIntegerField(default=PADROES_FIDELIDADE.validade_pontos_meses, validators=[MinValueValidator(1)])
@@ -230,6 +237,8 @@ class ConfiguracaoFidelidadeEmpresa(models.Model):
     class Meta:
         constraints = [
             models.CheckConstraint(condition=models.Q(pontos_por_real__gte=0), name="cfg_empresa_pontos_nao_negativos"),
+            models.CheckConstraint(condition=models.Q(precisao_pontos__in=[0, 1, 2, 4]), name="cfg_empresa_precisao_valida"),
+            models.CheckConstraint(condition=models.Q(modo_arredondamento_pontos__in=["HALF_UP", "DOWN", "UP"]), name="cfg_empresa_arredondamento_valido"),
             models.CheckConstraint(condition=models.Q(validade_pontos_meses__gt=0), name="cfg_empresa_validade_positiva"),
             models.CheckConstraint(condition=models.Q(resgate_minimo_pontos__gt=0), name="cfg_empresa_minimo_positivo"),
             models.CheckConstraint(condition=models.Q(incremento_resgate_pontos__gt=0), name="cfg_empresa_incremento_positivo"),
