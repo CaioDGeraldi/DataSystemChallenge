@@ -225,7 +225,7 @@ Entregue:
 - OpenAPI refletindo somente endpoints realmente implementados;
 - testes de autenticação, tenancy, HTTP, CSRF, migration e schema.
 
-Compra e idempotência transacional foram entregues posteriormente na F3.01. O motor base de pontos e `LotePontos` foi entregue na F3.02. Resgate, Cliente REST, níveis e campanhas/eventos permanecem futuros.
+Compra e idempotência transacional foram entregues posteriormente na F3.01. O motor base de pontos e `LotePontos` foi entregue na F3.02. Campanhas/eventos temporários foram entregues na F3.03. Resgate, Cliente REST e níveis permanecem futuros.
 
 ## Fase 3 — Motor de fidelidade
 
@@ -280,35 +280,42 @@ Entregue:
 - OpenAPI, `docs/API.md` e `docs/APRESENTACAO.md` atualizados;
 - validação em PostgreSQL com 87 testes focais e 291 testes totais, além dos gates de migrations, diff, lock e OpenAPI.
 
-Limitações deliberadas: não existe backfill automático, saldo consumível, Resgate, campanhas/eventos, níveis ou versionamento temporal completo de configurações nesta fase. Operações bulk, `QuerySet.update` e SQL bruto continuam fora dos caminhos normais protegidos pelo model.
+Limitações deliberadas da F3.02: não havia backfill automático, saldo consumível, Resgate, campanhas/eventos, níveis ou versionamento temporal completo de configurações. Campanhas/eventos foram entregues posteriormente na F3.03. Operações bulk, `QuerySet.update` e SQL bruto continuam fora dos caminhos normais protegidos pelo model.
 
-### F3.03 — Eventos/Campanhas 🟡 P0
+### F3.03 — Eventos/Campanhas ✅ P0
+
+Issue: #26.
+
+Entregue:
+
+- `EventoFidelidade` separado de `EfeitoEvento`;
+- escopo `EMPRESA`, cobrindo Lojas atuais e futuras do tenant, ou `LOJAS`, com conjunto relacional explícito;
+- único efeito operacional nesta fase: `MULTIPLICADOR_PONTOS` com `DecimalField(max_digits=12, decimal_places=4)` e valor estritamente positivo;
+- aplicabilidade temporal baseada em `Compra.ocorrida_em`, com limites inclusivos;
+- cálculo `Compra.valor × pontos_por_real = pontos_base`, aplicação do multiplicador sobre a base exata e política corporativa de precisão/arredondamento aplicada uma única vez ao resultado final;
+- `pontos_base` preservado como valor pré-campanha;
+- `multiplicador_pontos_aplicado` imutável em `LotePontos`, com `1.0000` como snapshot neutro para operações sem campanha e Lotes históricos;
+- `AplicacaoEfeitoEventoLote` para preservar proveniência histórica de Lote, Evento, Efeito, tipo e valor aplicados;
+- campanha `1.0000x` também registra aplicação histórica quando efetivamente selecionada;
+- definição de Evento, efeitos e conjunto de Lojas congelada após criação; mudança exige cancelar e criar novo Evento;
+- cancelamento explícito `null → timestamp`, sem reativação, reescrita ou exclusão normal do histórico;
+- estados `AGENDADO`, `VIGENTE`, `ENCERRADO` e `CANCELADO` derivados, sem campo redundante;
+- conflitos do mesmo efeito bloqueados quando há período inclusivamente sobreposto e Loja efetivamente compartilhada, cobrindo `EMPRESA × EMPRESA`, `EMPRESA × LOJAS` e `LOJAS × LOJAS`;
+- criação, cancelamento e resolução de campanha serializados por lock PostgreSQL da Empresa para evitar disputa concorrente de definição/aplicação;
+- autorização de gestão restrita a Administrador ativo; Gestor não cria nem cancela Evento nesta fase;
+- interface mínima para listar, criar e cancelar Eventos, sem CRUD público de campanhas na API;
+- integração atômica `Compra + LotePontos + AplicacaoEfeitoEventoLote` para novas Compras vencedoras;
+- retry equivalente preserva o histórico original sem resolver Evento novamente; Compras legadas sem Lote continuam retornando `fidelidade: null`;
+- API pública de Compra preservada com `pontos_base`, `pontos_concedidos` e `expira_em`, sem expor snapshots internos da campanha;
+- migration incremental `fidelidade.0003_eventos_fidelidade`;
+- `docs/API.md` e `docs/APRESENTACAO.md` atualizados para o fluxo real;
+- validação em PostgreSQL com 99 testes focais e 325 testes totais, além de `check`, `makemigrations --check`, migration aplicada, OpenAPI, `git diff --check` e `uv lock --check`.
+
+Limitações deliberadas: somente `MULTIPLICADOR_PONTOS` é operacional; não há `BONUS_PONTOS_PERCENTUAL`, `DESCONTO_GERAL_PERCENTUAL`, saldo, Resgate, níveis, backfill de campanhas, combinação automática de campanhas conflitantes nem versionamento temporal completo das configurações permanentes. Operações bulk, `QuerySet.update` e SQL bruto continuam fora dos caminhos normais protegidos pelo domínio.
+
+### F3.04 — Resgate e consumo de lotes 🟡 P0
 
 Próxima fase da vertical principal.
-
-Issue aberta: #26.
-
-Primeira capacidade priorizada:
-
-- nome;
-- período;
-- escopo Empresa ou conjunto de Lojas;
-- multiplicador temporário de pontos.
-
-Exemplo de demonstração:
-
-```text
-Loja herda 1 ponto/R$1
-+ Black Friday 2x
-+ Compra R$200
-= 400 pontos
-```
-
-Para a entrega inicial, campanhas conflitantes sobre a mesma regra/Loja/período devem ser impedidas em vez de combinadas implicitamente.
-
-A base operacional de Compra e cálculo de pontos já existe após F3.01/F3.02; a F3.03 deve aplicar efeitos temporários sem perder os snapshots históricos da concessão.
-
-### F3.04 — Resgate e consumo de lotes ⏳ P0
 
 O fluxo mínimo de resgate é obrigatório porque os indicadores exigem pontos resgatados, descontos e custo do programa.
 
