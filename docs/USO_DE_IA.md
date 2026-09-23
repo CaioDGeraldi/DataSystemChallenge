@@ -45,26 +45,36 @@ Entender o problema
 - identificar decisões ainda não fechadas;
 - estruturar Issues e critérios de aceite;
 - revisar implementações e diffs;
+- identificar inconsistências, lacunas de segurança e desvios de escopo antes do merge;
 - explicar conceitos técnicos para que a equipe compreenda as decisões;
 - apoiar a documentação e a preparação para apresentação.
 
 O ChatGPT não é tratado como fonte automática de verdade. Quando uma regra depende de informação externa ou de uma decisão do projeto, ela deve ser verificada ou explicitamente decidida antes de virar implementação.
 
-### Codex
+### Codex / GPT-6 Astra
 
-É utilizado principalmente como ferramenta de implementação assistida. Ele recebe uma Issue, a branch correta, as decisões já fechadas, o escopo e os critérios de aceite.
+O Codex é utilizado como ferramenta de implementação assistida. Nas execuções mais recentes, o modelo GPT-6 Astra também foi utilizado dentro desse fluxo para tarefas de implementação e revisão que exigem maior contexto técnico.
 
-A orientação do projeto é que o Codex:
+Essas ferramentas recebem uma Issue, a branch correta, as decisões já fechadas, o escopo e os critérios de aceite. A orientação do projeto é que:
 
-- preserve os contratos existentes;
-- implemente de forma incremental;
-- não invente requisitos;
-- não tome decisões arquiteturais pendentes por conta própria;
-- não amplie o escopo silenciosamente;
-- reporte bloqueios e dúvidas antes de escolher uma solução que altere o domínio;
-- produza código que posteriormente será revisado e validado pela equipe.
+- preservem os contratos existentes;
+- implementem de forma incremental;
+- não inventem requisitos;
+- não tomem decisões arquiteturais pendentes por conta própria;
+- não ampliem o escopo silenciosamente;
+- reportem bloqueios e dúvidas antes de escolher uma solução que altere o domínio;
+- não substituam a validação local feita pela equipe;
+- produzam código que posteriormente será revisado e validado antes da integração.
 
-Um exemplo real ocorreu na modelagem de `Cliente`, `Gestor`, `Loja` e `Empresa`: durante a implementação surgiu a necessidade de definir a política de exclusão dos relacionamentos (`on_delete`). Em vez de escolher silenciosamente entre `CASCADE` e `PROTECT`, a implementação foi interrompida. A equipe decidiu utilizar `PROTECT` para evitar exclusões destrutivas e só então o desenvolvimento continuou.
+A escolha do modelo ou da intensidade de raciocínio pode variar conforme a complexidade da tarefa, mas isso não altera o processo de responsabilidade: a ferramenta auxilia a execução; a equipe continua responsável por decidir, compreender, testar e aprovar.
+
+## Exemplos de decisões interrompidas ou corrigidas antes do merge
+
+Um exemplo ocorreu na modelagem de `Cliente`, `Gestor`, `Loja` e `Empresa`: durante a implementação surgiu a necessidade de definir a política de exclusão dos relacionamentos (`on_delete`). Em vez de escolher silenciosamente entre `CASCADE` e `PROTECT`, a implementação foi interrompida. A equipe decidiu utilizar `PROTECT` para evitar exclusões destrutivas e só então o desenvolvimento continuou.
+
+Outro exemplo ocorreu na F2.06. A primeira implementação das credenciais de integração tornava `Empresa` e o campo `escopo` imutáveis, mas a revisão identificou que uma credencial `LOJAS` ainda poderia ter seu conjunto efetivo de Lojas alterado pelos caminhos normais do domínio. O problema foi tratado como blocker antes do commit. A implementação foi corrigida para congelar o conjunto emitido de Lojas e exigir o fluxo `desativar credencial antiga → criar nova credencial` para qualquer mudança de escopo. Somente depois da correção, da nova revisão e dos testes a alteração foi integrada.
+
+Esses casos representam o comportamento esperado: a IA não deve decidir silenciosamente uma regra faltante e um resultado que passou por geração automatizada ainda pode ser rejeitado ou corrigido durante a revisão.
 
 ## Validação independente da IA
 
@@ -79,7 +89,38 @@ git diff --check
 uv lock --check
 ```
 
-Os testes são executados com PostgreSQL, que é o banco de referência da aplicação. Migrations, constraints, validações e relacionamentos também são revisados no diff antes do Pull Request.
+Os testes são executados com PostgreSQL, que é o banco de referência da aplicação. Migrations, constraints, validações, relacionamentos, autorização e isolamento multiempresa também são revisados no diff antes do Pull Request.
+
+Features podem exigir gates adicionais específicos. Na F2.06, por exemplo, além dos gates gerais foi validado o schema OpenAPI com:
+
+```text
+uv run python manage.py spectacular --file /tmp/datasystem-openapi.yml --validate
+```
+
+Na mesma fase, foram executados testes específicos da API e da integração, seguidos pela suíte completa do projeto. A aprovação da ferramenta que implementou a mudança não foi utilizada como evidência; os resultados reais dos testes e a revisão do diff foram utilizados para decidir se a alteração estava pronta para commit e merge.
+
+## Separação de responsabilidades
+
+O uso de IA no projeto pode ser resumido assim:
+
+```text
+Equipe
+├── define o problema
+├── fecha requisitos e decisões
+├── prioriza escopo
+├── executa e interpreta validações
+├── revisa o diff
+└── assume responsabilidade pelo resultado
+
+IA
+├── ajuda a analisar
+├── sugere alternativas
+├── implementa tarefas especificadas
+├── auxilia testes e documentação
+└── aponta riscos, dúvidas e inconsistências
+```
+
+A ferramenta pode produzir código, sugerir uma arquitetura ou identificar um problema, mas nenhuma dessas ações transfere a responsabilidade técnica para a IA.
 
 ## Registro de uso
 
@@ -88,10 +129,21 @@ Os testes são executados com PostgreSQL, que é o banco de referência da aplic
 | Não registrada | Planejamento e modelagem inicial | ChatGPT | Apoiou a discussão de requisitos, escopo, arquitetura e organização do desenvolvimento. | A equipe revisou as propostas e transformou as decisões aprovadas em Issues e critérios de aceite. |
 | 2026-09-22 | Bootstrap Django e autenticação por CPF (Issue #7) | ChatGPT e Codex | ChatGPT apoiou a definição da arquitetura; Codex auxiliou na configuração, implementação do `CustomUser`, validação de CPF e testes. | A equipe definiu `CustomUser` antes da migration inicial, autenticação por CPF, PostgreSQL como banco de referência e isolamento da infraestrutura. O código foi revisado e validado antes do merge. |
 | 2026-09-22 | Modelagem inicial de Empresa, Loja, Cliente e Gestor (Issue #9) | ChatGPT e Codex | Apoiou a modelagem das entidades, implementação dos relacionamentos, validação de CNPJ e testes de domínio. | A equipe separou identidade (`Usuario`) de perfis de domínio, decidiu `PROTECT` para os relacionamentos e manteve Compra, PDV e fidelidade fora do escopo. |
-| 2026-09-22 | Planejamento original de cadastro de Cliente e login por contexto (Issue #11) | ChatGPT | Apoiou a definição inicial do fluxo de cadastro, autenticação, autorização por contexto e sessão. | As decisões serviram como planejamento inicial, mas parte delas foi posteriormente revisada após a consolidação da arquitetura multiempresa. A Issue #11 deve ser atualizada depois da reconciliação do domínio. |
 | 2026-09-22 | Consolidação da arquitetura multiempresa, parâmetros e API (Issue #12) | ChatGPT | Apoiou a reorganização do produto como plataforma independente, multiempresa, configurável e API-first. | A equipe definiu Empresa como tenant, `1..N` Lojas, herança de parâmetros, overrides, eventos/campanhas, papel + escopo, API REST versionada, OpenAPI e idempotência. |
-| 2026-09-22 | Reconciliação planejada do domínio multiempresa (Issue #14) | ChatGPT | Apoiou a identificação das limitações estruturais de `Cliente` e `Gestor` e a definição da nova modelagem. | A equipe decidiu evoluir para `Cliente` por `Usuario + Empresa`, `MembroEmpresa` e `AcessoLoja`, preservando identidade única e isolamento entre Empresas. |
+| 2026-09-22 | Reconciliação do domínio multiempresa (Issue #14 / F2.03A) | ChatGPT e Codex | Apoiou a revisão da modelagem anterior e a implementação de uma estrutura compatível com múltiplas Empresas por identidade. | A equipe consolidou `Usuario` global, `Cliente = Usuario + Empresa`, `MembroEmpresa`, papéis `ADMINISTRADOR`/`GESTOR`, `AcessoLoja`, escopo corporativo implícito do Administrador, validações de tenant e `PROTECT`. |
+| 2026-09-22 | Cadastro e autenticação por contexto multiempresa (Issue #11 / F2.03B) | ChatGPT e Codex | Apoiou a definição e implementação do cadastro por Empresa, autenticação global por CPF e seleção de contexto. | A equipe definiu reutilização segura de `Usuario`, sessão com apenas `tipo_contexto`, `empresa_id` e `vinculo_id`, revalidação do vínculo no banco e distinção entre contexto de Cliente e Gestão. |
 | 2026-09-22 | Roadmap técnico e de produto (Issue #15) | ChatGPT | Apoiou a organização das fases e prioridades P0/P1/P2. | A equipe protegeu a vertical principal Empresa → Loja → Configuração → API → Compra → Pontos → Evento → Níveis/Resgate → Dashboard e manteve a FATECalçados como cenário, não regra do domínio. |
+| 2026-09-22 | Política e registro de uso de IA (Issue #17) | ChatGPT | Apoiou a formalização do processo já utilizado no projeto. | A equipe registrou que IA é apoio, não fonte de verdade; decisões faltantes devem interromper a implementação; validações reais, revisão de diff e Pull Request são obrigatórias antes da integração. |
+| 2026-09-22 | Onboarding de Empresa e primeira Loja (Issue #21 / F2.04A) | ChatGPT e Codex | Apoiou a especificação e implementação do fluxo de criação ou reutilização de identidade, Empresa, primeira Loja e Administrador. | A equipe definiu operação atômica, slug gerado no backend, Administrador com escopo corporativo e criação de Lojas adicionais restrita ao tenant ativo. |
+| 2026-09-22 | Convites de membros e atribuição de Lojas (Issue #23 / F2.04B) | ChatGPT e Codex | Apoiou a modelagem do convite, token, aceite, revogação, concorrência e testes. | A equipe definiu CPF como identificador, token bruto exibido apenas na criação, hash persistido, validade de 7 dias, aceite atômico e `GESTOR` com `1..N` Lojas explícitas. |
+| 2026-09-22 | Parâmetros hierárquicos de fidelidade (Issue #25 / F2.05) | ChatGPT e GPT-6 Astra | Apoiou a especificação e implementação de configuração tipada `padrão do produto → Empresa → override de Loja`. | A equipe definiu `Decimal`, ausência de override como herança, `0.00` como valor válido, resolução somente leitura e nenhuma regra específica de Bronze/Prata/Ouro hardcoded. Uma falha de import encontrada nos testes foi corrigida antes da integração. |
+| 2026-09-22 a 2026-09-23 | Base da API REST e credenciais de integração (Issue #28 / F2.06) | ChatGPT e GPT-6 Astra | Apoiou a especificação e implementação de DRF, `X-API-Key`, autenticação de integração, escopos `EMPRESA`/`LOJAS`, OpenAPI, Swagger, ReDoc, erros e testes. | A equipe separou integração de `Usuario`, exigiu hash do segredo, isolamento multiempresa e imutabilidade do escopo emitido. A revisão encontrou uma possibilidade de alterar o conjunto de Lojas após a emissão; o blocker foi corrigido antes do commit. Foram validados testes específicos, suíte completa e schema OpenAPI antes do Squash and merge. |
+
+## Estado atual
+
+Até a conclusão da F2.06, a IA participou de planejamento, documentação, implementação assistida e revisão de várias camadas do produto, incluindo domínio multiempresa, autenticação por contexto, onboarding, convites, parâmetros hierárquicos e a fundação da API REST.
+
+O processo utilizado nessas entregas permanece o mesmo: requisitos e decisões são fechados antes da implementação; a IA atua dentro do escopo estabelecido; a saída é validada independentemente; o diff é revisado; e somente então a alteração pode chegar à `main` por Pull Request e Squash and merge.
 
 ## Responsabilidade da equipe
 
