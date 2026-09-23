@@ -1,0 +1,28 @@
+{% extends "datasystem/base.html" %}
+{% block titulo %}Criar credencial de integração{% endblock %}
+{% block conteudo %}
+<h1>Criar credencial de integração</h1>
+<p>EMPRESA autoriza todas as Lojas atuais e futuras. LOJAS autoriza somente as selecionadas.</p>
+<form method="post">
+{% csrf_token %}
+{{ form.non_field_errors }}
+{{ form.nome.as_field_group }}
+{{ form.escopo.as_field_group }}
+<div id="selecao-lojas">{{ form.lojas.as_field_group }}</div>
+<button type="submit">Criar credencial</button>
+</form>
+<p><a href="{% url 'empresas:integracoes' %}">Voltar às integrações</a></p>
+<script>
+const escopo = document.getElementById('id_escopo');
+const lojas = document.getElementById('id_lojas');
+function atualizarLojas() {
+    const restrito = escopo.value === 'LOJAS';
+    document.getElementById('selecao-lojas').hidden = !restrito;
+    lojas.disabled = !restrito;
+    lojas.required = restrito;
+    if (!restrito) Array.from(lojas.options).forEach(option => { option.selected = false; });
+}
+escopo.addEventListener('change', atualizarLojas);
+atualizarLojas();
+</script>
+{% endblock %}

@@ -3,6 +3,8 @@ from django import forms
 from apps.usuarios.validators import normalizar_cpf, validar_cpf
 
 from .models import ConfiguracaoFidelidadeEmpresa, Loja, MembroEmpresa, OverrideFidelidadeLoja
+from .models import CredencialIntegracao
+from .services import validar_lojas_credencial
 
 from .validators import normalizar_cnpj, validar_cnpj
 
@@ -94,3 +96,23 @@ class OverrideFidelidadeLojaForm(forms.ModelForm):
     class Meta:
         model = OverrideFidelidadeLoja
         fields = ("pontos_por_real",)
+
+
+class CredencialIntegracaoForm(forms.Form):
+    nome = forms.CharField(label="Nome", max_length=255)
+    escopo = forms.ChoiceField(label="Escopo", choices=CredencialIntegracao.Escopo.choices)
+    lojas = forms.ModelMultipleChoiceField(
+        label="Lojas", queryset=Loja.objects.none(), required=False,
+        help_text="Somente para LOJAS: selecione uma ou mais. Para EMPRESA, deixe vazio.",
+    )
+
+    def __init__(self, *args, empresa, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.empresa = empresa
+        self.fields["lojas"].queryset = Loja.objects.filter(empresa=empresa).order_by("nome", "pk")
+
+    def clean(self):
+        dados = super().clean()
+        if "escopo" in dados and "lojas" in dados:
+            validar_lojas_credencial(self.empresa, dados["escopo"], dados["lojas"])
+        return dados

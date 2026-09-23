@@ -1,0 +1,19 @@
+{% extends "datasystem/base.html" %}
+{% block titulo %}Integrações{% endblock %}
+{% block conteudo %}
+<h1>Integrações — {{ empresa }}</h1>
+<p><a href="{% url 'empresas:nova_integracao' %}">Criar credencial</a></p>
+<table>
+<caption>Credenciais da Empresa</caption>
+<thead><tr><th scope="col">Nome</th><th scope="col">Identificador</th><th scope="col">Escopo</th><th scope="col">Estado</th><th scope="col">Criada em</th><th scope="col">Último uso</th><th scope="col">Ação</th></tr></thead>
+<tbody>
+{% for credencial in credenciais %}
+<tr>
+<td>{{ credencial.nome }}</td><td>{{ credencial.identificador }}</td><td>{{ credencial.escopo }}</td>
+<td>{{ credencial.ativa|yesno:"Ativa,Inativa" }}</td><td>{{ credencial.criada_em }}</td><td>{{ credencial.ultimo_uso_em|default_if_none:"Nunca utilizada" }}</td>
+<td>{% if credencial.ativa %}<form method="post" action="{% url 'empresas:desativar_integracao' credencial.id %}">{% csrf_token %}<button type="submit">Desativar {{ credencial.nome }}</button></form>{% endif %}</td>
+</tr>
+{% empty %}<tr><td colspan="7">Nenhuma credencial criada.</td></tr>{% endfor %}
+</tbody></table>
+<p><a href="{% url 'empresas:area' %}">Voltar à gestão</a></p>
+{% endblock %}

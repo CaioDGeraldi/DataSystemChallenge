@@ -5,6 +5,7 @@
 <p>Olá, {{ user.get_full_name }}.</p>
 <p>Papel: {{ membro.get_papel_display }}</p>
 <h2>Lojas</h2>
+{% if pode_criar_loja %}<p><a href="{% url 'empresas:integracoes' %}">Credenciais de integração</a></p>{% endif %}
 <ul>
 {% for loja in lojas %}
 <li>{{ loja.nome }} — {{ loja.cidade }}{% if pode_criar_loja %} <a href="{% url 'empresas:configuracao_loja' loja.pk %}">Configuração</a>{% endif %}</li>

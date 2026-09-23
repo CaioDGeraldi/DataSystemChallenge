@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import redirect, render
-from django.views.decorators.debug import sensitive_post_parameters
+from django.views.decorators.debug import sensitive_post_parameters, sensitive_variables
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 from django.views.decorators.cache import never_cache
 from django.urls import reverse
@@ -16,11 +16,13 @@ from .forms import (
     AceitarConviteForm,
     ConfiguracaoFidelidadeEmpresaForm,
     ConviteMembroForm,
+    CredencialIntegracaoForm,
     LojaForm,
     OnboardingEmpresaForm,
     OverrideFidelidadeLojaForm,
 )
-from .models import ConviteMembro, MembroEmpresa
+from .models import ConviteMembro, CredencialIntegracao, MembroEmpresa
+from .services import criar_credencial, desativar_credencial
 from .services import (
     consultar_configuracao_loja, remover_override_loja, resolver_configuracao,
     salvar_configuracao_empresa, salvar_override_loja,
@@ -199,3 +201,47 @@ def remover_override_loja_view(request, loja_id):
     remover_override_loja(request, loja_id)
     messages.success(request, "Override removido. A Loja voltou a herdar da Empresa.")
     return redirect("empresas:configuracao_loja", loja_id=loja_id)
+
+
+@login_required
+@never_cache
+@require_GET
+def integracoes(request):
+    administrador = exigir_administrador(request)
+    credenciais = CredencialIntegracao.objects.filter(empresa_id=administrador.empresa_id).order_by(
+        "-criada_em", "-pk",
+    ).values("id", "nome", "identificador", "escopo", "ativa", "criada_em", "ultimo_uso_em")
+    return render(request, "datasystem/gestor/integracoes.html", {
+        "empresa": administrador.empresa, "credenciais": credenciais,
+    })
+
+
+@login_required
+@never_cache
+@require_http_methods(["GET", "POST"])
+@sensitive_variables()
+def nova_integracao(request):
+    administrador = exigir_administrador(request)
+    form = CredencialIntegracaoForm(
+        request.POST if request.method == "POST" else None, empresa=administrador.empresa,
+    )
+    if request.method == "POST" and form.is_valid():
+        try:
+            credencial, chave = criar_credencial(request, **form.cleaned_data)
+        except ValidationError as exc:
+            form.add_error(None, exc.messages)
+        else:
+            resposta = render(request, "datasystem/gestor/integracao_criada.html", {
+                "nome": credencial.nome, "chave": chave,
+            })
+            resposta["Referrer-Policy"] = "no-referrer"
+            return resposta
+    return render(request, "datasystem/gestor/integracao_form.html", {"form": form})
+
+
+@login_required
+@require_POST
+def desativar_integracao(request, credencial_id):
+    desativar_credencial(request, credencial_id)
+    messages.success(request, "Credencial desativada.")
+    return redirect("empresas:integracoes")

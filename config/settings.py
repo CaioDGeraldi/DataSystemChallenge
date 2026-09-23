@@ -15,6 +15,9 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "rest_framework",
+    "drf_spectacular",
+    "apps.api",
     "apps.usuarios",
     "apps.empresas",
     "apps.clientes",
@@ -80,3 +83,23 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": ["apps.api.authentication.IntegracaoAuthentication"],
+    "DEFAULT_PERMISSION_CLASSES": ["apps.api.permissions.IntegracaoAutenticada"],
+    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "apps.api.exceptions.exception_handler",
+    "UNAUTHENTICATED_USER": None,
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "DataSystemChallenge — API de integração",
+    "VERSION": "1.0.0",
+    "DESCRIPTION": "Fundação da API: health público e contexto autenticado da integração.",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SERVE_AUTHENTICATION": [],
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
+    "SWAGGER_UI_SETTINGS": {"deepLinking": True, "persistAuthorization": False},
+}
