@@ -74,6 +74,8 @@ Um exemplo ocorreu na modelagem de `Cliente`, `Gestor`, `Loja` e `Empresa`: dura
 
 Outro exemplo ocorreu na F2.06. A primeira implementação das credenciais de integração tornava `Empresa` e o campo `escopo` imutáveis, mas a revisão identificou que uma credencial `LOJAS` ainda poderia ter seu conjunto efetivo de Lojas alterado pelos caminhos normais do domínio. O problema foi tratado como blocker antes do commit. A implementação foi corrigida para congelar o conjunto emitido de Lojas e exigir o fluxo `desativar credencial antiga → criar nova credencial` para qualquer mudança de escopo. Somente depois da correção, da nova revisão e dos testes a alteração foi integrada.
 
+Na F3.01, o GPT-6 Astra interrompeu a implementação antes de alterar código porque a Issue ainda não definia o limite monetário de `Compra.valor` nem o tamanho máximo de `identificador_externo`. A equipe fechou explicitamente `DecimalField(max_digits=12, decimal_places=2)` e limite de 255 caracteres antes da continuação. Durante a revisão posterior, foi identificado outro blocker: embora os retries não alterassem a Compra, o model ainda permitia reescrever fatos históricos já persistidos pelos caminhos normais de `save()`. A implementação foi corrigida para congelar Loja, Cliente, credencial de origem, identificador externo, valor, instante da venda e `criada_em`, sem invalidar Compras históricas quando a credencial de origem fosse desativada.
+
 Esses casos representam o comportamento esperado: a IA não deve decidir silenciosamente uma regra faltante e um resultado que passou por geração automatizada ainda pode ser rejeitado ou corrigido durante a revisão.
 
 ## Validação independente da IA
@@ -98,6 +100,8 @@ uv run python manage.py spectacular --file /tmp/datasystem-openapi.yml --validat
 ```
 
 Na mesma fase, foram executados testes específicos da API e da integração, seguidos pela suíte completa do projeto. A aprovação da ferramenta que implementou a mudança não foi utilizada como evidência; os resultados reais dos testes e a revisão do diff foram utilizados para decidir se a alteração estava pronta para commit e merge.
+
+Na F3.01, após a implementação inicial e a correção de imutabilidade histórica, foram executados 39 testes focais e 261 testes na suíte completa. Também foram validados `check`, `makemigrations --check`, aplicação/estado da migration `fidelidade.0001_initial`, `git diff --check`, `uv lock --check` e o schema OpenAPI com `spectacular --validate`. A concorrência idempotente foi coberta com PostgreSQL e conexões independentes, verificando tanto requests equivalentes quanto payloads divergentes para a mesma chave.
 
 ## Separação de responsabilidades
 
@@ -138,12 +142,13 @@ A ferramenta pode produzir código, sugerir uma arquitetura ou identificar um pr
 | 2026-09-22 | Convites de membros e atribuição de Lojas (Issue #23 / F2.04B) | ChatGPT e Codex | Apoiou a modelagem do convite, token, aceite, revogação, concorrência e testes. | A equipe definiu CPF como identificador, token bruto exibido apenas na criação, hash persistido, validade de 7 dias, aceite atômico e `GESTOR` com `1..N` Lojas explícitas. |
 | 2026-09-22 | Parâmetros hierárquicos de fidelidade (Issue #25 / F2.05) | ChatGPT e GPT-6 Astra | Apoiou a especificação e implementação de configuração tipada `padrão do produto → Empresa → override de Loja`. | A equipe definiu `Decimal`, ausência de override como herança, `0.00` como valor válido, resolução somente leitura e nenhuma regra específica de Bronze/Prata/Ouro hardcoded. Uma falha de import encontrada nos testes foi corrigida antes da integração. |
 | 2026-09-22 a 2026-09-23 | Base da API REST e credenciais de integração (Issue #28 / F2.06) | ChatGPT e GPT-6 Astra | Apoiou a especificação e implementação de DRF, `X-API-Key`, autenticação de integração, escopos `EMPRESA`/`LOJAS`, OpenAPI, Swagger, ReDoc, erros e testes. | A equipe separou integração de `Usuario`, exigiu hash do segredo, isolamento multiempresa e imutabilidade do escopo emitido. A revisão encontrou uma possibilidade de alterar o conjunto de Lojas após a emissão; o blocker foi corrigido antes do commit. Foram validados testes específicos, suíte completa e schema OpenAPI antes do Squash and merge. |
+| 2026-09-23 | Compra e idempotência pela API (Issue #34 / F3.01) | ChatGPT e GPT-6 Astra | ChatGPT apoiou a especificação do contrato, revisão técnica e análise de idempotência/concorrência; Astra implementou o domínio, endpoint, testes e documentação dentro da Issue. | Astra interrompeu a implementação diante de limites não especificados e a equipe definiu os valores antes de continuar. A revisão encontrou mutabilidade indevida dos fatos históricos; o blocker foi corrigido antes do commit. Foram validados 39 testes focais, 261 testes totais, migrations, diff, lock e OpenAPI antes do Squash and merge. |
 
 ## Estado atual
 
-Até a conclusão da F2.06, a IA participou de planejamento, documentação, implementação assistida e revisão de várias camadas do produto, incluindo domínio multiempresa, autenticação por contexto, onboarding, convites, parâmetros hierárquicos e a fundação da API REST.
+Até a conclusão da F3.01, a IA participou de planejamento, documentação, implementação assistida e revisão de várias camadas do produto, incluindo domínio multiempresa, autenticação por contexto, onboarding, convites, parâmetros hierárquicos, fundação da API REST e o primeiro recurso transacional idempotente de Compra.
 
-O processo utilizado nessas entregas permanece o mesmo: requisitos e decisões são fechados antes da implementação; a IA atua dentro do escopo estabelecido; a saída é validada independentemente; o diff é revisado; e somente então a alteração pode chegar à `main` por Pull Request e Squash and merge.
+O processo utilizado nessas entregas permanece o mesmo: requisitos e decisões são fechados antes da implementação; a IA atua dentro do escopo estabelecido; dúvidas que alteram contrato ou domínio interrompem a execução; a saída é validada independentemente; o diff é revisado; e somente então a alteração pode chegar à `main` por Pull Request e Squash and merge.
 
 ## Responsabilidade da equipe
 
