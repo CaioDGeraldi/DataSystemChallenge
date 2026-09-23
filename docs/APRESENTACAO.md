@@ -2,7 +2,26 @@
 
 Este documento organiza o que deve ser mostrado, explicado e defendido na apresentação final do DataSystemChallenge.
 
-Ele não é o arquivo final de slides. É uma fonte viva para a equipe registrar, durante o desenvolvimento, quais mensagens valem entrar na apresentação, como traduzi-las para uma banca mista e quais perguntas precisam estar preparadas.
+Ele não é o arquivo final de slides. É a fonte viva para registrar quais mensagens valem entrar na apresentação, como traduzi-las para uma banca mista e quais perguntas precisam estar preparadas.
+
+## Identidade da solução
+
+A nomenclatura usada na banca deve ser consistente:
+
+```text
+DataSystemChallenge
+→ projeto, repositório e contexto do desafio
+
+Retorna
+→ marca fictícia do produto de fidelidade
+
+FATECalçados
+→ empresa fictícia usada como cenário de demonstração
+```
+
+Na apresentação, usar **Retorna** como nome do produto.
+
+A identidade visual aprovada está documentada em `docs/IDENTIDADE_VISUAL.md` e os assets ficam em `assets/retorna/`.
 
 ## Regra de atualização
 
@@ -20,7 +39,7 @@ Sempre que uma mudança alterar materialmente algum destes pontos, revisar este 
 - evidência relevante de funcionamento;
 - pergunta provável da banca.
 
-Não atualizar o documento mecanicamente por toda alteração interna. Atualizar quando a mudança afetar **o que mostramos, o que dizemos ou o que precisamos saber responder**.
+Não atualizar mecanicamente por toda alteração interna. Atualizar quando a mudança afetar **o que mostramos, o que dizemos ou o que precisamos saber responder**.
 
 ## Restrições da apresentação
 
@@ -37,7 +56,7 @@ A banca não deve ser tratada como exclusivamente técnica nem exclusivamente de
 
 A mensagem que deve permanecer clara mesmo para quem esquecer detalhes é:
 
-> O DataSystemChallenge é uma plataforma de fidelidade multiempresa configurável e integrável por API. A FATECalçados é o cenário de demonstração, não o sistema inteiro.
+> **Retorna é uma plataforma de fidelidade multiempresa, configurável e integrável por API. A FATECalçados é o cenário usado para demonstrar seu funcionamento, não o sistema inteiro.**
 
 A apresentação deve mostrar uma sequência simples:
 
@@ -48,7 +67,7 @@ Lojas herdam ou recebem ajustes permitidos
 ↓
 PDV/ERP envia a venda pela API
 ↓
-plataforma aplica as regras de fidelidade
+Retorna aplica as regras de fidelidade
 ↓
 Cliente acumula e utiliza benefícios
 ↓
@@ -84,12 +103,40 @@ Evitar iniciar explicações com framework, classe, migration ou nome de funçã
 | `PROTECT` | Registros históricos não desaparecem porque outro cadastro foi excluído. |
 | Snapshot | Guardamos a regra realmente aplicada naquele momento para o histórico não mudar depois. |
 | Override de Loja | A Loja herda a regra da Empresa e só guarda a exceção quando ela é permitida. |
-| API REST | O PDV/ERP conversa com a plataforma por uma interface documentada. |
+| API REST | O PDV/ERP conversa com a Retorna por uma interface documentada. |
 | `X-API-Key` | Cada integração usa uma credencial própria, separada das contas humanas. |
 | Constraint de banco | O próprio banco possui uma última barreira contra estados inválidos. |
 | Monólito modular | Um único sistema implantável, separado internamente por responsabilidades. |
 
-Usar o termo técnico quando ele demonstrar conhecimento, mas acompanhá-lo de uma consequência compreensível.
+## Como explicar a API
+
+A API é uma parte central da proposta do produto, mas não deve ser apresentada como uma coleção de endpoints.
+
+Mensagem de negócio:
+
+> A Retorna não precisa substituir o sistema que a loja já usa. O PDV, ERP ou e-commerce envia a venda para a API, e a Retorna aplica as regras de fidelidade e devolve o resultado conforme o fluxo implementado.
+
+Mensagem técnica complementar:
+
+> As integrações usam credenciais próprias com escopo de Empresa ou Loja; os contratos são versionados, Compras possuem idempotência e a documentação técnica é publicada em OpenAPI.
+
+Responsabilidades atuais da API:
+
+- health da aplicação;
+- autenticação de integrações;
+- contexto autorizado da credencial;
+- isolamento Empresa/Loja;
+- registro idempotente de Compra;
+- contrato versionado e documentação OpenAPI.
+
+Direção da vertical, somente após as fases correspondentes serem integradas:
+
+- devolver fidelidade calculada na Compra;
+- consultar informações necessárias de Cliente/saldo;
+- registrar/validar Resgate;
+- expor transparência de configuração quando houver caso de uso real.
+
+Não dizer que esses itens futuros já existem.
 
 ## Escrita dos slides
 
@@ -117,8 +164,6 @@ A fala deve complementar o slide. O apresentador não deve simplesmente ler o co
 
 ## Status do conteúdo
 
-Ao manter este documento, diferenciar mentalmente três estados:
-
 ```text
 IMPLEMENTADO
 → pode ser demonstrado e afirmado como funcional
@@ -134,15 +179,13 @@ Na apresentação final, priorizar quase exclusivamente o que estiver **IMPLEMEN
 
 ## Roteiro-base para 7 minutos
 
-O roteiro deve contar uma história, não percorrer telas aleatoriamente.
-
 ### 0:00–0:40 — Problema e proposta
 
 Objetivo: fazer a banca entender rapidamente o que estamos resolvendo.
 
 Mensagem sugerida:
 
-> Programas de fidelidade precisam transformar compras em relacionamento mensurável sem obrigar cada empresa a desenvolver seu próprio motor de regras. Nossa proposta é uma plataforma configurável que recebe vendas dos sistemas já existentes e centraliza a fidelidade.
+> Programas de fidelidade precisam transformar compras em relacionamento mensurável sem obrigar cada empresa a desenvolver seu próprio motor de regras. Criamos a Retorna: uma plataforma configurável que recebe vendas dos sistemas já existentes e centraliza a fidelidade.
 
 Em seguida:
 
@@ -153,7 +196,7 @@ Em seguida:
 Mostrar visualmente:
 
 ```text
-Plataforma
+Retorna
 ├── Empresa A
 │   ├── Loja 1
 │   └── Loja 2
@@ -213,46 +256,50 @@ Se houver risco de lentidão ou navegação excessiva, usar uma combinação de 
 
 ### 4:15–5:15 — O que a Gestão consegue enxergar
 
-Quando o dashboard estiver pronto, priorizar os indicadores exigidos pelo cenário e aqueles que ajudam a explicar o programa:
+Quando o dashboard estiver pronto, priorizar os indicadores exigidos pelo cenário e aqueles que ajudam a explicar o programa.
+
+### Indicadores obrigatórios do cenário
 
 - clientes ativos;
 - ticket médio;
 - total/custo de descontos;
 - ranking por pontos acumulados;
-- evolução temporal;
+- evolução temporal.
+
+### Indicadores complementares do produto
+
 - total de clientes;
 - distribuição por níveis;
 - pontos acumulados x resgatados;
+- custo consolidado do programa em R$, quando houver base real para o cálculo;
 - taxa de recompra, se estiver disponível de forma coerente.
 
 Não tentar explicar todos os gráficos. Selecionar dois ou três para responder:
 
 > "O programa está sendo usado e qual impacto ele está gerando?"
 
-### 5:15–6:00 — Por que podemos confiar no fluxo
+A taxa de recompra é especialmente coerente com a marca Retorna porque mede se o cliente voltou a comprar, mas só deve ser exibida quando sua definição estiver fechada e o cálculo implementado.
 
-Este trecho é onde a banca técnica recebe evidência sem transformar a apresentação em uma aula de código.
+### 5:15–6:00 — Por que podemos confiar no fluxo
 
 Escolher poucas garantias que tenham consequência clara:
 
 - isolamento entre Empresas;
 - credenciais próprias de integração;
 - venda idempotente;
-- histórico preservado mesmo quando configurações mudam;
+- histórico preservado mesmo quando configurações mudam, conforme as fases que implementarem snapshots;
 - PostgreSQL como defesa final de integridade;
 - API documentada por OpenAPI.
 
 Exemplo:
 
-> Se a conexão do PDV cair depois de enviar uma venda, ele pode tentar novamente. A plataforma reconhece a mesma operação e não duplica a Compra nem a fidelidade.
+> Se a conexão do PDV cair depois de enviar uma venda, ele pode tentar novamente. A Retorna reconhece a mesma operação e não duplica a Compra.
 
-Números de testes podem ser usados como evidência complementar, mas não devem substituir a demonstração do comportamento.
+Quando a pontuação estiver integrada, essa explicação deve ser atualizada para incluir a fidelidade de forma atômica.
 
 ### 6:00–6:30 — Fechamento
 
-Retomar o valor em uma frase:
-
-> A empresa controla sua política de fidelidade, integra seus sistemas existentes e acompanha o resultado sem depender de regras fixas no software.
+> A Retorna permite que cada empresa controle sua política de fidelidade, integre os sistemas que já utiliza e acompanhe os resultados sem depender de regras fixas no software.
 
 Conectar novamente à FATECalçados:
 
@@ -262,31 +309,24 @@ Conectar novamente à FATECalçados:
 
 Não planejar conteúdo essencial para este intervalo.
 
-Usar como margem para:
-
-- troca entre slides e sistema;
-- pequenas pausas;
-- alguma demora de demonstração;
-- fechamento sem pressa.
-
 ## Estrutura sugerida de slides
 
-Não é obrigatório usar exatamente esta quantidade, mas a apresentação final deve permanecer curta.
+1. **Retorna — problema + proposta**
+2. **Uma plataforma, várias empresas e lojas**
+3. **Regras configuráveis**
+4. **Da venda ao benefício**
+5. **Resultado para a Gestão**
+6. **Confiabilidade da solução**
+7. **Fechamento**
 
-1. **Problema + proposta** — uma frase e uma imagem/diagrama simples.
-2. **Uma plataforma, várias empresas e lojas** — estrutura multiempresa.
-3. **Regras configuráveis** — exemplo de política de fidelidade.
-4. **Da venda ao benefício** — fluxo ponta a ponta e entrada na demonstração.
-5. **Resultado para a Gestão** — dashboard e indicadores.
-6. **Confiabilidade da solução** — API, isolamento, idempotência e histórico em linguagem simples.
-7. **Fechamento** — mensagem central e resultado alcançado.
-
-Se a demonstração real ocupar a tela durante parte do roteiro, não é necessário manter um slide separado aberto para cada etapa.
+A demonstração real pode substituir parte dos slides intermediários.
 
 ## Banco de mensagens do projeto
 
 ### Mensagens já sustentadas pelo produto integrado
 
+- Retorna é a marca fictícia do produto desenvolvido no DataSystemChallenge.
+- FATECalçados é cenário demonstrativo, não regra fixa do domínio.
 - Empresa é o tenant principal.
 - Uma Empresa pode possuir várias Lojas.
 - Administrador possui escopo corporativo; Gestor possui escopo explícito por Loja.
@@ -320,19 +360,25 @@ Quando uma feature relevante for integrada, responder:
 5. Surgiu uma nova limitação que pode virar pergunta?
 6. Alguma pergunta do FAQ precisa mudar?
 
-Se todas as respostas forem "não", provavelmente a mudança não precisa alterar a apresentação.
-
 ## FAQ — perguntas prováveis da banca
 
 As respostas abaixo são direções curtas. Na banca, responder primeiro em aproximadamente 20–30 segundos e aprofundar somente se houver pedido.
 
+### "O que é a Retorna?"
+
+É a marca do produto desenvolvido no desafio: uma plataforma de fidelidade multiempresa, configurável e integrável por API. O DataSystemChallenge continua sendo o projeto/repositório e a FATECalçados é o cenário demonstrativo.
+
 ### "Isso substitui o PDV?"
 
-Não. O PDV continua responsável por venda, pagamento, estoque, caixa e fiscal. A plataforma recebe os fatos necessários da venda e executa o domínio de fidelidade.
+Não. O PDV continua responsável por venda, pagamento, estoque, caixa e fiscal. A Retorna recebe os fatos necessários da venda e executa o domínio de fidelidade.
+
+### "Então qual é a função da API?"
+
+Conectar a Retorna aos sistemas que a empresa já utiliza. Hoje ela autentica integrações, controla escopo Empresa/Loja e recebe Compras de forma idempotente. Conforme a vertical evolui, ela deve devolver os resultados de fidelidade e suportar operações como consulta necessária ao atendimento e Resgate, sempre sem duplicar as regras no PDV.
 
 ### "Por que usar API em vez de cadastrar cada venda manualmente?"
 
-Porque a fidelidade precisa acompanhar os sistemas que a empresa já utiliza. A API permite que PDV ou ERP envie a venda de forma padronizada e documentada, sem duplicar operação humana.
+Porque a fidelidade precisa acompanhar os sistemas que a empresa já utiliza. A API permite que PDV, ERP ou e-commerce envie a venda de forma padronizada e documentada, sem duplicar operação humana.
 
 ### "O que acontece se o PDV enviar a mesma venda duas vezes?"
 
@@ -372,11 +418,11 @@ IA foi usada como apoio em análise, especificação, implementação assistida,
 
 ### "Quais são as limitações atuais?"
 
-Responder com as limitações realmente existentes na versão final. Não esconder limitações e não citar como problema algo que já foi resolvido. Manter esta resposta atualizada conforme o projeto evoluir.
+Responder com as limitações realmente existentes na versão final. Não esconder limitações e não citar como problema algo que já foi resolvido.
 
 ### "Como vocês sabem que funciona?"
 
-Responder combinando demonstração e evidência: testes automatizados dos fluxos críticos, validação em PostgreSQL, revisão de migrations/constraints, validação do OpenAPI e comportamento demonstrado no sistema. Evitar responder apenas com quantidade de testes.
+Responder combinando demonstração e evidência: testes automatizados dos fluxos críticos, validação em PostgreSQL, revisão de migrations/constraints, validação do OpenAPI e comportamento demonstrado no sistema.
 
 ### "O sistema suporta mais de uma Loja?"
 
@@ -411,12 +457,11 @@ Para responder:
 3. acrescentar o mecanismo técnico somente se necessário;
 4. quando houver limitação, declarar a limitação e o que foi deliberadamente deixado fora do escopo.
 
-Não transformar uma resposta de 20 segundos em uma nova apresentação.
-
 ## Checklist antes de fechar os slides
 
 - [ ] o roteiro ensaiado fica abaixo de 7 minutos;
 - [ ] existe margem de pelo menos 20 segundos;
+- [ ] Retorna é apresentada como produto e DataSystemChallenge como contexto do desafio;
 - [ ] a mensagem central aparece no início e no fechamento;
 - [ ] a FATECalçados está apresentada como cenário, não como regra hardcoded;
 - [ ] nenhuma funcionalidade planejada está sendo apresentada como pronta;
