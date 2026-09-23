@@ -1,0 +1,22 @@
+{% extends "datasystem/base.html" %}
+{% block titulo %}Eventos de fidelidade{% endblock %}
+{% block conteudo %}
+<h1>Eventos — {{ empresa }}</h1>
+<p><a href="{% url 'fidelidade:novo_evento' %}">Criar Evento</a></p>
+<table>
+<caption>Campanhas da Empresa</caption>
+<thead><tr><th scope="col">Nome</th><th scope="col">Período</th><th scope="col">Escopo</th><th scope="col">Multiplicador</th><th scope="col">Estado</th><th scope="col">Ação</th></tr></thead>
+<tbody>
+{% for evento in eventos %}
+<tr>
+<td>{{ evento.nome }}{% if evento.descricao %}<p>{{ evento.descricao }}</p>{% endif %}</td>
+<td>{{ evento.inicio_em }} até {{ evento.fim_em }}</td>
+<td>{{ evento.get_escopo_display }}{% for acesso in evento.lojas_selecionadas.all %}<br>{{ acesso.loja.nome }}{% endfor %}</td>
+<td>{% for efeito in evento.efeitos.all %}{{ efeito.valor }}x{% endfor %}</td>
+<td>{{ evento.estado }}</td>
+<td>{% if not evento.cancelado_em %}<form method="post" action="{% url 'fidelidade:cancelar_evento' evento.pk %}">{% csrf_token %}<button type="submit">Cancelar {{ evento.nome }}</button></form>{% endif %}</td>
+</tr>
+{% empty %}<tr><td colspan="6">Nenhum Evento cadastrado.</td></tr>{% endfor %}
+</tbody></table>
+<p><a href="{% url 'empresas:area' %}">Voltar à gestão</a></p>
+{% endblock %}

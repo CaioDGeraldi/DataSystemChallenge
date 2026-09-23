@@ -3,7 +3,9 @@ from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.validators import MinValueValidator
-from django.db import models
+from django.db import models, transaction
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
 from django.utils import timezone
 
 from apps.clientes.models import Cliente
@@ -90,6 +92,10 @@ class LotePontos(models.Model):
     pontos_base = models.DecimalField(max_digits=24, decimal_places=4, validators=[MinValueValidator(Decimal("0"))])
     pontos_concedidos = models.DecimalField(max_digits=24, decimal_places=4, validators=[MinValueValidator(Decimal("0"))])
     pontos_por_real_aplicado = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal("0"))])
+    multiplicador_pontos_aplicado = models.DecimalField(
+        max_digits=12, decimal_places=4, default=Decimal("1.0000"),
+        validators=[MinValueValidator(Decimal("0.0001"))],
+    )
     precisao_pontos_aplicada = models.PositiveIntegerField(choices=[(v, str(v)) for v in PRECISOES_PONTOS])
     modo_arredondamento_aplicado = models.CharField(max_length=7, choices=[(v, v) for v in MODOS_ARREDONDAMENTO_PONTOS])
     validade_pontos_meses_aplicada = models.PositiveIntegerField(validators=[MinValueValidator(1)])
@@ -102,6 +108,7 @@ class LotePontos(models.Model):
             models.CheckConstraint(condition=models.Q(pontos_base__gte=0), name="lote_base_nao_negativa"),
             models.CheckConstraint(condition=models.Q(pontos_concedidos__gte=0), name="lote_concessao_nao_negativa"),
             models.CheckConstraint(condition=models.Q(pontos_por_real_aplicado__gte=0), name="lote_taxa_nao_negativa"),
+            models.CheckConstraint(condition=models.Q(multiplicador_pontos_aplicado__gt=0), name="lote_multiplicador_positivo"),
             models.CheckConstraint(condition=models.Q(precisao_pontos_aplicada__in=[0, 1, 2, 4]), name="lote_precisao_valida"),
             models.CheckConstraint(condition=models.Q(modo_arredondamento_aplicado__in=["HALF_UP", "DOWN", "UP"]), name="lote_arredondamento_valido"),
             models.CheckConstraint(condition=models.Q(validade_pontos_meses_aplicada__gt=0), name="lote_validade_positiva"),
@@ -109,7 +116,7 @@ class LotePontos(models.Model):
 
     def clean_fields(self, exclude=None):
         erros = {}
-        for campo in ("pontos_base", "pontos_concedidos", "pontos_por_real_aplicado"):
+        for campo in ("pontos_base", "pontos_concedidos", "pontos_por_real_aplicado", "multiplicador_pontos_aplicado"):
             if campo not in (exclude or ()) and not isinstance(getattr(self, campo), Decimal):
                 erros[campo] = "Informe um Decimal, sem conversão de float."
         for campo in ("precisao_pontos_aplicada", "validade_pontos_meses_aplicada"):
@@ -149,6 +156,7 @@ class LotePontos(models.Model):
         base, concedidos = calcular_pontos(
             compra.valor, self.pontos_por_real_aplicado,
             self.precisao_pontos_aplicada, self.modo_arredondamento_aplicado,
+            self.multiplicador_pontos_aplicado,
         )
         esperados = {
             "pontos_base": base, "pontos_concedidos": concedidos,
@@ -163,3 +171,219 @@ class LotePontos(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         return super().save(*args, **kwargs)
+
+
+def _original_evento(instancia):
+    if instancia.pk is None:
+        return None
+    return type(instancia)._base_manager.using(instancia._state.db).filter(pk=instancia.pk).values().first()
+
+
+def _validar_historico_evento(instancia, original, exceto=()):
+    erros = {
+        campo.name: 'O fato histórico não pode ser alterado após a criação.'
+        for campo in instancia._meta.fields
+        if not campo.primary_key and campo.name not in exceto
+        and getattr(instancia, campo.attname) != original[campo.attname]
+    }
+    if erros:
+        raise ValidationError(erros)
+
+
+def _validar_instantes_evento(instancia, campos, exclude=()):
+    erros = {}
+    for campo in campos:
+        if campo in (exclude or ()):
+            continue
+        valor = getattr(instancia, campo)
+        if campo == 'cancelado_em' and valor is None:
+            continue
+        if not isinstance(valor, datetime) or timezone.is_naive(valor):
+            erros[campo] = 'Informe uma data/hora com timezone.'
+    if erros:
+        raise ValidationError(erros)
+
+
+class _RegistroEvento(models.Model):
+    """Escrita inicial exclusiva dos services; atualização valida todo o histórico."""
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        from .escrita_eventos import _exigir_escrita_eventos
+
+        if _original_evento(self) is None:
+            _exigir_escrita_eventos(self)
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class EventoFidelidade(_RegistroEvento):
+    class Escopo(models.TextChoices):
+        EMPRESA = 'EMPRESA', 'Empresa'
+        LOJAS = 'LOJAS', 'Lojas'
+
+    empresa = models.ForeignKey('empresas.Empresa', on_delete=models.PROTECT, related_name='eventos_fidelidade')
+    nome = models.CharField(max_length=255)
+    descricao = models.TextField(blank=True)
+    inicio_em = models.DateTimeField()
+    fim_em = models.DateTimeField()
+    escopo = models.CharField(max_length=7, choices=Escopo.choices)
+    criado_por = models.ForeignKey('empresas.MembroEmpresa', on_delete=models.PROTECT, related_name='eventos_criados')
+    criado_em = models.DateTimeField(default=timezone.now, editable=False)
+    cancelado_em = models.DateTimeField(null=True, blank=True, editable=False)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(fim_em__gt=models.F('inicio_em')), name='evento_periodo_valido'),
+            models.CheckConstraint(condition=models.Q(escopo__in=['EMPRESA', 'LOJAS']), name='evento_escopo_valido'),
+        ]
+
+    def save(self, *args, **kwargs):
+        # Evita que um save inalterado de instância antiga apague cancelamento
+        # concorrente entre a leitura da imutabilidade e o UPDATE.
+        with transaction.atomic():
+            if self.pk is not None:
+                type(self)._base_manager.select_for_update().filter(pk=self.pk).first()
+            return super().save(*args, **kwargs)
+
+    @property
+    def estado(self):
+        if self.cancelado_em is not None:
+            return 'CANCELADO'
+        agora = timezone.now()
+        if agora < self.inicio_em:
+            return 'AGENDADO'
+        if agora <= self.fim_em:
+            return 'VIGENTE'
+        return 'ENCERRADO'
+
+    def clean_fields(self, exclude=None):
+        _validar_instantes_evento(self, ('inicio_em', 'fim_em', 'criado_em', 'cancelado_em'), exclude)
+        super().clean_fields(exclude=exclude)
+
+    def clean(self):
+        super().clean()
+        self.clean_fields()
+        original = _original_evento(self)
+        if original is not None:
+            _validar_historico_evento(self, original, exceto=('cancelado_em',))
+            if self.cancelado_em != original['cancelado_em']:
+                if original['cancelado_em'] is not None or self.cancelado_em is None:
+                    raise ValidationError({'cancelado_em': 'O cancelamento original é imutável.'})
+                from .escrita_eventos import _exigir_escrita_eventos
+                _exigir_escrita_eventos(self)
+            return
+        if self.cancelado_em is not None:
+            raise ValidationError({'cancelado_em': 'Um Evento deve ser criado sem cancelamento.'})
+        if self.fim_em <= self.inicio_em:
+            raise ValidationError({'fim_em': 'O fim deve ser posterior ao início.'})
+        from apps.empresas.models import MembroEmpresa
+        if not MembroEmpresa.objects.filter(pk=self.criado_por_id, empresa_id=self.empresa_id,
+                                           ativo=True, papel='ADMINISTRADOR').exists():
+            raise ValidationError({'criado_por': 'O criador deve ser Administrador ativo da Empresa.'})
+
+
+class EfeitoEvento(_RegistroEvento):
+    class Tipo(models.TextChoices):
+        MULTIPLICADOR_PONTOS = 'MULTIPLICADOR_PONTOS', 'Multiplicador de pontos'
+
+    evento = models.ForeignKey(EventoFidelidade, on_delete=models.PROTECT, related_name='efeitos')
+    tipo = models.CharField(max_length=20, choices=Tipo.choices)
+    valor = models.DecimalField(max_digits=12, decimal_places=4, validators=[MinValueValidator(Decimal('0.0001'))])
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['evento', 'tipo'], name='evento_tipo_efeito_unico'),
+            models.CheckConstraint(condition=models.Q(valor__gt=0), name='efeito_valor_positivo'),
+            models.CheckConstraint(condition=models.Q(tipo='MULTIPLICADOR_PONTOS'), name='efeito_tipo_suportado'),
+        ]
+
+    def clean_fields(self, exclude=None):
+        if 'valor' not in (exclude or ()) and not isinstance(self.valor, Decimal):
+            raise ValidationError({'valor': 'Informe um Decimal, sem conversão de float.'})
+        super().clean_fields(exclude=exclude)
+
+    def clean(self):
+        super().clean()
+        self.clean_fields()
+        original = _original_evento(self)
+        if original is not None:
+            _validar_historico_evento(self, original)
+
+
+class EventoLoja(_RegistroEvento):
+    evento = models.ForeignKey(EventoFidelidade, on_delete=models.PROTECT, related_name='lojas_selecionadas')
+    loja = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name='eventos_selecionados')
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['evento', 'loja'], name='evento_loja_unica')]
+
+    def clean(self):
+        super().clean()
+        self.clean_fields()
+        original = _original_evento(self)
+        if original is not None:
+            _validar_historico_evento(self, original)
+            return
+        evento = EventoFidelidade.objects.get(pk=self.evento_id)
+        if evento.escopo != 'LOJAS':
+            raise ValidationError({'evento': 'Evento EMPRESA não aceita relações individuais de Loja.'})
+        if not Loja.objects.filter(pk=self.loja_id, empresa_id=evento.empresa_id).exists():
+            raise ValidationError({'loja': 'A Loja deve pertencer à Empresa do Evento.'})
+
+
+class AplicacaoEfeitoEventoLote(_RegistroEvento):
+    lote = models.ForeignKey(LotePontos, on_delete=models.PROTECT, related_name='aplicacoes_eventos')
+    evento = models.ForeignKey(EventoFidelidade, on_delete=models.PROTECT, related_name='aplicacoes_lotes')
+    efeito = models.ForeignKey(EfeitoEvento, on_delete=models.PROTECT, related_name='aplicacoes_lotes')
+    tipo_aplicado = models.CharField(max_length=20, choices=EfeitoEvento.Tipo.choices)
+    valor_aplicado = models.DecimalField(max_digits=12, decimal_places=4, validators=[MinValueValidator(Decimal('0.0001'))])
+    criado_em = models.DateTimeField(default=timezone.now, editable=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['lote', 'tipo_aplicado'], name='lote_tipo_evento_unico'),
+            models.CheckConstraint(condition=models.Q(valor_aplicado__gt=0), name='aplicacao_valor_positivo'),
+            models.CheckConstraint(condition=models.Q(tipo_aplicado='MULTIPLICADOR_PONTOS'), name='aplicacao_tipo_suportado'),
+        ]
+
+    def clean_fields(self, exclude=None):
+        if 'valor_aplicado' not in (exclude or ()) and not isinstance(self.valor_aplicado, Decimal):
+            raise ValidationError({'valor_aplicado': 'Informe um Decimal, sem conversão de float.'})
+        _validar_instantes_evento(self, ('criado_em',), exclude)
+        super().clean_fields(exclude=exclude)
+
+    def clean(self):
+        super().clean()
+        self.clean_fields()
+        original = _original_evento(self)
+        if original is not None:
+            _validar_historico_evento(self, original)
+            return  # Cancelamento e configuração atuais não invalidam histórico.
+        lote = LotePontos.objects.select_related('compra__loja', 'cliente').get(pk=self.lote_id)
+        evento = EventoFidelidade.objects.get(pk=self.evento_id)
+        efeito = EfeitoEvento.objects.get(pk=self.efeito_id)
+        compra = lote.compra
+        if (lote.cliente_id != compra.cliente_id or lote.cliente.empresa_id != compra.loja.empresa_id
+                or evento.empresa_id != compra.loja.empresa_id or efeito.evento_id != evento.pk):
+            raise ValidationError('Lote, Compra, Cliente, Loja, Evento e Efeito devem ser coerentes no mesmo tenant.')
+        if self.tipo_aplicado != efeito.tipo or self.valor_aplicado != efeito.valor:
+            raise ValidationError('O snapshot deve corresponder ao Efeito aplicado.')
+        if self.valor_aplicado != lote.multiplicador_pontos_aplicado:
+            raise ValidationError({'valor_aplicado': 'O multiplicador deve coincidir com o snapshot do Lote.'})
+        if evento.cancelado_em is not None or not evento.inicio_em <= compra.ocorrida_em <= evento.fim_em:
+            raise ValidationError('Evento não aplicável à Compra.')
+        if evento.escopo == 'LOJAS' and not EventoLoja.objects.filter(evento=evento, loja_id=compra.loja_id).exists():
+            raise ValidationError('A Loja não pertence ao escopo do Evento.')
+
+
+# delete() e QuerySet.delete() também não podem reduzir escopo ou apagar histórico.
+@receiver(pre_delete, sender=EventoFidelidade)
+@receiver(pre_delete, sender=EventoLoja)
+@receiver(pre_delete, sender=EfeitoEvento)
+@receiver(pre_delete, sender=AplicacaoEfeitoEventoLote)
+def _proteger_historico_eventos(sender, instance, **kwargs):
+    from django.db.models.deletion import ProtectedError
+
+    raise ProtectedError('Eventos e aplicações históricas não podem ser excluídos.', [instance])
