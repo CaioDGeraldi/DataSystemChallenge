@@ -34,13 +34,13 @@ class CompraHTTPTests(DadosCompras, TestCase):
         self.assertEqual(primeira.status_code, 201)
         dados = primeira.json()
         compra = Compra.objects.get()
-        self.assertEqual(set(dados), {"id", "identificador_externo", "loja", "cliente", "valor", "ocorrida_em", "criada_em"})
+        self.assertEqual(set(dados), {"id", "identificador_externo", "loja", "cliente", "valor", "ocorrida_em", "criada_em", "fidelidade"})
         self.assertEqual(dados["id"], compra.pk)
         self.assertEqual(dados["loja"], {"id": self.loja.pk, "nome": "Centro"})
         self.assertEqual(dados["cliente"], {"cpf": self.usuario.cpf})
         self.assertEqual(dados["valor"], "199.90")
         self.assertIn("no-store", primeira["Cache-Control"])
-        for privado in ("segredo", "hash", "senha", "password", "credencial", "pontos", self.chave):
+        for privado in ("segredo", "hash", "senha", "password", "credencial", self.chave):
             self.assertNotIn(privado, primeira.content.decode())
         retry = self.enviar(cliente_cpf="529.982.247-25", identificador_externo=" VENDA-000123 ")
         self.assertEqual(retry.status_code, 200)
@@ -183,4 +183,4 @@ class CompraOpenAPITests(SimpleTestCase):
         for status in ("200", "201"):
             referencia = post["responses"][status]["content"]["application/json"]["schema"]["$ref"].split("/")[-1]
             saida = schema["components"]["schemas"][referencia]
-            self.assertEqual(set(saida["properties"]), {"id", "identificador_externo", "loja", "cliente", "valor", "ocorrida_em", "criada_em"})
+            self.assertEqual(set(saida["properties"]), {"id", "identificador_externo", "loja", "cliente", "valor", "ocorrida_em", "criada_em", "fidelidade"})

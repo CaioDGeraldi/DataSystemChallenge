@@ -95,6 +95,18 @@ class ClienteCompraSerializer(serializers.Serializer):
     cpf = serializers.CharField(source="usuario.cpf")
 
 
+class FidelidadeCompraSerializer(serializers.Serializer):
+    pontos_base = serializers.DecimalField(
+        max_digits=24, decimal_places=4, coerce_to_string=True,
+        help_text="Produto exato da Compra pela taxa aplicada, string com quatro casas decimais.",
+    )
+    pontos_concedidos = serializers.DecimalField(
+        max_digits=24, decimal_places=4, coerce_to_string=True,
+        help_text="Concessão após política da Empresa, string com quatro casas decimais.",
+    )
+    expira_em = serializers.DateTimeField()
+
+
 class CompraSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     identificador_externo = serializers.CharField(max_length=255)
@@ -103,3 +115,7 @@ class CompraSerializer(serializers.Serializer):
     valor = serializers.DecimalField(max_digits=12, decimal_places=2, coerce_to_string=True)
     ocorrida_em = serializers.DateTimeField()
     criada_em = serializers.DateTimeField()
+    fidelidade = FidelidadeCompraSerializer(
+        source="lote_pontos", read_only=True, allow_null=True,
+        help_text="Resultado histórico; decimais com quatro casas. Null para Compra legada sem Lote. Retry não recalcula.",
+    )

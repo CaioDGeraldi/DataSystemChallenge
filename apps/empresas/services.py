@@ -284,7 +284,8 @@ def resolver_configuracao(empresa, loja=None):
 
 def salvar_configuracao_empresa(request, *, pontos_por_real, validade_pontos_meses,
                                 resgate_minimo_pontos, incremento_resgate_pontos,
-                                valor_monetario_por_ponto, periodo_cliente_ativo_dias):
+                                valor_monetario_por_ponto, periodo_cliente_ativo_dias,
+                                precisao_pontos, modo_arredondamento_pontos):
     with transaction.atomic():
         contexto = exigir_administrador(request)
         # O lock da Empresa também serializa a primeira edição, sem linha prévia.
@@ -293,6 +294,8 @@ def salvar_configuracao_empresa(request, *, pontos_por_real, validade_pontos_mes
         configuracao = ConfiguracaoFidelidadeEmpresa.objects.filter(empresa=empresa).first()
         if configuracao is None:
             configuracao = ConfiguracaoFidelidadeEmpresa(empresa=empresa)
+        configuracao.precisao_pontos = precisao_pontos
+        configuracao.modo_arredondamento_pontos = modo_arredondamento_pontos
         configuracao.pontos_por_real = pontos_por_real
         configuracao.validade_pontos_meses = validade_pontos_meses
         configuracao.resgate_minimo_pontos = resgate_minimo_pontos

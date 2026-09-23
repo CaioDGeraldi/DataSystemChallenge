@@ -6,7 +6,7 @@ A API REST é uma interface de primeira classe do DataSystemChallenge. Ela exist
 
 A API utiliza Django REST Framework sobre a mesma camada de domínio utilizada pela interface web.
 
-A F2.06 entrega credenciais de integração, health, contexto e OpenAPI. A F3.01 acrescenta registro de Compra e idempotência. Cliente por API, Resgate, LotePontos, cálculo de fidelidade, campanhas/eventos e níveis permanecem futuros; os exemplos desses fluxos abaixo não são funcionalidades disponíveis.
+A F2.06 entrega credenciais de integração, health, contexto e OpenAPI. A F3.01 acrescenta registro de Compra e idempotência; a F3.02 acrescenta cálculo base de pontos e LotePontos histórico. Cliente por API, Resgate, saldo consolidado, campanhas/eventos e níveis permanecem futuros; os exemplos desses fluxos abaixo não são funcionalidades disponíveis.
 
 ```text
 Django Templates ─┐
@@ -187,7 +187,7 @@ A plataforma:
 
 Não deve existir um contrato em que o PDV determine arbitrariamente `pontos_concedidos` como fonte de verdade.
 
-## Compra e idempotência — implementado na F3.01
+## Compra, idempotência e fidelidade — F3.01/F3.02
 
 ```http
 POST /api/v1/compras/
@@ -215,21 +215,21 @@ Todos os campos são obrigatórios:
 | `valor` | Decimal positivo com até duas casas decimais: `0.01` a `9999999999.99`. Envie string decimal, nunca float. Não há arredondamento de valores com casas excedentes. |
 | `ocorrida_em` | ISO 8601 com timezone explícito. Data sem timezone é inválida. Sem limites de passado/futuro nesta fase. |
 
-O domínio `apps.fidelidade` persiste `Compra` com Loja, Cliente, credencial de origem, identificador externo, valor, instante da venda e `criada_em` preenchido pelo servidor. Os relacionamentos usam `PROTECT`. Model e service validam coerência de tenant; a autorização reutiliza os helpers da F2.06. Não são calculados pontos nem criados LotePontos.
+O domínio `apps.fidelidade` persiste `Compra` com Loja, Cliente, credencial de origem, identificador externo, valor, instante da venda e `criada_em` preenchido pelo servidor. Os relacionamentos usam `PROTECT`. Model e service validam coerência de tenant; a autorização reutiliza os helpers da F2.06. Para novas operações, o service cria também um LotePontos histórico, na mesma transação.
 
 A chave idempotente é **Loja + identificador_externo**, protegida por `UniqueConstraint` no PostgreSQL. O mesmo identificador pode existir em outra Loja. O valor usa `DecimalField(max_digits=12, decimal_places=2)` e possui constraint `valor > 0`.
 
 | Situação | Resultado |
 | --- | --- |
-| Primeira chamada válida | Cria Compra e retorna `201 Created`. |
-| Mesma chave com Loja, Cliente, valor e instante equivalentes | Retorna Compra original, sem alterações, com `200 OK`. |
-| Mesma chave com Cliente, valor ou instante divergentes | Retorna `409 idempotencia_conflitante`, sem alterar ou duplicar Compra. |
+| Primeira chamada válida | Cria Compra + LotePontos atomicamente e retorna `201 Created`. |
+| Mesma chave com Loja, Cliente, valor e instante equivalentes | Retorna Compra e fidelidade originais, sem recálculo, com `200 OK`. Legado sem Lote retorna `fidelidade: null`. |
+| Mesma chave com Cliente, valor ou instante divergentes | Retorna `409 idempotencia_conflitante`, sem alterar ou duplicar Compra ou Lote. |
 
 A comparação usa Cliente resolvido, valor Decimal e instante timezone-aware. Offsets diferentes que representam o mesmo instante são equivalentes. Outro consumidor autorizado para a mesma Loja pode repetir a operação: `credencial_origem`, `criada_em` e os demais fatos originais são preservados, inclusive quando a credencial de origem foi desativada posteriormente.
 
-`registrar_compra()` executa a operação em transação. O INSERT ocorre em savepoint; em disputa, somente a violação da constraint da chave idempotente é recuperada para consultar a Compra vencedora e comparar os fatos. Requests equivalentes convergem para uma Compra; divergentes resultam em uma criação e um conflito. Outras falhas de integridade não são ocultadas. A estratégia utiliza a constraint imediata e o isolamento padrão READ COMMITTED do PostgreSQL configurado pelo Django.
+`registrar_compra()` executa a operação em transação. O INSERT ocorre em savepoint; em disputa, somente a violação da constraint da chave idempotente é recuperada para consultar a Compra vencedora e comparar os fatos. Somente a operação vencedora resolve a configuração e cria o Lote antes do commit da transação externa. Qualquer falha na concessão desfaz também a nova Compra. Requests equivalentes convergem para uma Compra e um Lote; divergentes resultam em uma criação e um conflito. Outras falhas de integridade não são ocultadas. A estratégia utiliza a constraint imediata e o isolamento padrão READ COMMITTED do PostgreSQL configurado pelo Django.
 
-Resposta ilustrativa, com o mesmo formato em `201` e `200`:
+Resposta ilustrativa com taxa padrão de 1,00 ponto/R$, precisão 2 e HALF_UP; o mesmo histórico é retornado em `201` e no retry `200`:
 
 ```json
 {
@@ -239,11 +239,67 @@ Resposta ilustrativa, com o mesmo formato em `201` e `200`:
   "cliente": {"cpf": "52998224725"},
   "valor": "199.90",
   "ocorrida_em": "2026-09-23T10:30:00-03:00",
-  "criada_em": "2026-09-23T10:30:02-03:00"
+  "criada_em": "2026-09-23T10:30:02-03:00",
+  "fidelidade": {
+    "pontos_base": "199.9000",
+    "pontos_concedidos": "199.9000",
+    "expira_em": "2027-09-23T10:30:00-03:00"
+  }
 }
 ```
 
-A resposta expõe somente esses campos, com valor monetário em string de duas casas. Não retorna segredo, hash, senha, credencial completa ou pontos. Nesta fase não há GET/listagem, edição, cancelamento, estorno ou exclusão de Compra pela API.
+A resposta expõe somente esses campos, com valor monetário em string de duas casas. O bloco `fidelidade` expõe apenas pontos base, pontos concedidos (strings decimais com exatamente quatro casas) e expiração. Não retorna segredo, hash, senha, credencial completa ou os demais snapshots internos. Nesta fase não há GET/listagem, edição, cancelamento, estorno ou exclusão de Compra pela API.
+
+## Motor de pontos e histórico — F3.02
+
+O PDV envia fatos da venda; pontos enviados no payload não definem a concessão. A plataforma resolve `pontos_por_real` pelo padrão do produto → Empresa → override permitido da Loja.
+
+Dois parâmetros são configuráveis **somente por Empresa**, na tela administrativa já existente, por Administrador ativo:
+
+| Parâmetro | Valores | Default |
+| --- | --- | --- |
+| `precisao_pontos` | `0`, `1`, `2`, `4` | `2` |
+| `modo_arredondamento_pontos` | `HALF_UP`, `DOWN`, `UP` | `HALF_UP` |
+
+A Loja continua podendo sobrescrever apenas `pontos_por_real`. Models e constraints rejeitam políticas fora dos conjuntos permitidos.
+
+```text
+pontos_base = Compra.valor × pontos_por_real efetivo
+pontos_concedidos = pontos_base quantizados pela política da Empresa
+```
+
+Toda a cadeia usa `Decimal`, sem float e sem arredondar o produto intermediário. Os campos físicos de pontos têm 24 dígitos, dos quais quatro decimais. A política de concessão não altera essa capacidade técnica.
+
+Exemplo: R$ 49,90 × 1,25 ponto/R$ = `62.3750` pontos base:
+
+| Precisão | Modo | Pontos concedidos na API |
+| --- | --- | --- |
+| 2 | HALF_UP (metade para cima) | `"62.3800"` |
+| 2 | DOWN (reduz a fração excedente) | `"62.3700"` |
+| 2 | UP (aumenta se houver fração excedente) | `"62.3800"` |
+| 0 | HALF_UP | `"62.0000"` |
+| 1 | HALF_UP | `"62.4000"` |
+| 4 | HALF_UP | `"62.3750"` |
+
+Taxa `0.00` é válida e ainda cria um Lote com base e concessão `"0.0000"`.
+
+Cada nova Compra registrada pelo service possui um único Lote, com relações históricas `PROTECT`. O Lote guarda Cliente exatamente igual ao da Compra, resultados, taxa aplicada, precisão, modo, validade em meses, aquisição, expiração e criação. Esses fatos são imutáveis pelos caminhos normais do model, inclusive em instâncias reconstruídas por PK e `save(update_fields=...)`. Alteração de parâmetros ou desativação da credencial de origem não invalida nem recalcula o histórico. Bulk, `QuerySet.update` e SQL bruto continuam podendo contornar validações de model.
+
+### Aquisição e validade
+
+`adquiridos_em` é o instante de `Compra.ocorrida_em`. A expiração soma **meses de calendário** usando `America/Sao_Paulo`, preservando horário e timezone-aware. Se o dia não existir no mês de destino, usa o último dia válido: 31/01/2027 + 1 mês → 28/02/2027; em 2028 → 29/02/2028.
+
+Se a combinação do instante e da validade produzir uma expiração fora do intervalo representável, a operação recebe `400 requisicao_invalida` (mensagem pública `Dados inválidos.`), com rollback integral de Compra + Lote. A expiração não é truncada e a validade não é reduzida. O parâmetro continua aceitando os inteiros positivos permitidos pelo seu contrato; não foi imposto um máximo arbitrário.
+
+Esta fase apenas registra a expiração; não implementa saldo, consumo, Resgate ou remoção automática de pontos expirados.
+
+### Configuração no processamento e Compras legadas
+
+A configuração aplicada é a vigente **no processamento da nova Compra**, inclusive para vendas retroativas. `ocorrida_em` determina aquisição/expiração, mas não seleciona uma configuração antiga: ainda não existe versionamento temporal de políticas. Os snapshots registram o que foi efetivamente aplicado.
+
+Não há backfill. Compras anteriores à F3.02 podem permanecer sem Lote e recebem `"fidelidade": null`. Um retry legado não resolve política, não calcula pontos/validade e não cria Lote, mesmo se a configuração atual produzir uma expiração impossível. Qualquer backfill futuro exige operação explícita.
+
+Retries de Compras com Lote retornam o resultado original sem recálculo, inclusive por outra credencial autorizada. Conflitos permanecem `409 idempotencia_conflitante` e preservam ambos os registros.
 
 ## Contrato externo e serializers
 
@@ -383,7 +439,7 @@ As três rotas são públicas no MVP:
 /api/redoc/       -> ReDoc
 ```
 
-O schema pode ser obtido como JSON com `Accept: application/vnd.oai.openapi+json`; YAML também está disponível. Ele descreve health, contexto e `POST /api/v1/compras/`, sem endpoints futuros. Compra possui serializers reais de request/response e respostas documentadas `201`, `200`, `400`, `401`, `403`, `404`, `409` e `405`.
+O schema pode ser obtido como JSON com `Accept: application/vnd.oai.openapi+json`; YAML também está disponível. Ele descreve health, contexto e `POST /api/v1/compras/`, sem endpoints futuros. Compra possui serializers reais de request/response, incluindo `fidelidade` nullable com pontos em strings de quatro casas e expiração, e respostas documentadas `201`, `200`, `400`, `401`, `403`, `404`, `409` e `405`.
 
 O security scheme se chama `X-API-Key`, com `type: apiKey`, `in: header` e `name: X-API-Key`. Health não exige autenticação; contexto e Compra exigem esse scheme. No Swagger, use **Authorize** e informe a chave completa `<identificador>.<segredo>` para testar os endpoints protegidos. A autorização não é persistida pelo Swagger entre carregamentos. Documentação pública não concede acesso aos dados.
 
@@ -458,6 +514,8 @@ O contrato de cada endpoint deve expor somente os dados necessários ao caso de 
 Na F2.06, a cobertura adicionada está em `apps/api/tests.py`, `apps/empresas/test_integracoes.py` e `apps/empresas/test_migration_integracoes.py`: autenticação, escopo, provisionamento web, CSRF, contrato de erros, OpenAPI e preservação dos dados na migration incremental `0007` → `0008`.
 
 Na F3.01, `apps/fidelidade/test_compras.py`, `apps/fidelidade/test_concorrencia_compras.py`, `apps/fidelidade/test_migrations.py` e `apps/api/test_compras.py` cobrem domínio, limites monetários e de identificador, tenancy, retries, conflitos, preservação da origem, concorrência real via conexões independentes, HTTP, OpenAPI e preservação do domínio anterior à migration inicial de Compra. Os testes de concorrência têm PostgreSQL como referência.
+
+Na F3.02, `apps/fidelidade/test_pontos.py`, `apps/fidelidade/test_migration_pontos.py` e `apps/api/test_pontos.py` acrescentam cobertura de cálculo, calendário, limites representáveis, snapshots, imutabilidade, rollback, legado e contrato de fidelidade. Os testes de parâmetros e concorrência existentes foram ampliados para a política corporativa e uma Compra + um Lote.
 
 Os endpoints de negócio futuros também deverão ter testes para:
 

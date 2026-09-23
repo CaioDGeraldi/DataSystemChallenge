@@ -126,12 +126,32 @@ Responsabilidades atuais da API:
 - autenticação de integrações;
 - contexto autorizado da credencial;
 - isolamento Empresa/Loja;
-- registro idempotente de Compra;
+- registro idempotente de Compra e concessão atômica de pontos;
+- retorno de `pontos_base`, `pontos_concedidos` e `expira_em` no bloco `fidelidade` de `POST /api/v1/compras/`;
 - contrato versionado e documentação OpenAPI.
+
+Fluxo da entrega com a F3.02:
+
+```text
+PDV/ERP
+↓
+envia fatos da Compra
+↓
+Retorna resolve a política
+↓
+calcula fidelidade
+↓
+persiste Compra + Lote atomicamente
+↓
+devolve o resultado
+```
+
+Compra e Lote são gravados juntos: se a concessão falhar, a nova Compra também é desfeita. Retry equivalente devolve a mesma Compra e o mesmo Lote, sem duplicar ou recalcular.
+
+Compras anteriores ao motor não receberam backfill. Seu retry retorna `fidelidade: null`: não inventamos uma política histórica que não foi registrada.
 
 Direção da vertical, somente após as fases correspondentes serem integradas:
 
-- devolver fidelidade calculada na Compra;
 - consultar informações necessárias de Cliente/saldo;
 - registrar/validar Resgate;
 - expor transparência de configuração quando houver caso de uso real.
@@ -215,7 +235,17 @@ Não gastar tempo apresentando models individualmente.
 
 ### 1:20–2:00 — Regra configurável
 
-Usar um exemplo numérico simples.
+> Cada empresa pode definir como os pontos são concedidos.
+
+```text
+Compra: R$ 49,90
+Regra: 1,25 ponto/R$
+Resultado bruto: 62,3750
+Política da Empresa: 2 casas + HALF_UP
+Resultado concedido: 62,38 pontos
+```
+
+O armazenamento interno suporta quatro casas. A Empresa escolhe precisão 0/1/2/4 e modo HALF_UP/DOWN/UP. A Loja pode sobrescrever `pontos_por_real`, mas não precisão/arredondamento. O histórico guarda o resultado e a política realmente aplicada.
 
 Direção final esperada:
 
@@ -249,6 +279,8 @@ A demonstração final deve procurar seguir uma única venda ao longo do sistema
 7. Resgate altera o saldo
 8. Dashboard reflete a operação
 ```
+
+Na entrega F3.02, demonstrar a venda até a resposta com pontos e expiração; depois repetir a requisição para mostrar que Compra e Lote permanecem os mesmos. Alterar a política e repetir a mesma venda evidencia que o histórico não é recalculado. Saldo, Resgate, campanhas, níveis e dashboard continuam futuros; as etapas correspondentes do roteiro acima dependem das próximas fases.
 
 Não abrir módulos sem relação com a história principal.
 
@@ -287,15 +319,13 @@ Escolher poucas garantias que tenham consequência clara:
 - isolamento entre Empresas;
 - credenciais próprias de integração;
 - venda idempotente;
-- histórico preservado mesmo quando configurações mudam, conforme as fases que implementarem snapshots;
+- histórico de Compra e Lote preservado mesmo quando configurações mudam;
 - PostgreSQL como defesa final de integridade;
 - API documentada por OpenAPI.
 
 Exemplo:
 
-> Se a conexão do PDV cair depois de enviar uma venda, ele pode tentar novamente. A Retorna reconhece a mesma operação e não duplica a Compra.
-
-Quando a pontuação estiver integrada, essa explicação deve ser atualizada para incluir a fidelidade de forma atômica.
+> Se a conexão do PDV cair depois de enviar uma venda, ele pode tentar novamente. A Retorna devolve a mesma Compra e o mesmo Lote, sem duplicar nem recalcular pontos. Compra e concessão são gravadas juntas: se uma falhar, a nova operação inteira é desfeita.
 
 ### 6:00–6:30 — Fechamento
 
@@ -325,6 +355,8 @@ A demonstração real pode substituir parte dos slides intermediários.
 
 ### Mensagens já sustentadas pelo produto integrado
 
+As mensagens abaixo contemplam a F3.02 validada e sua integração junto com este documento.
+
 - Retorna é a marca fictícia do produto desenvolvido no DataSystemChallenge.
 - FATECalçados é cenário demonstrativo, não regra fixa do domínio.
 - Empresa é o tenant principal.
@@ -335,15 +367,17 @@ A demonstração real pode substituir parte dos slides intermediários.
 - Integrações possuem credenciais próprias com escopo `EMPRESA` ou `LOJAS`.
 - Compra é recebida por `POST /api/v1/compras/`.
 - A mesma venda externa é identificada por `Loja + identificador_externo`.
-- Retry equivalente não cria uma segunda Compra.
+- Retry equivalente retorna a mesma Compra e o mesmo Lote, sem duplicação ou recálculo.
 - Fatos históricos da Compra são imutáveis pelos caminhos normais do domínio.
+- Novas Compras geram LotePontos atomicamente, inclusive quando a taxa concede zero pontos.
+- A Empresa configura precisão e arredondamento; o Lote preserva a política e o resultado aplicados.
+- Alterações posteriores de parâmetros não mudam os pontos históricos.
+- Compras legadas sem Lote retornam `fidelidade: null`, sem backfill implícito.
 
 ### Mensagens previstas para a vertical final
 
 Estas só devem migrar para o bloco de mensagens implementadas depois da respectiva entrega:
 
-- cálculo e armazenamento histórico de pontos;
-- política configurável de precisão/arredondamento de pontos;
 - campanhas/eventos temporários;
 - resgate;
 - níveis configuráveis;
@@ -374,7 +408,7 @@ Não. O PDV continua responsável por venda, pagamento, estoque, caixa e fiscal.
 
 ### "Então qual é a função da API?"
 
-Conectar a Retorna aos sistemas que a empresa já utiliza. Hoje ela autentica integrações, controla escopo Empresa/Loja e recebe Compras de forma idempotente. Conforme a vertical evolui, ela deve devolver os resultados de fidelidade e suportar operações como consulta necessária ao atendimento e Resgate, sempre sem duplicar as regras no PDV.
+Conectar a Retorna aos sistemas que a empresa já utiliza. Ela autentica integrações, controla escopo Empresa/Loja, recebe os fatos da Compra e devolve a fidelidade calculada. Compra e Lote são registrados juntos, sem duplicação nos retries. Consultas de saldo e Resgate continuam futuros; as regras de fidelidade ficam na Retorna, sem duplicação no PDV.
 
 ### "Por que usar API em vez de cadastrar cada venda manualmente?"
 
@@ -382,7 +416,7 @@ Porque a fidelidade precisa acompanhar os sistemas que a empresa já utiliza. A 
 
 ### "O que acontece se o PDV enviar a mesma venda duas vezes?"
 
-A Compra é idempotente. A combinação Loja + identificador externo representa a mesma operação; um retry equivalente retorna a Compra existente em vez de criar outra.
+A combinação Loja + identificador externo identifica a operação. Se os fatos forem equivalentes, a Retorna retorna a mesma Compra e o mesmo Lote, sem duplicar nem recalcular pontos, mesmo se a política tiver mudado depois. Se os fatos divergirem, informa conflito.
 
 ### "Como vocês impedem uma empresa de acessar os dados de outra?"
 
@@ -394,11 +428,23 @@ Porque ela é o cenário de demonstração. Regras que podem variar entre empres
 
 ### "O que uma empresa consegue configurar?"
 
-A resposta deve refletir apenas o que estiver integrado. Atualmente existe configuração hierárquica de fidelidade com parâmetros da Empresa e override de `pontos_por_real` por Loja. Novos parâmetros devem ser adicionados à resposta somente após implementação.
+A Empresa define os parâmetros de fidelidade, incluindo taxa, validade, precisão de 0/1/2/4 casas e modo HALF_UP/DOWN/UP. A Loja pode sobrescrever `pontos_por_real`, mas herda a precisão e o arredondamento corporativos. Cada concessão guarda a política aplicada para preservar o histórico.
 
 ### "Se a empresa mudar uma regra, as compras antigas mudam?"
 
-Não devem mudar. A arquitetura exige que operações históricas guardem o resultado e os parâmetros efetivamente aplicados. Enquanto uma parte dessa vertical ainda não estiver implementada, explicar como decisão arquitetural e não como funcionalidade pronta.
+Não. Os pontos antigos permanecem como foram concedidos. O Lote registra resultado bruto, resultado concedido e política aplicada; mudar a configuração afeta novas operações, sem reescrever esse histórico. Repetir uma venda já registrada também não recalcula seus pontos.
+
+### "Como funciona o arredondamento?"
+
+Cada Empresa escolhe quantas casas usa na concessão e o modo de arredondar: HALF_UP leva a metade para cima, DOWN reduz a fração excedente e UP aumenta quando existe fração excedente. Por exemplo, 62,3750 bruto vira 62,38 com duas casas e HALF_UP. Ambos os valores ficam no histórico.
+
+### "Por que Compras antigas não ganharam pontos automaticamente?"
+
+Porque não havia registro da política aplicada a essas Compras. Não inventamos um histórico que não foi registrado. Por isso não houve backfill: a Compra legada continua sem Lote e seu retry devolve `fidelidade: null`, sem aplicar retroativamente a configuração atual.
+
+### "O que a API devolve depois de registrar uma Compra?"
+
+Além dos dados da Compra, devolve o bloco `fidelidade` com `pontos_base`, `pontos_concedidos` e `expira_em`. Os pontos aparecem como strings com quatro casas decimais. Uma nova operação retorna 201; um retry equivalente retorna 200 com o mesmo histórico. Isso ainda não representa saldo disponível para Resgate.
 
 ### "Por que vocês escolheram um monólito modular e não microserviços?"
 
@@ -430,7 +476,7 @@ Sim. Uma Empresa possui `1..N` Lojas; Administradores têm visão corporativa e 
 
 ### "O que acontece quando a internet falha durante o envio de uma venda?"
 
-O sistema externo pode repetir a requisição. A idempotência impede que o retry equivalente gere outra Compra. Quando a pontuação estiver integrada, a mesma garantia deve abranger a concessão de fidelidade de forma atômica.
+O sistema externo pode repetir a requisição. A Retorna retorna a mesma Compra e o mesmo Lote, sem duplicar ou recalcular a concessão. Os dois registros são atômicos: se a criação do Lote falhar, a nova Compra também é desfeita. Assim, uma falha não deixa a nova venda registrada pela metade.
 
 ## Preparação dos 3 minutos de perguntas
 
