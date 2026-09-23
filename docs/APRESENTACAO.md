@@ -130,18 +130,18 @@ Responsabilidades atuais da API:
 - retorno de `pontos_base`, `pontos_concedidos` e `expira_em` no bloco `fidelidade` de `POST /api/v1/compras/`;
 - contrato versionado e documentação OpenAPI.
 
-Fluxo da entrega com a F3.02:
+Fluxo da entrega com a F3.03:
 
 ```text
 PDV/ERP
 ↓
 envia fatos da Compra
 ↓
-Retorna resolve a política
+Retorna resolve a política e a campanha aplicável à data da venda
 ↓
 calcula fidelidade
 ↓
-persiste Compra + Lote atomicamente
+persiste Compra + Lote + aplicação da campanha atomicamente
 ↓
 devolve o resultado
 ```
@@ -247,6 +247,19 @@ Resultado concedido: 62,38 pontos
 
 O armazenamento interno suporta quatro casas. A Empresa escolhe precisão 0/1/2/4 e modo HALF_UP/DOWN/UP. A Loja pode sobrescrever `pontos_por_real`, mas não precisão/arredondamento. O histórico guarda o resultado e a política realmente aplicada.
 
+Exemplo adicional da F3.03:
+
+> Uma campanha altera temporariamente a concessão sem mudar a regra permanente da Empresa ou da Loja.
+
+```text
+Regra base: 1 ponto/R$1
+Campanha: 2x pontos
+Compra: R$ 200
+Resultado: 400 pontos
+```
+
+O Administrador escolhe período e escopo da campanha. A Retorna aplica o multiplicador antes do arredondamento final e registra a origem no histórico. Para caber no roteiro, escolher um dos exemplos para o slide e deixar o outro para perguntas.
+
 Direção final esperada:
 
 ```text
@@ -254,9 +267,9 @@ Empresa define pontos por real
 ↓
 Loja herda a regra
 ↓
-política de arredondamento define a concessão final
+Evento aplicável modifica temporariamente a pontuação
 ↓
-Evento pode modificar temporariamente a pontuação
+política de arredondamento define a concessão final
 ```
 
 Somente incluir no slide as partes já implementadas no momento da apresentação.
@@ -273,14 +286,14 @@ A demonstração final deve procurar seguir uma única venda ao longo do sistema
 1. Empresa/Loja configurada
 2. integração envia Compra
 3. API aceita a operação
-4. motor calcula fidelidade
-5. Evento/Campanha altera o resultado, quando aplicável
+4. motor calcula pontos base
+5. aplica Evento/Campanha quando cabível, depois o arredondamento final
 6. Cliente acumula pontos
 7. Resgate altera o saldo
 8. Dashboard reflete a operação
 ```
 
-Na entrega F3.02, demonstrar a venda até a resposta com pontos e expiração; depois repetir a requisição para mostrar que Compra e Lote permanecem os mesmos. Alterar a política e repetir a mesma venda evidencia que o histórico não é recalculado. Saldo, Resgate, campanhas, níveis e dashboard continuam futuros; as etapas correspondentes do roteiro acima dependem das próximas fases.
+Na entrega F3.03, criar uma campanha 2x e demonstrar a venda até a resposta com pontos e expiração; depois repetir a requisição para mostrar que Compra e Lote permanecem os mesmos. Alterar a política e repetir a mesma venda evidencia que o histórico não é recalculado. Saldo, Resgate, bônus/descontos percentuais, níveis e dashboard continuam futuros; as etapas correspondentes do roteiro acima dependem das próximas fases.
 
 Não abrir módulos sem relação com a história principal.
 
@@ -374,11 +387,19 @@ As mensagens abaixo contemplam a F3.02 validada e sua integração junto com est
 - Alterações posteriores de parâmetros não mudam os pontos históricos.
 - Compras legadas sem Lote retornam `fidelidade: null`, sem backfill implícito.
 
+### Mensagens da F3.03 para integração após validação
+
+- Campanhas temporárias com multiplicador não alteram a configuração permanente.
+- A data da venda define a aplicabilidade, mesmo quando o PDV envia depois.
+- Administrador cria campanhas para a Empresa ou Lojas selecionadas e cancela sem apagar histórico.
+- Campanhas do mesmo efeito, período e Loja não são combinadas; o conflito é rejeitado.
+- Compra, Lote e aplicação histórica são gravados juntos; retries preservam o resultado original.
+- Cancelar uma campanha impede novas concessões por ela, mas não altera pontos já concedidos.
+
 ### Mensagens previstas para a vertical final
 
 Estas só devem migrar para o bloco de mensagens implementadas depois da respectiva entrega:
 
-- campanhas/eventos temporários;
 - resgate;
 - níveis configuráveis;
 - indicadores do dashboard calculados sobre o fluxo completo.
@@ -433,6 +454,18 @@ A Empresa define os parâmetros de fidelidade, incluindo taxa, validade, precis�
 ### "Se a empresa mudar uma regra, as compras antigas mudam?"
 
 Não. Os pontos antigos permanecem como foram concedidos. O Lote registra resultado bruto, resultado concedido e política aplicada; mudar a configuração afeta novas operações, sem reescrever esse histórico. Repetir uma venda já registrada também não recalcula seus pontos.
+
+### "Uma campanha muda a regra permanente da Loja?"
+
+Não. A Empresa e a Loja continuam com sua regra base. A campanha aplica um multiplicador temporário antes do arredondamento: com 1 ponto por real, campanha 2x e Compra de R$ 200, são concedidos 400 pontos. A Retorna guarda o resultado e a campanha aplicada no histórico.
+
+### "E se o PDV enviar a venda depois que a campanha terminar?"
+
+A Retorna considera a data em que a venda ocorreu. Se ela estava dentro do período, inclusive nos limites, e a campanha não foi cancelada, o multiplicador pode ser aplicado. Os parâmetros permanentes ainda são os vigentes no processamento, pois não existe versionamento temporal completo deles.
+
+### "O que acontece ao cancelar uma campanha?"
+
+Ela deixa de participar de novas concessões, mas os pontos e a origem das concessões anteriores permanecem intactos. Não editamos nem apagamos sua definição: para corrigir uma campanha, o Administrador cancela a antiga e cria outra. Repetir uma venda já registrada devolve o histórico original.
 
 ### "Como funciona o arredondamento?"
 

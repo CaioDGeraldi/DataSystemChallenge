@@ -6,7 +6,7 @@ A API REST é uma interface de primeira classe do DataSystemChallenge. Ela exist
 
 A API utiliza Django REST Framework sobre a mesma camada de domínio utilizada pela interface web.
 
-A F2.06 entrega credenciais de integração, health, contexto e OpenAPI. A F3.01 acrescenta registro de Compra e idempotência; a F3.02 acrescenta cálculo base de pontos e LotePontos histórico. Cliente por API, Resgate, saldo consolidado, campanhas/eventos e níveis permanecem futuros; os exemplos desses fluxos abaixo não são funcionalidades disponíveis.
+A F2.06 entrega credenciais de integração, health, contexto e OpenAPI. A F3.01 acrescenta registro de Compra e idempotência; a F3.02 acrescenta cálculo base de pontos e LotePontos histórico. A F3.03 acrescenta campanhas temporárias com multiplicador de pontos. Cliente por API, Resgate, saldo consolidado, bônus/descontos percentuais e níveis permanecem futuros; os exemplos desses fluxos abaixo não são funcionalidades disponíveis.
 
 ```text
 Django Templates ─┐
@@ -160,7 +160,7 @@ Loja autorizada?
 └── não -> 403
 ```
 
-## Responsabilidade pelo cálculo — futuro
+## Responsabilidade pelo cálculo
 
 O consumidor externo envia os fatos necessários da venda. Ele não envia o resultado calculado da fidelidade como fonte de verdade.
 
@@ -168,10 +168,11 @@ Exemplo correto:
 
 ```json
 {
+  "loja_id": 1,
   "identificador_externo": "VENDA-000123",
   "cliente_cpf": "52998224725",
   "valor": "149.90",
-  "realizada_em": "2026-09-22T14:31:00-03:00"
+  "ocorrida_em": "2026-09-22T14:31:00-03:00"
 }
 ```
 
@@ -181,13 +182,13 @@ A plataforma:
 2. identifica o Cliente;
 3. resolve a configuração efetiva da Empresa/Loja;
 4. identifica eventos/campanhas aplicáveis;
-5. calcula pontos e benefícios;
+5. aplica o multiplicador e calcula a concessão de pontos;
 6. persiste a operação e seus snapshots;
 7. retorna o resultado.
 
 Não deve existir um contrato em que o PDV determine arbitrariamente `pontos_concedidos` como fonte de verdade.
 
-## Compra, idempotência e fidelidade — F3.01/F3.02
+## Compra, idempotência e fidelidade — F3.01/F3.02/F3.03
 
 ```http
 POST /api/v1/compras/
@@ -265,12 +266,12 @@ A Loja continua podendo sobrescrever apenas `pontos_por_real`. Models e constrai
 
 ```text
 pontos_base = Compra.valor × pontos_por_real efetivo
-pontos_concedidos = pontos_base quantizados pela política da Empresa
+pontos_concedidos = (pontos_base × multiplicador aplicado) quantizados pela política da Empresa
 ```
 
 Toda a cadeia usa `Decimal`, sem float e sem arredondar o produto intermediário. Os campos físicos de pontos têm 24 dígitos, dos quais quatro decimais. A política de concessão não altera essa capacidade técnica.
 
-Exemplo: R$ 49,90 × 1,25 ponto/R$ = `62.3750` pontos base:
+Exemplo sem campanha: R$ 49,90 × 1,25 ponto/R$ = `62.3750` pontos base:
 
 | Precisão | Modo | Pontos concedidos na API |
 | --- | --- | --- |
@@ -300,6 +301,50 @@ A configuração aplicada é a vigente **no processamento da nova Compra**, incl
 Não há backfill. Compras anteriores à F3.02 podem permanecer sem Lote e recebem `"fidelidade": null`. Um retry legado não resolve política, não calcula pontos/validade e não cria Lote, mesmo se a configuração atual produzir uma expiração impossível. Qualquer backfill futuro exige operação explícita.
 
 Retries de Compras com Lote retornam o resultado original sem recálculo, inclusive por outra credencial autorizada. Conflitos permanecem `409 idempotencia_conflitante` e preservam ambos os registros.
+
+## Campanhas temporárias — F3.03
+
+Campanhas modificam a concessão temporariamente, sem alterar os parâmetros permanentes. Nesta fase, somente `MULTIPLICADOR_PONTOS` é operacional. A Gestão administrativa permite listar/criar/cancelar Eventos; não há CRUD público de campanhas na API.
+
+A aplicabilidade usa **`Compra.ocorrida_em`**, com intervalo inclusivo `inicio_em <= ocorrida_em <= fim_em`. O fim do Evento deve ser posterior ao início. Uma venda enviada depois do encerramento ainda pode receber o Evento se ocorreu no período e ele não estiver cancelado. A configuração Empresa/Loja continua sendo a vigente no processamento; não foi criado versionamento temporal dessa configuração.
+
+Escopo `EMPRESA` abrange todas as Lojas atuais e futuras do tenant, sem relações individuais. Escopo `LOJAS` exige uma ou mais Lojas explícitas da própria Empresa. Apenas Administrador ativo pode listar, criar e cancelar; Empresa e criador vêm do contexto autenticado.
+
+```text
+Compra.valor × pontos_por_real = pontos_base (pré-campanha)
+pontos_base × multiplicador = resultado exato intermediário
+política corporativa aplicada uma vez = pontos_concedidos
+```
+
+Exemplo: `49.90 × 1.25 = 62.3750` base; Evento `2.0000x`; precisão 2 e HALF_UP → `124.7500` concedidos. O bloco público continua contendo somente `pontos_base`, `pontos_concedidos` e `expira_em`; nenhum snapshot de campanha foi acrescentado à resposta.
+
+Multiplicadores usam Decimal com até 12 dígitos e quatro casas, estritamente positivos (`0.0001` a `99999999.9999`). Valores como `1.0025` e `0.5000` são válidos. O cálculo usa contexto local de 40 dígitos, suficiente para os três operandos, sem float e sem arredondamento antes da política final. Resultado final fora da capacidade `DecimalField(24, 4)` gera `400 requisicao_invalida`, sem truncamento e com rollback integral.
+
+### Conflitos, cancelamento e concorrência
+
+É rejeitada a criação de campanhas não canceladas com o mesmo tipo de efeito, período sobreposto e Loja efetivamente compartilhada: EMPRESA × EMPRESA, EMPRESA × LOJAS ou LOJAS × LOJAS com interseção. Fronteiras iguais também conflitam. Empresas diferentes não conflitam.
+
+Criação, cancelamento e resolução para concessão usam o mesmo bloqueio `SELECT FOR NO KEY UPDATE` da Empresa em transações PostgreSQL. Isso serializa operações da mesma Empresa, inclusive a primeira campanha, evitando a corrida de SELECT + INSERT. Na concessão, o bloqueio permanece até o commit de Compra + Lote + aplicação. O resultado acompanha a ordem efetiva de aquisição desse bloqueio: cancelamento concluído primeiro impede aplicação; concessão concluída primeiro preserva seu histórico. A arbitragem idempotente por constraint de Compra permanece inalterada.
+
+Nome, descrição, período, escopo, criador, Empresa, conjunto de Lojas e efeitos são imutáveis após a criação transacional. Para mudar uma campanha, cancele e crie outra. Cancelamento registra uma única transição `null → timestamp`; não permite reativação nem reescrita do instante. Eventos cancelados deixam de disputar aplicabilidade/conflitos para novas operações. Não há DELETE normal dos registros históricos.
+
+Estados mostrados na Gestão usam o relógio atual: AGENDADO, VIGENTE, ENCERRADO e CANCELADO. Esse estado não substitui a comparação com a data da Compra.
+
+### Proveniência e atomicidade
+
+O Lote guarda `multiplicador_pontos_aplicado` imutável e valida sua concessão a partir desse snapshot. Lotes anteriores recebem `1.0000` pela migration, preservando os demais fatos e sem criar aplicações retroativas.
+
+Quando há Evento, `AplicacaoEfeitoEventoLote` guarda relações protegidas com Lote, Evento e Efeito, além de tipo, valor aplicado e criação. Valida tenant, Loja, período, origem e igualdade com o multiplicador do Lote. Sem Evento, o multiplicador é `1.0000` e não há aplicação; uma campanha `1.0000x` gera aplicação, mesmo sem alterar o resultado numérico.
+
+Compra + Lote + aplicação são uma única transação. Falha em qualquer parte desfaz a nova operação inteira. Retry equivalente não resolve Evento novamente, não recalcula e não duplica aplicação; 409 preserva todo o histórico. Cancelamento posterior não invalida Lotes nem aplicações existentes. Compra legada sem Lote continua retornando `fidelidade: null`, sem backfill.
+
+Rotas web, com CSRF nos POSTs:
+
+- `GET /gestao/eventos/`;
+- `GET/POST /gestao/eventos/novo/`;
+- `POST /gestao/eventos/<id>/cancelar/`.
+
+Como no restante do domínio, `QuerySet.update`, bulk e SQL bruto podem contornar validações; não são caminhos normais de escrita. Nenhum trigger foi criado.
 
 ## Contrato externo e serializers
 
@@ -530,7 +575,7 @@ Os endpoints de negócio futuros também deverão ter testes para:
 - retry/idempotência de Compra;
 - aplicação de configuração herdada;
 - aplicação de override da Loja;
-- aplicação de Evento quando o motor correspondente existir.
+- aplicação de Evento com preservação do histórico.
 
 O teste de isolamento entre Empresas é requisito prioritário para qualquer endpoint multiempresa.
 

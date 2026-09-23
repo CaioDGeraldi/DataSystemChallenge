@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
 
@@ -9,18 +11,23 @@ from apps.usuarios.validators import normalizar_cpf, validar_cpf
 from .exceptions import ClienteNaoEncontrado, IdempotenciaConflitante, LojaForaDoEscopo
 from .calculos import calcular_expiracao, calcular_pontos
 from .models import Compra, LotePontos
+from .eventos import resolver_efeito_evento, registrar_aplicacao_evento
+from .escrita_eventos import _permitir_escrita_eventos
 
 
 def _criar_lote_da_nova_compra(compra):
     """Somente após vencer o INSERT, dentro da transação de registrar_compra."""
     politica = resolver_configuracao(compra.loja.empresa, compra.loja)
+    efeito = resolver_efeito_evento(compra.loja, compra.ocorrida_em)
+    multiplicador = efeito.valor if efeito is not None else Decimal("1.0000")
     base, concedidos = calcular_pontos(
         compra.valor, politica.pontos_por_real, politica.precisao_pontos,
-        politica.modo_arredondamento_pontos,
+        politica.modo_arredondamento_pontos, multiplicador,
     )
-    return LotePontos.objects.create(
+    lote = LotePontos.objects.create(
         compra=compra, cliente_id=compra.cliente_id,
         pontos_base=base, pontos_concedidos=concedidos,
+        multiplicador_pontos_aplicado=multiplicador,
         pontos_por_real_aplicado=politica.pontos_por_real,
         precisao_pontos_aplicada=politica.precisao_pontos,
         modo_arredondamento_aplicado=politica.modo_arredondamento_pontos,
@@ -28,6 +35,10 @@ def _criar_lote_da_nova_compra(compra):
         adquiridos_em=compra.ocorrida_em,
         expira_em=calcular_expiracao(compra.ocorrida_em, politica.validade_pontos_meses),
     )
+    if efeito is not None:
+        with _permitir_escrita_eventos(lote):
+            registrar_aplicacao_evento(lote, efeito)
+    return lote
 
 
 def _comparar_fatos(existente, candidata):

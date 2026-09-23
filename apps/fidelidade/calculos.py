@@ -13,7 +13,7 @@ from apps.empresas.parametros import PRECISOES_PONTOS
 ARREDONDAMENTOS = {"HALF_UP": ROUND_HALF_UP, "DOWN": ROUND_DOWN, "UP": ROUND_UP}
 
 
-def calcular_pontos(valor, pontos_por_real, precisao, modo):
+def calcular_pontos(valor, pontos_por_real, precisao, modo, multiplicador=Decimal("1.0000")):
     for numero in (valor, pontos_por_real):
         if not isinstance(numero, Decimal) or not numero.is_finite() or numero < 0:
             raise ValidationError("Informe valores Decimal não negativos e finitos.")
@@ -21,12 +21,18 @@ def calcular_pontos(valor, pontos_por_real, precisao, modo):
     if (type(precisao) is not int or precisao not in PRECISOES_PONTOS
             or not isinstance(modo, str) or modo not in ARREDONDAMENTOS):
         raise ValidationError("Política de pontos inválida.")
-    # Duas entradas de até 12 dígitos: produto exato de até 24 dígitos.
-    # O contexto local evita depender da precisão Decimal do chamador.
-    with localcontext(Context(prec=28, rounding=ROUND_HALF_UP)):
+    if not isinstance(multiplicador, Decimal) or not multiplicador.is_finite() or multiplicador <= 0:
+        raise ValidationError("Informe um multiplicador Decimal estritamente positivo.")
+    DecimalValidator(max_digits=12, decimal_places=4)(multiplicador)
+    # Três operandos de até 12 dígitos: até 36 dígitos no produto exato.
+    # Margem para carry na quantização; contexto independente do chamador.
+    with localcontext(Context(prec=40, rounding=ROUND_HALF_UP)):
         base = valor * pontos_por_real
-        concedidos = base.quantize(Decimal(1).scaleb(-precisao), rounding=ARREDONDAMENTOS[modo])
-        return base.quantize(Decimal("0.0001")), concedidos.quantize(Decimal("0.0001"))
+        concedidos = (base * multiplicador).quantize(Decimal(1).scaleb(-precisao), rounding=ARREDONDAMENTOS[modo])
+        base = base.quantize(Decimal("0.0001"))
+        concedidos = concedidos.quantize(Decimal("0.0001"))
+        DecimalValidator(max_digits=24, decimal_places=4)(concedidos)
+        return base, concedidos
 
 
 def calcular_expiracao(adquiridos_em, validade_meses):

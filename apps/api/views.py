@@ -58,8 +58,9 @@ class CompraView(APIView):
             405: OpenApiResponse(EnvelopeErroSerializer, description="metodo_nao_permitido"),
         },
         description=("Registra Compra e fidelidade atomicamente. Idempotência por Loja + identificador externo. "
-                     "Aplica a configuração efetiva no processamento e preserva snapshots nos retries. "
-                     "Expiração não representável retorna 400 com rollback integral."),
+                     "Aplica a configuração efetiva no processamento e campanha em ocorrida_em antes do arredondamento. "
+                     "Preserva snapshots nos retries. "
+                     "Expiração ou pontos não representáveis retornam 400 com rollback integral."),
     )
     def post(self, request):
         entrada = RegistrarCompraSerializer(data=request.data)
