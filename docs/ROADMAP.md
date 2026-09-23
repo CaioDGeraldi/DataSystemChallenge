@@ -57,7 +57,7 @@ Entregue:
 - documentação de coordenação;
 - registro do uso consciente de IA.
 
-## Fase 2 — Fundação técnica e domínio
+## Fase 2 — Fundação técnica e domínio ✅
 
 ### F2.01 — Bootstrap Django e PostgreSQL ✅
 
@@ -84,7 +84,7 @@ Entregue como primeira modelagem do domínio:
 - relações protegidas com `PROTECT`;
 - testes de domínio.
 
-Essa modelagem foi válida para o estágio em que foi criada, mas `Cliente` e `Gestor` precisam evoluir para suportar o produto multiempresa consolidado posteriormente.
+Essa primeira modelagem foi posteriormente reconciliada pela F2.03A para suportar corretamente identidade global, múltiplas Empresas e escopo por Loja.
 
 ### Arquitetura multiempresa, parâmetros e API ✅
 
@@ -101,111 +101,139 @@ Consolidado em `docs/ARQUITETURA_PRODUTO.md` e `docs/API.md`:
 - idempotência;
 - isolamento multiempresa.
 
-### F2.03A — Reconciliar domínio multiempresa 🟡 P0
+### F2.03A — Reconciliar domínio multiempresa ✅ P0
 
 Issue: #14.
 
-Objetivo: remover as limitações estruturais da primeira modelagem antes de continuar cadastro e autorização.
+Entregue:
 
-Principais entregas:
-
-- `Cliente` passa a representar `Usuario + Empresa`;
+- `Usuario` permanece como identidade global;
+- `Cliente` representa `Usuario + Empresa`;
 - um `Usuario` pode participar do programa de várias Empresas;
-- criar `MembroEmpresa`;
+- `MembroEmpresa` representa vínculo administrativo com a Empresa;
 - papéis iniciais `ADMINISTRADOR` e `GESTOR`;
-- criar `AcessoLoja`;
+- `AcessoLoja` representa o escopo explícito de Gestor;
 - Gestor pode possuir `1..N` Lojas;
-- Administrador possui acesso corporativo implícito;
-- constraints de unicidade e isolamento entre Empresas;
-- migrations incrementais;
-- testes do novo domínio.
+- Administrador possui escopo corporativo implícito para Lojas atuais e futuras;
+- papel e escopo permanecem conceitos separados;
+- relações principais protegidas com `PROTECT`;
+- invariantes multiempresa e constraints incrementais;
+- testes do domínio no PostgreSQL.
 
-Esta fase bloqueia a continuação do fluxo antigo da Issue #11.
+Limitação aceita: operações como `QuerySet.update`, bulk e SQL bruto não são caminhos normais do domínio e podem contornar validações de model.
 
-### F2.03B — Cadastro e autenticação por contexto ⏳ P0
+### F2.03B — Cadastro e autenticação por contexto ✅ P0
 
-A Issue #11 deverá ser revisada após a F2.03A.
+Issue: #11.
 
-Direção:
+Entregue:
 
-- cadastro de Cliente por Empresa;
-- reutilização segura de `Usuario` existente em vez de duplicar identidade;
-- login por CPF + senha;
-- seleção de contexto;
-- sessão com contexto ativo;
-- autorização baseada no vínculo real com a Empresa;
-- áreas mínimas protegidas.
+- cadastro público de Cliente por Empresa;
+- reutilização segura de `Usuario` existente mediante prova de senha;
+- login global por CPF + senha;
+- contextos derivados dos vínculos reais de Cliente e `MembroEmpresa`;
+- seleção explícita quando existem múltiplos contextos;
+- sessão com somente `tipo_contexto`, `empresa_id` e `vinculo_id`;
+- autorização revalidada no banco a cada acesso protegido;
+- áreas mínimas de Cliente e Gestão;
+- logout via POST + CSRF;
+- `Empresa.slug` único e estável;
+- testes de concorrência, autenticação, autorização e migration.
 
-### F2.04 — Onboarding de Empresa e membros ⏳ P0
+Limitação conhecida: diferenças de resposta no cadastro ainda podem permitir inferência da existência de um CPF; uniformização de mensagens e rate limiting ficam para endurecimento posterior.
 
-Direção:
+### F2.04A — Onboarding de Empresa e primeira Loja ✅ P0
 
-```text
-Usuario
-↓
-cria Empresa
-↓
-se torna ADMINISTRADOR
-↓
-cria 1..N Lojas
-↓
-convida membros
-↓
-atribui papel
-↓
-se GESTOR, atribui 1..N Lojas
-```
+Issue: #21.
 
-Inclui convite seguro, uso único, validade, revogação e reaproveitamento de identidade já existente.
+Entregue:
 
-### F2.05 — Parâmetros hierárquicos ⏳ P0
+- onboarding público para identidade nova ou existente;
+- criação atômica de `Empresa + primeira Loja + MembroEmpresa ADMINISTRADOR`;
+- geração de slug único no backend;
+- reaproveitamento da identidade global existente;
+- ativação do novo contexto de Gestão após sucesso;
+- criação de Lojas adicionais somente por Administrador ativo;
+- Administrador vê todas as Lojas do tenant;
+- Gestor vê somente Lojas de `AcessoLoja`;
+- testes de atomicidade, concorrência, autorização e tenancy.
 
-Objetivo: eliminar valores comerciais hardcoded antes do motor de fidelidade.
+### F2.04B — Convites de membros e atribuição de Lojas ✅ P0
 
-Direção:
+Issue: #23.
+
+Entregue:
+
+- convites direcionados por CPF;
+- token criptograficamente aleatório com somente hash persistido;
+- validade de 7 dias;
+- uso único e revogação explícita;
+- convite para `ADMINISTRADOR` ou `GESTOR`;
+- `GESTOR` exige `1..N` Lojas explícitas do próprio tenant;
+- aceite atômico com reutilização ou criação de `Usuario`;
+- criação de `MembroEmpresa` e `AcessoLoja` somente no aceite;
+- proteção contra aceite duplicado e concorrência;
+- telas mínimas de membros e convites;
+- testes de rollback, identidade, sessão, tenancy e permissões.
+
+### F2.05 — Parâmetros hierárquicos ✅ P0
+
+Issue: #25.
+
+Entregue:
 
 ```text
 Padrão do produto
 ↓
 Configuração da Empresa
 ↓
-Override da Loja
+Override opcional da Loja
 ```
 
-Prioridades iniciais:
+- defaults tipados e centralizados;
+- `ConfiguracaoFidelidadeEmpresa` com parâmetros P0;
+- `OverrideFidelidadeLoja` somente para `pontos_por_real` nesta fase;
+- `Decimal` para pontuação fracionária e valores monetários;
+- ausência de override significa herança dinâmica da Empresa;
+- `0.00` é um override válido e não é confundido com ausência;
+- serviço somente leitura para resolver configuração efetiva;
+- isolamento cross-tenant no backend;
+- edição restrita a Administrador ativo;
+- migration incremental e testes de domínio, autorização, resolução e tenancy.
 
-- pontos por real;
-- validade dos pontos;
-- resgate mínimo;
-- incremento de resgate;
-- conversão pontos/desconto;
-- parâmetros necessários para cliente ativo e indicadores.
+Níveis, benefícios, Compra, Resgate e eventos/campanhas permanecem fora desta fase.
 
-Lojas armazenam apenas overrides, não cópias dos padrões da Empresa.
+### F2.06 — Base da API REST ✅ P0
 
-### F2.06 — Base da API REST ⏳ P0
+Issue: #28.
 
-Objetivo: tornar integração uma capacidade nativa do produto.
+Entregue:
 
-Entregas mínimas:
+- Django REST Framework e `drf-spectacular`;
+- API versionada em `/api/v1/`;
+- `GET /api/v1/health/` público;
+- `GET /api/v1/contexto/` autenticado;
+- credenciais próprias de integração, separadas de `Usuario`;
+- autenticação por `X-API-Key: <identificador>.<segredo>`;
+- segredo bruto exibido somente na criação e persistência apenas do hash;
+- escopos `EMPRESA` e `LOJAS`;
+- imutabilidade da Empresa, do tipo de escopo e do conjunto emitido de Lojas pelos caminhos normais do domínio;
+- helpers reutilizáveis de autorização por Loja;
+- provisionamento e desativação de credenciais por Administrador ativo;
+- envelope consistente para erros tratados;
+- `/api/schema/`, `/api/docs/` e `/api/redoc/`;
+- OpenAPI refletindo somente endpoints realmente implementados;
+- testes de autenticação, tenancy, HTTP, CSRF, migration e schema.
 
-- Django REST Framework;
-- `/api/v1/`;
-- health check;
-- autenticação de integração;
-- escopo Empresa/Loja;
-- formato consistente de erros;
-- OpenAPI;
-- Swagger UI;
-- ReDoc;
-- documentação conceitual de integração;
-- testes de isolamento cross-tenant.
+Compra, idempotência transacional, pontos, Resgate, Cliente REST, níveis e campanhas/eventos permanecem futuros.
 
 ## Fase 3 — Motor de fidelidade
 
-### F3.01 — Compra e idempotência ⏳ P0
+### F3.01 — Compra e idempotência 🟡 P0
 
-Primeiro recurso transacional central exposto para integração.
+Próxima fase da vertical principal.
+
+Objetivo: implementar o primeiro recurso transacional central exposto para integração, sem antecipar ainda o cálculo de pontos da F3.02.
 
 Direção:
 
@@ -214,8 +242,9 @@ Direção:
 - prevenção de duplicidade em retries;
 - valor com `Decimal`;
 - data/hora da venda;
-- vínculo com Cliente da Empresa;
+- vínculo com Cliente da mesma Empresa da Loja;
 - endpoint `POST /api/v1/compras/`;
+- reutilização da autenticação e do escopo de integração entregues na F2.06;
 - consumidor envia fatos da venda, não pontos calculados.
 
 A plataforma continua responsável pela fidelidade; não substitui o PDV.
@@ -244,6 +273,8 @@ Cada transação guarda o resultado aplicado para não ser recalculada quando co
 
 ### F3.03 — Eventos/Campanhas ⏳ P0
 
+Issue aberta: #26.
+
 Primeira capacidade priorizada:
 
 - nome;
@@ -261,6 +292,8 @@ Loja herda 1 ponto/R$1
 ```
 
 Para a entrega inicial, campanhas conflitantes sobre a mesma regra/Loja/período devem ser impedidas em vez de combinadas implicitamente.
+
+A implementação deve ocorrer após existir a base operacional de Compra e cálculo de pontos necessária para tornar o efeito demonstrável na vertical principal.
 
 ### F3.04 — Resgate e consumo de lotes ⏳ P0
 
