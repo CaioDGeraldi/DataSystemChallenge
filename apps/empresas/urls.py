@@ -4,6 +4,9 @@ from . import views
 
 app_name = "empresas"
 urlpatterns = [
+    path("gestao/integracoes/", views.integracoes, name="integracoes"),
+    path("gestao/integracoes/nova/", views.nova_integracao, name="nova_integracao"),
+    path("gestao/integracoes/<int:credencial_id>/desativar/", views.desativar_integracao, name="desativar_integracao"),
     path("gestao/configuracao/", views.configuracao_empresa, name="configuracao_empresa"),
     path("gestao/lojas/<int:loja_id>/configuracao/", views.configuracao_loja, name="configuracao_loja"),
     path("gestao/lojas/<int:loja_id>/configuracao/remover/", views.remover_override_loja_view, name="remover_override_loja"),

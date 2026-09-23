@@ -1,13 +1,16 @@
 from dataclasses import asdict
 
 import hashlib
+import re
 import secrets
 
 from django.contrib.auth import authenticate, get_user_model, login
+from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.utils.text import slugify
 from django.utils import timezone
+from django.views.decorators.debug import sensitive_variables
 
 from apps.usuarios.validators import normalizar_cpf, validar_cpf
 
@@ -18,6 +21,7 @@ from apps.usuarios.services import (
 from .models import AcessoLoja, ConviteAcessoLoja, ConviteMembro, Empresa, Loja, MembroEmpresa
 from .validators import normalizar_cnpj, validar_cnpj
 from .models import ConfiguracaoFidelidadeEmpresa, OverrideFidelidadeLoja
+from .models import CredencialAcessoLoja, CredencialIntegracao, _permitir_acessos_iniciais
 from .parametros import ConfiguracaoEfetiva, PADROES_FIDELIDADE
 
 
@@ -335,3 +339,94 @@ def consultar_configuracao_loja(request, loja_id):
         "configuracao": resolver_configuracao(loja.empresa, loja),
         "tem_override": OverrideFidelidadeLoja.objects.filter(loja=loja).exists(),
     }
+
+
+@sensitive_variables()
+def gerar_chave_integracao():
+    """Identificador público (144 bits) e segredo (256 bits), independentes."""
+    return secrets.token_urlsafe(18), secrets.token_urlsafe(32)
+
+
+def validar_lojas_credencial(empresa, escopo, lojas):
+    if escopo not in CredencialIntegracao.Escopo.values:
+        raise ValidationError({"escopo": "Escopo inválido."})
+    ids = {loja.pk for loja in lojas}
+    if escopo == CredencialIntegracao.Escopo.EMPRESA and ids:
+        raise ValidationError({"lojas": "Credencial EMPRESA não recebe seleção de Lojas."})
+    if escopo == CredencialIntegracao.Escopo.LOJAS and not ids:
+        raise ValidationError({"lojas": "Selecione ao menos uma Loja."})
+    selecionadas = list(Loja.objects.filter(pk__in=ids, empresa_id=empresa.pk).order_by("nome", "pk"))
+    if len(selecionadas) != len(ids):
+        raise ValidationError({"lojas": "Todas as Lojas devem pertencer à Empresa ativa."})
+    return selecionadas
+
+
+@sensitive_variables()
+def criar_credencial(request, *, nome, escopo, lojas=()):
+    with transaction.atomic():
+        criador = _administrador_bloqueado(request)
+        selecionadas = validar_lojas_credencial(criador.empresa, escopo, lojas)
+        identificador, segredo = gerar_chave_integracao()
+        credencial = CredencialIntegracao.objects.create(
+            empresa_id=criador.empresa_id, criada_por=criador, nome=nome,
+            identificador=identificador, segredo_hash=make_password(segredo), escopo=escopo,
+        )
+        with _permitir_acessos_iniciais(credencial, selecionadas):
+            for loja in selecionadas:
+                CredencialAcessoLoja.objects.create(credencial=credencial, loja=loja)
+        # A chave é um retorno efêmero, nunca atributo do model ou dado de sessão.
+        return credencial, f"{identificador}.{segredo}"
+
+
+def desativar_credencial(request, credencial_id):
+    with transaction.atomic():
+        administrador = _administrador_bloqueado(request)
+        credencial = CredencialIntegracao.objects.select_for_update().filter(
+            pk=credencial_id, empresa_id=administrador.empresa_id,
+        ).first()
+        if credencial is None:
+            raise PermissionDenied("Credencial não autorizada neste contexto.")
+        credencial.ativa = False
+        credencial.save(update_fields=["ativa"])
+        return credencial
+
+
+@sensitive_variables()
+def autenticar_credencial(chave):
+    """Retorna a credencial válida ou None, sem distinguir falhas publicamente."""
+    if not isinstance(chave, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}\.[A-Za-z0-9_-]{1,128}", chave):
+        return None
+    identificador, segredo = chave.split(".")
+    with transaction.atomic():
+        # O mesmo lock da desativação evita restaurar estado obsoleto ao registrar uso.
+        credencial = CredencialIntegracao.objects.select_for_update().filter(identificador=identificador).first()
+        if credencial is None:
+            # Custo do hasher também para identificadores inexistentes.
+            make_password(segredo)
+            return None
+        segredo_valido = check_password(segredo, credencial.segredo_hash)
+        if not segredo_valido or not credencial.ativa:
+            return None
+        credencial.ultimo_uso_em = timezone.now()
+        credencial.save(update_fields=["ultimo_uso_em"])
+        return credencial
+
+
+def lojas_autorizadas(credencial):
+    # Reconsulta estado persistido: objetos antigos ou adulterados não ampliam acesso.
+    atual = CredencialIntegracao.objects.filter(pk=credencial.pk, ativa=True).first()
+    if atual is None:
+        return Loja.objects.none()
+    lojas = Loja.objects.filter(empresa_id=atual.empresa_id)
+    if atual.escopo == CredencialIntegracao.Escopo.LOJAS:
+        lojas = lojas.filter(acessos_credenciais__credencial_id=atual.pk)
+    elif atual.escopo != CredencialIntegracao.Escopo.EMPRESA:
+        return Loja.objects.none()
+    return lojas.order_by("nome", "pk")
+
+
+def exigir_loja_autorizada(credencial, loja):
+    autorizada = lojas_autorizadas(credencial).filter(pk=loja.pk).first()
+    if autorizada is None:
+        raise PermissionDenied("Loja não autorizada para esta integração.")
+    return autorizada

@@ -1,10 +1,15 @@
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
+from django.contrib.auth.hashers import identify_hasher
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
 from django.utils import timezone
 
 from apps.usuarios.validators import normalizar_cpf, validar_cpf
@@ -277,3 +282,100 @@ class OverrideFidelidadeLoja(models.Model):
 
     def __str__(self):
         return f"Override de fidelidade — {self.loja}"
+
+
+class CredencialIntegracao(models.Model):
+    class Escopo(models.TextChoices):
+        EMPRESA = "EMPRESA", "Empresa"
+        LOJAS = "LOJAS", "Lojas"
+
+    empresa = models.ForeignKey(Empresa, on_delete=models.PROTECT, related_name="credenciais_integracao")
+    nome = models.CharField(max_length=255)
+    identificador = models.CharField(max_length=64, unique=True, editable=False)
+    segredo_hash = models.CharField(max_length=128, editable=False)
+    escopo = models.CharField(max_length=7, choices=Escopo.choices)
+    ativa = models.BooleanField(default=True)
+    criada_por = models.ForeignKey(MembroEmpresa, on_delete=models.PROTECT, related_name="credenciais_criadas")
+    criada_em = models.DateTimeField(default=timezone.now, editable=False)
+    ultimo_uso_em = models.DateTimeField(null=True, blank=True, editable=False)
+
+    def clean(self):
+        super().clean()
+        try:
+            identify_hasher(self.segredo_hash)
+        except (ValueError, TypeError):
+            raise ValidationError({"segredo_hash": "Informe somente um hash de segredo válido."}) from None
+        if self.criada_por_id and self.empresa_id:
+            empresa = MembroEmpresa.objects.filter(pk=self.criada_por_id).values_list("empresa_id", flat=True).first()
+            if empresa is not None and empresa != self.empresa_id:
+                raise ValidationError({"criada_por": "O criador deve pertencer à Empresa da credencial."})
+        if self.pk is not None:
+            original = type(self)._base_manager.using(self._state.db).filter(pk=self.pk).values("empresa_id", "escopo").first()
+            if original is not None:
+                erros = {}
+                if original["empresa_id"] != self.empresa_id:
+                    erros["empresa"] = "A Empresa não pode ser alterada após a criação."
+                if original["escopo"] != self.escopo:
+                    erros["escopo"] = "O escopo não pode ser alterado. Desative a credencial e crie outra."
+                if erros:
+                    raise ValidationError(erros)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.nome
+
+
+_acessos_em_emissao = ContextVar("acessos_credencial_em_emissao", default=frozenset())
+
+
+@contextmanager
+def _permitir_acessos_iniciais(credencial, lojas):
+    """Uso interno de criar_credencial, dentro da transação de emissão."""
+    token = _acessos_em_emissao.set(frozenset((credencial.pk, loja.pk) for loja in lojas))
+    try:
+        yield
+    finally:
+        _acessos_em_emissao.reset(token)
+
+
+class CredencialAcessoLoja(models.Model):
+    credencial = models.ForeignKey(CredencialIntegracao, on_delete=models.PROTECT, related_name="acessos_lojas")
+    loja = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name="acessos_credenciais")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["credencial", "loja"], name="credencial_loja_unica"),
+        ]
+
+    def clean(self):
+        super().clean()
+        credencial = CredencialIntegracao.objects.filter(pk=self.credencial_id).first()
+        loja_empresa = Loja.objects.filter(pk=self.loja_id).values_list("empresa_id", flat=True).first()
+        if credencial is not None:
+            if credencial.escopo != CredencialIntegracao.Escopo.LOJAS:
+                raise ValidationError({"credencial": "Somente credenciais LOJAS recebem acessos individuais."})
+            if loja_empresa is not None and loja_empresa != credencial.empresa_id:
+                raise ValidationError({"loja": "A Loja deve pertencer à Empresa da credencial."})
+
+        original = type(self)._base_manager.using(self._state.db).filter(pk=self.pk).values_list(
+            "credencial_id", "loja_id",
+        ).first() if self.pk is not None else None
+        acesso = (self.credencial_id, self.loja_id)
+        if original is not None:
+            if original != acesso:
+                raise ValidationError("O escopo emitido é imutável. Desative a credencial e crie outra.")
+        elif acesso not in _acessos_em_emissao.get():
+            raise ValidationError("Lojas só podem ser vinculadas durante a criação da credencial.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+@receiver(pre_delete, sender=CredencialAcessoLoja)
+def _impedir_remocao_acesso_credencial(sender, instance, **kwargs):
+    # pre_delete também protege QuerySet.delete() e o manager reverso.
+    raise ValidationError("O escopo emitido é imutável. Desative a credencial e crie outra.")

@@ -1,0 +1,9 @@
+{% extends "datasystem/base.html" %}
+{% block titulo %}Credencial criada{% endblock %}
+{% block conteudo %}
+<h1>Credencial criada — {{ nome }}</h1>
+<p><strong>Copie a chave agora. O segredo é exibido somente na criação e não poderá ser exibido novamente.</strong></p>
+<pre><code>X-API-Key: {{ chave }}</code></pre>
+<p>Guarde a chave em local seguro. Se perdê-la, desative esta credencial e crie outra.</p>
+<p><a href="{% url 'empresas:integracoes' %}">Voltar às integrações</a></p>
+{% endblock %}
