@@ -36,7 +36,9 @@ Motor de pontos
 ↓
 Evento/Campanha temporária
 ↓
-Níveis e Resgate
+Resgate
+↓
+Níveis
 ↓
 Dashboard
 ```
@@ -225,7 +227,7 @@ Entregue:
 - OpenAPI refletindo somente endpoints realmente implementados;
 - testes de autenticação, tenancy, HTTP, CSRF, migration e schema.
 
-Compra e idempotência transacional foram entregues posteriormente na F3.01. O motor base de pontos e `LotePontos` foi entregue na F3.02. Campanhas/eventos temporários foram entregues na F3.03. Resgate, Cliente REST e níveis permanecem futuros.
+Compra e idempotência transacional foram entregues posteriormente na F3.01. O motor base de pontos e `LotePontos` foi entregue na F3.02. Campanhas/eventos temporários foram entregues na F3.03. Resgate idempotente e consumo histórico de Lotes foram entregues na F3.04. Cliente REST e níveis permanecem futuros.
 
 ## Fase 3 — Motor de fidelidade
 
@@ -280,7 +282,7 @@ Entregue:
 - OpenAPI, `docs/API.md` e `docs/APRESENTACAO.md` atualizados;
 - validação em PostgreSQL com 87 testes focais e 291 testes totais, além dos gates de migrations, diff, lock e OpenAPI.
 
-Limitações deliberadas da F3.02: não havia backfill automático, saldo consumível, Resgate, campanhas/eventos, níveis ou versionamento temporal completo de configurações. Campanhas/eventos foram entregues posteriormente na F3.03. Operações bulk, `QuerySet.update` e SQL bruto continuam fora dos caminhos normais protegidos pelo model.
+Limitações deliberadas da F3.02: não havia backfill automático, saldo consumível, Resgate, campanhas/eventos, níveis ou versionamento temporal completo de configurações. Campanhas/eventos foram entregues posteriormente na F3.03 e Resgate/saldo consumível foram entregues na F3.04. Operações bulk, `QuerySet.update` e SQL bruto continuam fora dos caminhos normais protegidos pelo model.
 
 ### F3.03 — Eventos/Campanhas ✅ P0
 
@@ -311,27 +313,37 @@ Entregue:
 - `docs/API.md` e `docs/APRESENTACAO.md` atualizados para o fluxo real;
 - validação em PostgreSQL com 99 testes focais e 325 testes totais, além de `check`, `makemigrations --check`, migration aplicada, OpenAPI, `git diff --check` e `uv lock --check`.
 
-Limitações deliberadas: somente `MULTIPLICADOR_PONTOS` é operacional; não há `BONUS_PONTOS_PERCENTUAL`, `DESCONTO_GERAL_PERCENTUAL`, saldo, Resgate, níveis, backfill de campanhas, combinação automática de campanhas conflitantes nem versionamento temporal completo das configurações permanentes. Operações bulk, `QuerySet.update` e SQL bruto continuam fora dos caminhos normais protegidos pelo domínio.
+Limitações deliberadas: somente `MULTIPLICADOR_PONTOS` é operacional; não há `BONUS_PONTOS_PERCENTUAL`, `DESCONTO_GERAL_PERCENTUAL`, níveis, backfill de campanhas, combinação automática de campanhas conflitantes nem versionamento temporal completo das configurações permanentes. Na F3.03 ainda não havia saldo consumível nem Resgate; esse fluxo foi entregue posteriormente na F3.04. Operações bulk, `QuerySet.update` e SQL bruto continuam fora dos caminhos normais protegidos pelo domínio.
 
-### F3.04 — Resgate e consumo de lotes 🟡 P0
+### F3.04 — Resgate e consumo de lotes ✅ P0
+
+Issue: #49.
+
+Entregue:
+
+- `Resgate` como fato histórico da operação e `AlocacaoResgate` como consumo histórico dos Lotes;
+- saldo disponível derivado dos `pontos_concedidos` de Lotes ainda válidos menos alocações anteriores, sem campo de saldo materializado;
+- pedido de Resgate com quantidade inteira positiva, persistida em `DecimalField(max_digits=20, decimal_places=0)`, enquanto alocações preservam quatro casas em `DecimalField(max_digits=24, decimal_places=4)`;
+- consumo determinístico por FEFO: `expira_em ASC → adquiridos_em ASC → pk ASC`;
+- instante do Resgate definido no servidor por `timezone.now()`, sem backdating; em `expira_em == resgatado_em` o Lote já está expirado;
+- mínimo, incremento e valor monetário por ponto resolvidos na nova operação e preservados em snapshots históricos;
+- desconto histórico em `DecimalField(max_digits=32, decimal_places=2)`, calculado com `Decimal` e `ROUND_HALF_UP`, sem `float` ou truncamento;
+- `POST /api/v1/resgates/` autenticado por `X-API-Key`, com primeira criação `201`, retry equivalente `200` e conflito material `409 idempotencia_conflitante`;
+- chave idempotente `Loja + identificador_externo`, protegida por `UniqueConstraint` e arbitrada antes do consumo com `pg_advisory_xact_lock` derivado deterministicamente de SHA-256;
+- ordem de locks `advisory → Cliente → Lotes FEFO`, impedindo double-spend entre Resgates concorrentes com chaves diferentes para o mesmo Cliente;
+- retry equivalente preservando credencial de origem, snapshots, desconto, instante e alocações, sem reler configuração, saldo ou expiração;
+- relações históricas com `PROTECT`, imutabilidade de Resgate/alocações e bloqueio dos caminhos públicos de `update`, `bulk_update` e `bulk_create`;
+- criação atômica de Resgate e todas as alocações, com rollback integral em falhas de validação, cálculo, persistência ou conjunto incompleto;
+- consumo baseado em `LotePontos.pontos_concedidos`, incorporando campanhas já aplicadas sem recalcular Evento;
+- migration incremental `fidelidade.0004_resgate_alocacaoresgate`;
+- OpenAPI, `docs/API.md` e `docs/APRESENTACAO.md` atualizados para o contrato real;
+- validação em PostgreSQL com 150 testes focais e 377 testes totais, além de `check`, `makemigrations --check`, migration aplicada, OpenAPI, `git diff --check` e `uv lock --check`.
+
+Limitações deliberadas: não há cancelamento, estorno, edição ou backdating de Resgate; não há endpoint público de saldo, níveis, dashboard, vínculo obrigatório Resgate → Compra ou ledger genérico. APIs internas do ORM e SQL bruto continuam fora do contrato normal de escrita.
+
+### F3.05 — Níveis configuráveis 🟡 P0
 
 Próxima fase da vertical principal.
-
-O fluxo mínimo de resgate é obrigatório porque os indicadores exigem pontos resgatados, descontos e custo do programa.
-
-Direção:
-
-- `Resgate`;
-- `AlocacaoResgate`;
-- saldo suficiente;
-- mínimo/incremento parametrizados;
-- consumo dos lotes que expiram primeiro;
-- valor financeiro do desconto registrado historicamente;
-- endpoint de integração quando necessário.
-
-Recursos sofisticados de resgate podem ficar em P1, mas o domínio necessário para demonstrar resgates reais precisa existir no P0.
-
-### F3.05 — Níveis configuráveis ⏳ P0
 
 A distribuição Bronze/Prata/Ouro faz parte dos indicadores esperados do cenário de demonstração, mas esses nomes não são enums obrigatórios do produto.
 
@@ -435,7 +447,9 @@ registrar Compra pela API
 ↓
 pontos são calculados pelo domínio
 ↓
-Cliente é classificado e pode resgatar
+Cliente resgata pontos
+↓
+Cliente é classificado
 ↓
 resultado aparece no Dashboard
 ```
@@ -486,4 +500,4 @@ A equipe deve conseguir explicar arquitetura, parâmetros, segurança, API, uso 
 
 Nova funcionalidade só entra no P0 se for necessária para completar a vertical principal ou atender requisito obrigatório da entrega.
 
-Se uma ideia nova colocar em risco Empresa → Loja → Configuração → API → Compra → Pontos → Evento → Níveis/Resgate → Dashboard, ela deve ser classificada como P1 ou P2.
+Se uma ideia nova colocar em risco Empresa → Loja → Configuração → API → Compra → Pontos → Evento → Resgate → Níveis → Dashboard, ela deve ser classificada como P1 ou P2.
