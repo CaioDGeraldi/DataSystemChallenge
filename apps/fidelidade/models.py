@@ -387,3 +387,164 @@ def _proteger_historico_eventos(sender, instance, **kwargs):
     from django.db.models.deletion import ProtectedError
 
     raise ProtectedError('Eventos e aplicações históricas não podem ser excluídos.', [instance])
+
+
+class _HistoricoResgateQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise ValidationError('Resgates e alocações são imutáveis.')
+
+    def bulk_update(self, objs, fields, batch_size=None):
+        raise ValidationError('Resgates e alocações são imutáveis.')
+
+    def bulk_create(self, objs, **kwargs):
+        raise ValidationError('Use registrar_resgate para criar o histórico completo.')
+
+
+class _RegistroResgate(models.Model):
+    objects = _HistoricoResgateQuerySet.as_manager()
+
+    class Meta:
+        abstract = True
+
+    def _original(self):
+        if self.pk is None:
+            return None
+        return type(self)._base_manager.using(self._state.db).filter(pk=self.pk).values().first()
+
+    def _validar_historico(self, original):
+        erros = {
+            campo.name: 'O fato histórico não pode ser alterado após a criação.'
+            for campo in self._meta.fields
+            if not campo.primary_key and getattr(self, campo.attname) != original[campo.attname]
+        }
+        if erros:
+            raise ValidationError(erros)
+
+    def save(self, *args, **kwargs):
+        from .escrita_resgates import _exigir_escrita_resgates
+
+        if self._original() is None:
+            _exigir_escrita_resgates(self)
+        # INSERT/constraint arbitra unicidade, inclusive na defesa residual do service.
+        self.full_clean(validate_constraints=False)
+        return super().save(*args, **kwargs)
+
+
+class Resgate(_RegistroResgate):
+    loja = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name='resgates')
+    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name='resgates')
+    credencial_origem = models.ForeignKey(CredencialIntegracao, on_delete=models.PROTECT, related_name='resgates')
+    identificador_externo = models.CharField(max_length=255)
+    pontos_resgatados = models.DecimalField(max_digits=20, decimal_places=0, validators=[MinValueValidator(Decimal('1'))])
+    resgate_minimo_pontos_aplicado = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    incremento_resgate_pontos_aplicado = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    valor_monetario_por_ponto_aplicado = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    valor_desconto = models.DecimalField(max_digits=32, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    resgatado_em = models.DateTimeField(editable=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['loja', 'identificador_externo'], name='resgate_loja_identificador_unico'),
+            models.CheckConstraint(condition=models.Q(pontos_resgatados__gt=0), name='resgate_pontos_positivos'),
+            models.CheckConstraint(condition=models.Q(resgate_minimo_pontos_aplicado__gt=0), name='resgate_minimo_positivo'),
+            models.CheckConstraint(condition=models.Q(incremento_resgate_pontos_aplicado__gt=0), name='resgate_incremento_positivo'),
+            models.CheckConstraint(condition=models.Q(valor_monetario_por_ponto_aplicado__gt=0), name='resgate_taxa_positiva'),
+            models.CheckConstraint(condition=models.Q(valor_desconto__gt=0), name='resgate_desconto_positivo'),
+        ]
+
+    def clean_fields(self, exclude=None):
+        from .calculos_resgate import normalizar_identificador_resgate
+
+        if 'identificador_externo' not in (exclude or ()):
+            self.identificador_externo = normalizar_identificador_resgate(self.identificador_externo)
+        for campo in ('pontos_resgatados', 'valor_monetario_por_ponto_aplicado', 'valor_desconto'):
+            valor = getattr(self, campo)
+            if campo not in (exclude or ()) and (not isinstance(valor, Decimal) or not valor.is_finite()):
+                raise ValidationError({campo: 'Informe um Decimal finito, sem conversão de float.'})
+        for campo in ('resgate_minimo_pontos_aplicado', 'incremento_resgate_pontos_aplicado'):
+            if campo not in (exclude or ()) and type(getattr(self, campo)) is not int:
+                raise ValidationError({campo: 'Informe um número inteiro.'})
+        if 'resgatado_em' not in (exclude or ()):
+            if not isinstance(self.resgatado_em, datetime) or timezone.is_naive(self.resgatado_em):
+                raise ValidationError({'resgatado_em': 'Informe uma data/hora com timezone.'})
+        super().clean_fields(exclude=exclude)
+
+    def clean(self):
+        super().clean()
+        self.clean_fields()
+        original = self._original()
+        if original is not None:
+            self._validar_historico(original)
+            return
+        from apps.empresas.services import exigir_loja_autorizada
+        from .calculos_resgate import calcular_desconto
+
+        loja = Loja.objects.get(pk=self.loja_id)
+        cliente = Cliente.objects.get(pk=self.cliente_id)
+        credencial = CredencialIntegracao.objects.get(pk=self.credencial_origem_id)
+        if loja.empresa_id != cliente.empresa_id or loja.empresa_id != credencial.empresa_id:
+            raise ValidationError('Loja, Cliente e credencial devem pertencer à mesma Empresa.')
+        try:
+            exigir_loja_autorizada(credencial, loja)
+        except PermissionDenied:
+            raise ValidationError({'credencial_origem': 'Credencial não autorizada para a Loja.'}) from None
+        pontos = int(self.pontos_resgatados)
+        if (pontos < self.resgate_minimo_pontos_aplicado
+                or (pontos - self.resgate_minimo_pontos_aplicado) % self.incremento_resgate_pontos_aplicado):
+            raise ValidationError({'pontos_resgatados': 'Os pontos devem respeitar o mínimo e incremento aplicados.'})
+        if self.valor_desconto != calcular_desconto(self.pontos_resgatados, self.valor_monetario_por_ponto_aplicado):
+            raise ValidationError({'valor_desconto': 'O desconto deve corresponder aos snapshots aplicados.'})
+
+
+class AlocacaoResgate(_RegistroResgate):
+    resgate = models.ForeignKey(Resgate, on_delete=models.PROTECT, related_name='alocacoes')
+    lote = models.ForeignKey(LotePontos, on_delete=models.PROTECT, related_name='alocacoes_resgate')
+    pontos_consumidos = models.DecimalField(max_digits=24, decimal_places=4, validators=[MinValueValidator(Decimal('0.0001'))])
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['resgate', 'lote'], name='alocacao_resgate_lote_unico'),
+            models.CheckConstraint(condition=models.Q(pontos_consumidos__gt=0), name='alocacao_pontos_positivos'),
+        ]
+
+    def clean_fields(self, exclude=None):
+        if 'pontos_consumidos' not in (exclude or ()):
+            if not isinstance(self.pontos_consumidos, Decimal) or not self.pontos_consumidos.is_finite():
+                raise ValidationError({'pontos_consumidos': 'Informe um Decimal finito, sem conversão de float.'})
+        super().clean_fields(exclude=exclude)
+
+    def clean(self):
+        super().clean()
+        self.clean_fields()
+        original = self._original()
+        if original is not None:
+            self._validar_historico(original)
+            return
+        from decimal import Context, localcontext
+        from django.db.models import Sum
+
+        resgate = Resgate.objects.select_related('loja', 'cliente').get(pk=self.resgate_id)
+        lote = LotePontos.objects.select_related('compra__loja').get(pk=self.lote_id)
+        if (resgate.cliente_id != lote.cliente_id
+                or lote.compra.cliente_id != resgate.cliente_id
+                or lote.compra.loja.empresa_id != resgate.loja.empresa_id
+                or resgate.cliente.empresa_id != resgate.loja.empresa_id):
+            raise ValidationError('Resgate e Lote devem pertencer ao mesmo Cliente e tenant.')
+        if lote.expira_em <= resgate.resgatado_em:
+            raise ValidationError({'lote': 'Lote expirado no instante do Resgate.'})
+        # Os locks já pertencem ao service; não adquirir novos locks em ordem inversa.
+        with localcontext(Context(prec=40)):
+            consumido = type(self).objects.filter(lote_id=lote.pk).aggregate(total=Sum('pontos_consumidos'))['total'] or Decimal('0')
+            alocado = type(self).objects.filter(resgate_id=resgate.pk).aggregate(total=Sum('pontos_consumidos'))['total'] or Decimal('0')
+            if consumido + self.pontos_consumidos > lote.pontos_concedidos:
+                raise ValidationError({'pontos_consumidos': 'O consumo excede os pontos concedidos do Lote.'})
+            if alocado + self.pontos_consumidos > resgate.pontos_resgatados:
+                raise ValidationError({'pontos_consumidos': 'O consumo excede os pontos do Resgate.'})
+
+
+@receiver(pre_delete, sender=Resgate)
+@receiver(pre_delete, sender=AlocacaoResgate)
+def _proteger_historico_resgates(sender, instance, **kwargs):
+    from django.db.models.deletion import ProtectedError
+
+    raise ProtectedError('Resgates e alocações históricas não podem ser excluídos.', [instance])

@@ -118,7 +118,7 @@ Mensagem de negócio:
 
 Mensagem técnica complementar:
 
-> As integrações usam credenciais próprias com escopo de Empresa ou Loja; os contratos são versionados, Compras possuem idempotência e a documentação técnica é publicada em OpenAPI.
+> As integrações usam credenciais próprias com escopo de Empresa ou Loja; os contratos são versionados, Compras e Resgates possuem idempotência e a documentação técnica é publicada em OpenAPI.
 
 Responsabilidades atuais da API:
 
@@ -128,9 +128,10 @@ Responsabilidades atuais da API:
 - isolamento Empresa/Loja;
 - registro idempotente de Compra e concessão atômica de pontos;
 - retorno de `pontos_base`, `pontos_concedidos` e `expira_em` no bloco `fidelidade` de `POST /api/v1/compras/`;
+- registro idempotente de Resgate, consumo de Lotes e retorno do desconto por `POST /api/v1/resgates/`;
 - contrato versionado e documentação OpenAPI.
 
-Fluxo da entrega com a F3.03:
+Fluxo de concessão com a F3.03, preservado na F3.04:
 
 ```text
 PDV/ERP
@@ -150,10 +151,11 @@ Compra e Lote são gravados juntos: se a concessão falhar, a nova Compra també
 
 Compras anteriores ao motor não receberam backfill. Seu retry retorna `fidelidade: null`: não inventamos uma política histórica que não foi registrada.
 
+Na F3.04, o PDV pode solicitar Resgate desses pontos: a Retorna valida mínimo, incremento e saldo elegível, consome Lotes por vencimento e devolve o desconto. Resgate e alocações são gravados juntos; a configuração aplicada permanece no histórico.
+
 Direção da vertical, somente após as fases correspondentes serem integradas:
 
 - consultar informações necessárias de Cliente/saldo;
-- registrar/validar Resgate;
 - expor transparência de configuração quando houver caso de uso real.
 
 Não dizer que esses itens futuros já existem.
@@ -289,11 +291,24 @@ A demonstração final deve procurar seguir uma única venda ao longo do sistema
 4. motor calcula pontos base
 5. aplica Evento/Campanha quando cabível, depois o arredondamento final
 6. Cliente acumula pontos
-7. Resgate altera o saldo
-8. Dashboard reflete a operação
+7. API recebe Resgate e consome os Lotes válidos
+8. Retorna devolve o desconto e preserva o resultado nos retries
+9. Dashboard reflete a operação (etapa futura)
 ```
 
-Na entrega F3.03, criar uma campanha 2x e demonstrar a venda até a resposta com pontos e expiração; depois repetir a requisição para mostrar que Compra e Lote permanecem os mesmos. Alterar a política e repetir a mesma venda evidencia que o histórico não é recalculado. Saldo, Resgate, bônus/descontos percentuais, níveis e dashboard continuam futuros; as etapas correspondentes do roteiro acima dependem das próximas fases.
+Na F3.04, o roteiro inclui criar uma campanha 2x, registrar a venda e mostrar os pontos e a expiração. Em seguida, enviar `POST /api/v1/resgates/` com 200 pontos e mostrar o desconto. Repetir Compra e Resgate evidencia que o histórico não é recalculado nem consumido novamente, inclusive após mudar a política. O Resgate calcula saldo a partir dos Lotes válidos e consumos anteriores; não existe saldo materializado nem endpoint público de consulta. Bônus/descontos percentuais, níveis e dashboard continuam futuros.
+
+Exemplo para a FATECalçados:
+
+```text
+200 pontos
+× R$ 0,05 por ponto
+= R$ 10,00 de desconto
+```
+
+> A Retorna consome primeiro os pontos que vencem antes. Se o PDV repetir o pedido por falha de conexão, recebe o mesmo desconto, sem consumir pontos novamente.
+
+O instante do Resgate vem do servidor: o PDV não pode informar uma data passada para usar pontos expirados. A quantidade solicitada é inteira, mas pode consumir frações de vários Lotes. O desconto e os parâmetros aplicados permanecem registrados mesmo quando a Empresa muda suas regras.
 
 Não abrir módulos sem relação com a história principal.
 
@@ -331,14 +346,17 @@ Escolher poucas garantias que tenham consequência clara:
 
 - isolamento entre Empresas;
 - credenciais próprias de integração;
-- venda idempotente;
-- histórico de Compra e Lote preservado mesmo quando configurações mudam;
+- Compra e Resgate idempotentes;
+- histórico de Compra, Lote, Resgate e desconto preservado mesmo quando configurações mudam;
+- pedidos simultâneos não podem gastar os mesmos pontos;
 - PostgreSQL como defesa final de integridade;
 - API documentada por OpenAPI.
 
 Exemplo:
 
 > Se a conexão do PDV cair depois de enviar uma venda, ele pode tentar novamente. A Retorna devolve a mesma Compra e o mesmo Lote, sem duplicar nem recalcular pontos. Compra e concessão são gravadas juntas: se uma falhar, a nova operação inteira é desfeita.
+
+Para o Resgate, a mesma garantia protege o desconto: registro e consumo são gravados juntos. Com saldo de 100 pontos e dois pedidos simultâneos de 100, somente um pode consumir esse saldo; o outro recebe saldo insuficiente.
 
 ### 6:00–6:30 — Fechamento
 
@@ -396,11 +414,20 @@ As mensagens abaixo contemplam a F3.02 validada e sua integração junto com est
 - Compra, Lote e aplicação histórica são gravados juntos; retries preservam o resultado original.
 - Cancelar uma campanha impede novas concessões por ela, mas não altera pontos já concedidos.
 
+### Mensagens da F3.04
+
+- Resgate é recebido por `POST /api/v1/resgates/`, com a credencial `X-API-Key` da integração.
+- O Cliente precisa ter pontos válidos suficientes e respeitar mínimo e incremento corporativos.
+- O consumo prioriza a expiração mais próxima e preserva os Lotes originais.
+- `200 pontos × R$ 0,05 = R$ 10,00` é registrado como desconto histórico.
+- Retry equivalente retorna o mesmo Resgate, sem novo consumo ou recálculo financeiro.
+- O saldo é derivado, e o fluxo transacional serializa disputas pelo mesmo Cliente.
+- Não há backdating, cancelamento, estorno ou consulta pública de saldo nesta fase.
+
 ### Mensagens previstas para a vertical final
 
 Estas só devem migrar para o bloco de mensagens implementadas depois da respectiva entrega:
 
-- resgate;
 - níveis configuráveis;
 - indicadores do dashboard calculados sobre o fluxo completo.
 
@@ -429,7 +456,7 @@ Não. O PDV continua responsável por venda, pagamento, estoque, caixa e fiscal.
 
 ### "Então qual é a função da API?"
 
-Conectar a Retorna aos sistemas que a empresa já utiliza. Ela autentica integrações, controla escopo Empresa/Loja, recebe os fatos da Compra e devolve a fidelidade calculada. Compra e Lote são registrados juntos, sem duplicação nos retries. Consultas de saldo e Resgate continuam futuros; as regras de fidelidade ficam na Retorna, sem duplicação no PDV.
+Conectar a Retorna aos sistemas que a empresa já utiliza. Ela autentica integrações, controla escopo Empresa/Loja, recebe os fatos da Compra e devolve a fidelidade calculada. Também recebe pedidos de Resgate e devolve o desconto calculado a partir dos pontos consumidos. Cada operação preserva seu histórico nos retries. A consulta pública de saldo continua futura; as regras de fidelidade ficam na Retorna, sem duplicação no PDV.
 
 ### "Por que usar API em vez de cadastrar cada venda manualmente?"
 
@@ -478,6 +505,18 @@ Porque não havia registro da política aplicada a essas Compras. Não inventamo
 ### "O que a API devolve depois de registrar uma Compra?"
 
 Além dos dados da Compra, devolve o bloco `fidelidade` com `pontos_base`, `pontos_concedidos` e `expira_em`. Os pontos aparecem como strings com quatro casas decimais. Uma nova operação retorna 201; um retry equivalente retorna 200 com o mesmo histórico. Isso ainda não representa saldo disponível para Resgate.
+
+### "Como os pontos viram desconto?"
+
+A integração solicita uma quantidade inteira de pontos, respeitando mínimo e incremento. A Retorna consome os Lotes válidos que expiram primeiro e aplica o valor por ponto: 200 pontos a R$ 0,05 dão R$ 10,00. Lotes podem conter frações; o consumo pode combinar essas frações sem perder precisão. O desconto e os parâmetros ficam registrados como fatos históricos.
+
+### "O mesmo saldo pode ser usado em dois caixas ao mesmo tempo?"
+
+O fluxo serializa Resgates do mesmo Cliente e calcula o saldo depois dos consumos anteriores. Se dois pedidos de 100 disputarem saldo de 100, apenas um pode concluir. Se forem retries da mesma operação, devolvemos o histórico original sem consumir novamente.
+
+### "Posso resgatar pontos depois do vencimento usando a data da venda?"
+
+Não. Resgate usa o instante do servidor e só consome Lotes com expiração posterior a esse instante. No instante exato do vencimento o Lote já está expirado. Um retry de Resgate que já foi concluído continua retornando seu resultado histórico mesmo após o vencimento.
 
 ### "Por que vocês escolheram um monólito modular e não microserviços?"
 

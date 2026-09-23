@@ -3,9 +3,11 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError as DomainValidationError
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.usuarios.validators import normalizar_cpf, validar_cpf
+from apps.fidelidade.calculos_resgate import MAX_PONTOS_RESGATE
 
 
 class HealthSerializer(serializers.Serializer):
@@ -119,3 +121,50 @@ class CompraSerializer(serializers.Serializer):
         source="lote_pontos", read_only=True, allow_null=True,
         help_text="Resultado histórico; decimais com quatro casas. Null para Compra legada sem Lote. Retry não recalcula.",
     )
+
+
+@extend_schema_field({'type': 'integer', 'minimum': 1, 'maximum': MAX_PONTOS_RESGATE})
+class PontosResgateField(serializers.IntegerField):
+    def to_internal_value(self, data):
+        if type(data) is not int:
+            raise serializers.ValidationError('Envie pontos como inteiro JSON, sem float ou string.')
+        return super().to_internal_value(data)
+
+
+class IdentificadorResgateField(serializers.CharField):
+    def to_internal_value(self, data):
+        if not isinstance(data, str):
+            raise serializers.ValidationError('Informe um identificador textual.')
+        return super().to_internal_value(data)
+
+
+class RegistrarResgateSerializer(serializers.Serializer):
+    loja_id = serializers.IntegerField(min_value=1)
+    identificador_externo = IdentificadorResgateField(
+        max_length=255, trim_whitespace=True,
+        help_text='String não vazia após strip, case preservado; única por Loja.',
+    )
+    cliente_cpf = serializers.CharField(help_text='CPF válido de Cliente da Empresa da Loja, como na Compra.')
+    pontos = PontosResgateField(
+        min_value=1, max_value=MAX_PONTOS_RESGATE,
+        help_text='Inteiro JSON positivo de até 20 dígitos. Não aceita float nem string.',
+    )
+
+    validate_cliente_cpf = RegistrarCompraSerializer.validate_cliente_cpf
+
+    def to_internal_value(self, data):
+        if isinstance(data, dict):
+            extras = set(data) - set(self.fields)
+            if extras:
+                raise serializers.ValidationError({campo: 'Campo não permitido; Resgate não aceita backdating.' for campo in extras})
+        return super().to_internal_value(data)
+
+
+class ResgateSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    identificador_externo = serializers.CharField(max_length=255)
+    loja = LojaCompraSerializer()
+    cliente = ClienteCompraSerializer()
+    pontos_resgatados = PontosResgateField(min_value=1, max_value=MAX_PONTOS_RESGATE)
+    valor_desconto = serializers.DecimalField(max_digits=32, decimal_places=2, coerce_to_string=True)
+    resgatado_em = serializers.DateTimeField()

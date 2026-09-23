@@ -8,3 +8,15 @@ class ClienteNaoEncontrado(Exception):
 
 class IdempotenciaConflitante(Exception):
     pass
+
+
+class PontosAbaixoDoMinimo(Exception):
+    pass
+
+
+class IncrementoResgateInvalido(Exception):
+    pass
+
+
+class SaldoInsuficiente(Exception):
+    pass
