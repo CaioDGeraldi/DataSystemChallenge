@@ -225,7 +225,7 @@ Entregue:
 - OpenAPI refletindo somente endpoints realmente implementados;
 - testes de autenticação, tenancy, HTTP, CSRF, migration e schema.
 
-Compra e idempotência transacional foram entregues posteriormente na F3.01. Pontos, Resgate, Cliente REST, níveis e campanhas/eventos permanecem futuros.
+Compra e idempotência transacional foram entregues posteriormente na F3.01. O motor base de pontos e `LotePontos` foi entregue na F3.02. Resgate, Cliente REST, níveis e campanhas/eventos permanecem futuros.
 
 ## Fase 3 — Motor de fidelidade
 
@@ -254,31 +254,37 @@ Entregue:
 
 A F3.01 registra somente os fatos da venda. Pontos e `LotePontos` não são calculados nesta fase.
 
-### F3.02 — Motor de pontos e LotePontos 🟡 P0
+### F3.02 — Motor de pontos e LotePontos ✅ P0
+
+Issue: #40.
+
+Entregue:
+
+- política corporativa de concessão com `precisao_pontos` em `0`, `1`, `2` ou `4` e `modo_arredondamento_pontos` em `HALF_UP`, `DOWN` ou `UP`;
+- defaults do produto em 2 casas e `HALF_UP`;
+- precisão física dos pontos fixa em quatro casas decimais;
+- `pontos_por_real` continua podendo receber override por Loja, enquanto precisão e arredondamento permanecem corporativos;
+- cálculo determinístico com `Decimal`, sem `float` ou `round()` binário;
+- `LotePontos` 1:1 com `Compra`, Cliente obrigatório e relações históricas protegidas com `PROTECT`;
+- snapshots da taxa, precisão, modo de arredondamento, validade, resultados e datas realmente aplicados;
+- fatos de `LotePontos` imutáveis após criação pelos caminhos normais do domínio;
+- taxa `0.00` continua criando Lote histórico com zero pontos;
+- `adquiridos_em` usa `Compra.ocorrida_em` e a expiração usa meses de calendário em `America/Sao_Paulo`, com ajuste para o último dia válido do mês;
+- expiração fora do intervalo representável é rejeitada como `400 requisicao_invalida`, sem truncamento, com rollback integral;
+- novas Compras e seus Lotes são criados na mesma transação;
+- retry equivalente retorna a mesma Compra e o mesmo Lote, sem recálculo, inclusive após mudança de configuração;
+- concorrência continua arbitrada pela constraint da Compra e resulta em no máximo um Lote para a vencedora;
+- Compras anteriores à F3.02 não recebem backfill; retry legado retorna `fidelidade: null`;
+- `POST /api/v1/compras/` passou a retornar `pontos_base`, `pontos_concedidos` e `expira_em` no bloco `fidelidade`;
+- migrations incrementais `empresas.0009` e `fidelidade.0002`;
+- OpenAPI, `docs/API.md` e `docs/APRESENTACAO.md` atualizados;
+- validação em PostgreSQL com 87 testes focais e 291 testes totais, além dos gates de migrations, diff, lock e OpenAPI.
+
+Limitações deliberadas: não existe backfill automático, saldo consumível, Resgate, campanhas/eventos, níveis ou versionamento temporal completo de configurações nesta fase. Operações bulk, `QuerySet.update` e SQL bruto continuam fora dos caminhos normais protegidos pelo model.
+
+### F3.03 — Eventos/Campanhas 🟡 P0
 
 Próxima fase da vertical principal.
-
-Objetivo: calcular pontos a partir da configuração efetiva e persistir o resultado histórico sem recalcular Compras anteriores quando parâmetros futuros mudarem.
-
-Fluxo:
-
-```text
-Compra
-↓
-resolver Empresa/Loja
-↓
-resolver parâmetros
-↓
-calcular pontos
-↓
-registrar resultado histórico
-↓
-criar LotePontos
-```
-
-Cada transação deve guardar o resultado aplicado para não ser recalculada quando configurações futuras mudarem.
-
-### F3.03 — Eventos/Campanhas ⏳ P0
 
 Issue aberta: #26.
 
@@ -300,7 +306,7 @@ Loja herda 1 ponto/R$1
 
 Para a entrega inicial, campanhas conflitantes sobre a mesma regra/Loja/período devem ser impedidas em vez de combinadas implicitamente.
 
-A implementação deve ocorrer após existir a base operacional de Compra e cálculo de pontos necessária para tornar o efeito demonstrável na vertical principal.
+A base operacional de Compra e cálculo de pontos já existe após F3.01/F3.02; a F3.03 deve aplicar efeitos temporários sem perder os snapshots históricos da concessão.
 
 ### F3.04 — Resgate e consumo de lotes ⏳ P0
 
