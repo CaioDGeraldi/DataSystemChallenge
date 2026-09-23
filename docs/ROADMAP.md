@@ -225,33 +225,40 @@ Entregue:
 - OpenAPI refletindo somente endpoints realmente implementados;
 - testes de autenticação, tenancy, HTTP, CSRF, migration e schema.
 
-Compra, idempotência transacional, pontos, Resgate, Cliente REST, níveis e campanhas/eventos permanecem futuros.
+Compra e idempotência transacional foram entregues posteriormente na F3.01. Pontos, Resgate, Cliente REST, níveis e campanhas/eventos permanecem futuros.
 
 ## Fase 3 — Motor de fidelidade
 
-### F3.01 — Compra e idempotência 🟡 P0
+### F3.01 — Compra e idempotência ✅ P0
+
+Issue: #34.
+
+Entregue:
+
+- `Compra` persistida em `apps.fidelidade` como fato histórico de venda;
+- relações com Loja, Cliente e credencial de origem protegidas por `PROTECT`;
+- coerência obrigatória de tenant entre Compra, Loja, Cliente e credencial;
+- fatos materiais da Compra imutáveis após criação pelos caminhos normais do domínio;
+- `identificador_externo` normalizado com limite de 255 caracteres;
+- valor monetário com `DecimalField(max_digits=12, decimal_places=2)`, mínimo `0.01` e constraint positiva;
+- data/hora da venda timezone-aware separada de `criada_em`;
+- chave idempotente `Loja + identificador_externo` protegida por `UniqueConstraint`;
+- `POST /api/v1/compras/` autenticado por `X-API-Key`;
+- primeira criação retorna `201`, retry equivalente retorna `200` e conflito de fatos retorna `409 idempotencia_conflitante`;
+- retry por outra credencial autorizada preserva `credencial_origem` e o restante do histórico original;
+- concorrência resolvida por transação, savepoint e constraint PostgreSQL, sem converter outras falhas de integridade em retry;
+- erros específicos de Loja fora do escopo e Cliente inexistente no tenant;
+- OpenAPI e `docs/API.md` atualizados para o contrato real;
+- migration inicial de `apps.fidelidade`;
+- testes de domínio, HTTP, tenancy, idempotência, concorrência, migration e schema.
+
+A F3.01 registra somente os fatos da venda. Pontos e `LotePontos` não são calculados nesta fase.
+
+### F3.02 — Motor de pontos e LotePontos 🟡 P0
 
 Próxima fase da vertical principal.
 
-Objetivo: implementar o primeiro recurso transacional central exposto para integração, sem antecipar ainda o cálculo de pontos da F3.02.
-
-Direção:
-
-- `Compra` pertence a uma Loja;
-- identificador externo da venda;
-- prevenção de duplicidade em retries;
-- valor com `Decimal`;
-- data/hora da venda;
-- vínculo com Cliente da mesma Empresa da Loja;
-- endpoint `POST /api/v1/compras/`;
-- reutilização da autenticação e do escopo de integração entregues na F2.06;
-- consumidor envia fatos da venda, não pontos calculados.
-
-A plataforma continua responsável pela fidelidade; não substitui o PDV.
-
-### F3.02 — Motor de pontos e LotePontos ⏳ P0
-
-Objetivo: calcular pontos a partir da configuração efetiva.
+Objetivo: calcular pontos a partir da configuração efetiva e persistir o resultado histórico sem recalcular Compras anteriores quando parâmetros futuros mudarem.
 
 Fluxo:
 
@@ -269,7 +276,7 @@ registrar resultado histórico
 criar LotePontos
 ```
 
-Cada transação guarda o resultado aplicado para não ser recalculada quando configurações futuras mudarem.
+Cada transação deve guardar o resultado aplicado para não ser recalculada quando configurações futuras mudarem.
 
 ### F3.03 — Eventos/Campanhas ⏳ P0
 
