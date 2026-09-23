@@ -6,7 +6,7 @@ A API REST é uma interface de primeira classe do DataSystemChallenge. Ela exist
 
 A API utiliza Django REST Framework sobre a mesma camada de domínio utilizada pela interface web.
 
-A F2.06 implementa somente a fundação: credenciais de integração, health, contexto e OpenAPI. Compra, idempotência de Compra, Cliente por API, Resgate, LotePontos, cálculo de fidelidade, campanhas/eventos e níveis permanecem futuros; os exemplos desses fluxos abaixo não são endpoints disponíveis.
+A F2.06 entrega credenciais de integração, health, contexto e OpenAPI. A F3.01 acrescenta registro de Compra e idempotência. Cliente por API, Resgate, LotePontos, cálculo de fidelidade, campanhas/eventos e níveis permanecem futuros; os exemplos desses fluxos abaixo não são funcionalidades disponíveis.
 
 ```text
 Django Templates ─┐
@@ -40,8 +40,9 @@ A primeira versão utiliza prefixo:
 Endpoints implementados:
 
 ```text
-/api/v1/health/
-/api/v1/contexto/
+GET  /api/v1/health/
+GET  /api/v1/contexto/
+POST /api/v1/compras/
 ```
 
 Alterações incompatíveis de contrato devem resultar em nova versão, em vez de quebrar silenciosamente consumidores existentes.
@@ -141,11 +142,11 @@ Os escopos implementados são:
 
 Empresa e escopo são imutáveis após a criação pelos caminhos normais do domínio. As relações usam `PROTECT`, e o par credencial/Loja é único. Models validam relações cross-tenant e rejeitam acessos individuais para `EMPRESA`; o service garante `1..N` Lojas na criação transacional.
 
-`lojas_autorizadas(credencial)` e `exigir_loja_autorizada(credencial, loja)` ficam em `apps.empresas.services` para reutilização pelos endpoints futuros. Reconsultam o estado persistido e filtram sempre pela Empresa. Objetos adulterados em memória e relações cross-tenant inseridas fora do fluxo normal não ampliam acesso. Credenciais inativas não recebem Lojas autorizadas.
+`lojas_autorizadas(credencial)` e `exigir_loja_autorizada(credencial, loja)` ficam em `apps.empresas.services` e são reutilizados pelo registro de Compra. Reconsultam o estado persistido e filtram sempre pela Empresa. Objetos adulterados em memória e relações cross-tenant inseridas fora do fluxo normal não ampliam acesso. Credenciais inativas não recebem Lojas autorizadas.
 
 Como no restante do domínio, `QuerySet.update`, operações bulk e SQL bruto podem contornar validações do model; não são caminhos normais para alterar invariantes. Não há triggers de banco.
 
-Quando o endpoint de Compra existir, uma credencial limitada à Loja Araras não poderá registrar compra na Loja Campinas.
+Uma credencial limitada à Loja Araras não pode registrar Compra na Loja Campinas.
 
 A regra de autorização deve ser aplicada no backend, independentemente do identificador recebido pela URL ou pelo payload.
 
@@ -186,41 +187,63 @@ A plataforma:
 
 Não deve existir um contrato em que o PDV determine arbitrariamente `pontos_concedidos` como fonte de verdade.
 
-## Compra e idempotência — futuro
+## Compra e idempotência — implementado na F3.01
 
-Integrações podem repetir uma requisição por timeout, perda de conexão ou retry automático. A mesma venda não pode gerar pontos duas vezes.
-
-Cada venda externa deve possuir um identificador estável, por exemplo:
-
-```text
-identificador_externo = VENDA-000123
+```http
+POST /api/v1/compras/
+X-API-Key: <identificador>.<segredo>
+Content-Type: application/json
 ```
 
-A identidade da operação deve ser única dentro do escopo adequado, por exemplo:
-
-```text
-Loja + identificador_externo
+```json
+{
+  "loja_id": 1,
+  "identificador_externo": "VENDA-000123",
+  "cliente_cpf": "52998224725",
+  "valor": "199.90",
+  "ocorrida_em": "2026-09-23T10:30:00-03:00"
+}
 ```
 
-ou outro escopo definido pela integração.
+Todos os campos são obrigatórios:
 
-Fluxo esperado:
+| Campo | Contrato |
+| --- | --- |
+| `loja_id` | ID positivo de Loja autorizada pela credencial. Loja externa, não autorizada ou inexistente recebe `403 loja_fora_do_escopo`. |
+| `identificador_externo` | String de até 255 caracteres após `strip()` nas extremidades; não pode ficar vazia. Preserva case, espaços e conteúdo interno. |
+| `cliente_cpf` | CPF normalizado/validado pela regra existente. Resolve a identidade global e o Cliente da Empresa da Loja. Não cria vínculo nem altera Usuario. Sem Cliente no tenant: `404 cliente_nao_encontrado`. |
+| `valor` | Decimal positivo com até duas casas decimais: `0.01` a `9999999999.99`. Envie string decimal, nunca float. Não há arredondamento de valores com casas excedentes. |
+| `ocorrida_em` | ISO 8601 com timezone explícito. Data sem timezone é inválida. Sem limites de passado/futuro nesta fase. |
 
-```text
-PDV envia VENDA-000123
-↓
-Compra criada e pontos concedidos
-↓
-resposta se perde
-↓
-PDV reenvia VENDA-000123
-↓
-plataforma reconhece a operação existente
-↓
-não duplica Compra nem pontos
+O domínio `apps.fidelidade` persiste `Compra` com Loja, Cliente, credencial de origem, identificador externo, valor, instante da venda e `criada_em` preenchido pelo servidor. Os relacionamentos usam `PROTECT`. Model e service validam coerência de tenant; a autorização reutiliza os helpers da F2.06. Não são calculados pontos nem criados LotePontos.
+
+A chave idempotente é **Loja + identificador_externo**, protegida por `UniqueConstraint` no PostgreSQL. O mesmo identificador pode existir em outra Loja. O valor usa `DecimalField(max_digits=12, decimal_places=2)` e possui constraint `valor > 0`.
+
+| Situação | Resultado |
+| --- | --- |
+| Primeira chamada válida | Cria Compra e retorna `201 Created`. |
+| Mesma chave com Loja, Cliente, valor e instante equivalentes | Retorna Compra original, sem alterações, com `200 OK`. |
+| Mesma chave com Cliente, valor ou instante divergentes | Retorna `409 idempotencia_conflitante`, sem alterar ou duplicar Compra. |
+
+A comparação usa Cliente resolvido, valor Decimal e instante timezone-aware. Offsets diferentes que representam o mesmo instante são equivalentes. Outro consumidor autorizado para a mesma Loja pode repetir a operação: `credencial_origem`, `criada_em` e os demais fatos originais são preservados, inclusive quando a credencial de origem foi desativada posteriormente.
+
+`registrar_compra()` executa a operação em transação. O INSERT ocorre em savepoint; em disputa, somente a violação da constraint da chave idempotente é recuperada para consultar a Compra vencedora e comparar os fatos. Requests equivalentes convergem para uma Compra; divergentes resultam em uma criação e um conflito. Outras falhas de integridade não são ocultadas. A estratégia utiliza a constraint imediata e o isolamento padrão READ COMMITTED do PostgreSQL configurado pelo Django.
+
+Resposta ilustrativa, com o mesmo formato em `201` e `200`:
+
+```json
+{
+  "id": 123,
+  "identificador_externo": "VENDA-000123",
+  "loja": {"id": 1, "nome": "Centro"},
+  "cliente": {"cpf": "52998224725"},
+  "valor": "199.90",
+  "ocorrida_em": "2026-09-23T10:30:00-03:00",
+  "criada_em": "2026-09-23T10:30:02-03:00"
+}
 ```
 
-A política exata de resposta ao retry será definida junto ao endpoint de Compra.
+A resposta expõe somente esses campos, com valor monetário em string de duas casas. Não retorna segredo, hash, senha, credencial completa ou pontos. Nesta fase não há GET/listagem, edição, cancelamento, estorno ou exclusão de Compra pela API.
 
 ## Contrato externo e serializers
 
@@ -267,6 +290,9 @@ Mapeamento implementado:
 | 405 | `metodo_nao_permitido` | Método não permitido. |
 | 406 | `formato_nao_aceito` | Formato de resposta não aceito. |
 | 415 | `formato_nao_suportado` | Formato de conteúdo não suportado. |
+| 403 | `loja_fora_do_escopo` | Loja não autorizada para esta integração. |
+| 404 | `cliente_nao_encontrado` | Cliente não encontrado. |
+| 409 | `idempotencia_conflitante` | Identificador externo já utilizado com dados diferentes. |
 
 O 404 também cobre URLs inexistentes dentro de `/api/`. Erros de validação podem acrescentar detalhes por campo:
 
@@ -284,9 +310,6 @@ Exceções internas inesperadas são relançadas pelo DRF para preservar logging
 
 Códigos de negócio possíveis no futuro incluem:
 
-- `loja_fora_do_escopo`;
-- `cliente_nao_encontrado`;
-- `compra_duplicada`;
 - `saldo_insuficiente`;
 - `resgate_invalido`;
 - `campanha_conflitante`.
@@ -295,7 +318,7 @@ Esses códigos futuros ainda não fazem parte do contrato implementado.
 
 ## Status HTTP
 
-Semântica HTTP; criação de recursos e conflitos de operações de negócio são futuros:
+Semântica HTTP implementada:
 
 ```text
 200 OK
@@ -331,11 +354,10 @@ Direção inicial:
 ```text
 GET  /api/v1/clientes/por-cpf/{cpf}/
 GET  /api/v1/clientes/{id}/saldo/
-POST /api/v1/compras/
 POST /api/v1/resgates/
 ```
 
-Os endpoints de Cliente, Compra e Resgate acima são direção de produto, não estão disponíveis e não aparecem no OpenAPI. Cada endpoint deve ganhar critérios de aceite antes da implementação.
+Os endpoints de Cliente e Resgate acima são direção de produto, não estão disponíveis e não aparecem no OpenAPI. Cada endpoint deve ganhar critérios de aceite antes da implementação.
 
 Endpoints administrativos adicionais podem ser expostos somente quando houver necessidade real.
 
@@ -361,9 +383,9 @@ As três rotas são públicas no MVP:
 /api/redoc/       -> ReDoc
 ```
 
-O schema pode ser obtido como JSON com `Accept: application/vnd.oai.openapi+json`; YAML também está disponível. Ele descreve somente health e contexto, sem endpoints futuros.
+O schema pode ser obtido como JSON com `Accept: application/vnd.oai.openapi+json`; YAML também está disponível. Ele descreve health, contexto e `POST /api/v1/compras/`, sem endpoints futuros. Compra possui serializers reais de request/response e respostas documentadas `201`, `200`, `400`, `401`, `403`, `404`, `409` e `405`.
 
-O security scheme se chama `X-API-Key`, com `type: apiKey`, `in: header` e `name: X-API-Key`. Health não exige autenticação; contexto exige esse scheme. No Swagger, use **Authorize** e informe a chave completa `<identificador>.<segredo>` para testar o contexto. A autorização não é persistida pelo Swagger entre carregamentos. Documentação pública não concede acesso aos dados.
+O security scheme se chama `X-API-Key`, com `type: apiKey`, `in: header` e `name: X-API-Key`. Health não exige autenticação; contexto e Compra exigem esse scheme. No Swagger, use **Authorize** e informe a chave completa `<identificador>.<segredo>` para testar os endpoints protegidos. A autorização não é persistida pelo Swagger entre carregamentos. Documentação pública não concede acesso aos dados.
 
 ## Documentação conceitual
 
@@ -434,6 +456,8 @@ O contrato de cada endpoint deve expor somente os dados necessários ao caso de 
 ## Testes da API
 
 Na F2.06, a cobertura adicionada está em `apps/api/tests.py`, `apps/empresas/test_integracoes.py` e `apps/empresas/test_migration_integracoes.py`: autenticação, escopo, provisionamento web, CSRF, contrato de erros, OpenAPI e preservação dos dados na migration incremental `0007` → `0008`.
+
+Na F3.01, `apps/fidelidade/test_compras.py`, `apps/fidelidade/test_concorrencia_compras.py`, `apps/fidelidade/test_migrations.py` e `apps/api/test_compras.py` cobrem domínio, limites monetários e de identificador, tenancy, retries, conflitos, preservação da origem, concorrência real via conexões independentes, HTTP, OpenAPI e preservação do domínio anterior à migration inicial de Compra. Os testes de concorrência têm PostgreSQL como referência.
 
 Os endpoints de negócio futuros também deverão ter testes para:
 
