@@ -6,7 +6,7 @@ A API REST é uma interface de primeira classe do DataSystemChallenge. Ela exist
 
 A API utiliza Django REST Framework sobre a mesma camada de domínio utilizada pela interface web.
 
-A F2.06 entrega credenciais de integração, health, contexto e OpenAPI. A F3.01 acrescenta registro de Compra e idempotência; a F3.02 acrescenta cálculo base de pontos e LotePontos histórico. A F3.03 acrescenta campanhas temporárias com multiplicador de pontos. Cliente por API, Resgate, saldo consolidado, bônus/descontos percentuais e níveis permanecem futuros; os exemplos desses fluxos abaixo não são funcionalidades disponíveis.
+A F2.06 entrega credenciais de integração, health, contexto e OpenAPI. A F3.01 acrescenta registro de Compra e idempotência; a F3.02 acrescenta cálculo base de pontos e LotePontos histórico. A F3.03 acrescenta campanhas temporárias com multiplicador de pontos. A F3.04 acrescenta Resgate idempotente com consumo de Lotes e desconto histórico. Cliente por API, consulta pública de saldo, bônus/descontos percentuais e níveis permanecem futuros.
 
 ```text
 Django Templates ─┐
@@ -43,6 +43,7 @@ Endpoints implementados:
 GET  /api/v1/health/
 GET  /api/v1/contexto/
 POST /api/v1/compras/
+POST /api/v1/resgates/
 ```
 
 Alterações incompatíveis de contrato devem resultar em nova versão, em vez de quebrar silenciosamente consumidores existentes.
@@ -142,7 +143,7 @@ Os escopos implementados são:
 
 Empresa e escopo são imutáveis após a criação pelos caminhos normais do domínio. As relações usam `PROTECT`, e o par credencial/Loja é único. Models validam relações cross-tenant e rejeitam acessos individuais para `EMPRESA`; o service garante `1..N` Lojas na criação transacional.
 
-`lojas_autorizadas(credencial)` e `exigir_loja_autorizada(credencial, loja)` ficam em `apps.empresas.services` e são reutilizados pelo registro de Compra. Reconsultam o estado persistido e filtram sempre pela Empresa. Objetos adulterados em memória e relações cross-tenant inseridas fora do fluxo normal não ampliam acesso. Credenciais inativas não recebem Lojas autorizadas.
+`lojas_autorizadas(credencial)` e `exigir_loja_autorizada(credencial, loja)` ficam em `apps.empresas.services` e são reutilizados pelos registros de Compra e Resgate. Reconsultam o estado persistido e filtram sempre pela Empresa. Objetos adulterados em memória e relações cross-tenant inseridas fora do fluxo normal não ampliam acesso. Credenciais inativas não recebem Lojas autorizadas.
 
 Como no restante do domínio, `QuerySet.update`, operações bulk e SQL bruto podem contornar validações do model; não são caminhos normais para alterar invariantes. Não há triggers de banco.
 
@@ -346,6 +347,91 @@ Rotas web, com CSRF nos POSTs:
 
 Como no restante do domínio, `QuerySet.update`, bulk e SQL bruto podem contornar validações; não são caminhos normais de escrita. Nenhum trigger foi criado.
 
+## Resgate e consumo de Lotes — F3.04
+
+```http
+POST /api/v1/resgates/
+X-API-Key: <identificador>.<segredo>
+Content-Type: application/json
+```
+
+```json
+{
+  "loja_id": 1,
+  "identificador_externo": "RESGATE-001",
+  "cliente_cpf": "52998224725",
+  "pontos": 200
+}
+```
+
+Os quatro campos são obrigatórios. `loja_id` deve identificar Loja autorizada à credencial; o CPF deve ser válido e possuir Cliente na Empresa dessa Loja. Cliente inexistente e Cliente somente de outro tenant recebem o mesmo `404 cliente_nao_encontrado`, sem criar vínculo. Loja externa, inexistente ou sem acesso recebe `403 loja_fora_do_escopo`.
+
+`identificador_externo` exige string não vazia, com até 255 caracteres após `strip`; case e espaços internos são preservados. `pontos` exige **inteiro JSON positivo**, de 1 a `99999999999999999999`. Float (`200.0`), string (`"200"`), booleano e fração são rejeitados. Consumidores devem preservar inteiros exatos nesse intervalo, sem convertê-los a ponto flutuante. O OpenAPI não restringe o campo a `int64`.
+
+Campos extras são rejeitados, inclusive `ocorrida_em`, `resgatado_em` ou qualquer timestamp do PDV. Cada nova operação fixa uma única vez `resgatado_em = timezone.now()` após obter o lock do Cliente. Não há backdating de Resgate.
+
+### Regras, saldo derivado e FEFO
+
+Aplicam-se os parâmetros efetivos atuais da Empresa (a Loja continua podendo sobrescrever somente `pontos_por_real`):
+
+```text
+pontos >= resgate_minimo_pontos
+(pontos - resgate_minimo_pontos) % incremento_resgate_pontos == 0
+```
+
+Com mínimo 100 e incremento 50, são válidos 100, 150, 200 e 250. Os defaults do produto continuam sendo mínimo 100 e incremento 100.
+
+Não existe saldo materializado. No instante T do Resgate:
+
+```text
+saldo = soma de pontos_concedidos nos Lotes com expira_em > T
+        - soma das AlocacaoResgate desses Lotes
+```
+
+Em `expira_em == T`, o Lote já está expirado. A elegibilidade usa a expiração persistida, inclusive para Lotes cuja Compra possui data futura; não acrescenta um filtro por aquisição. O consumo usa `pontos_concedidos`, que já incorpora a campanha aplicada, sem recalcular campanha nem usar `pontos_base`.
+
+FEFO é determinístico: `expira_em ASC → adquiridos_em ASC → pk ASC`. Lotes permanecem imutáveis; somente alocações registram consumo. Um Resgate de 100 pode consumir `99.7500` do Lote A e `0.2500` do Lote B. O consumo acumulado nunca pode exceder a concessão de cada Lote, e a soma das alocações deve ser exatamente o Resgate.
+
+### Desconto e snapshots
+
+```text
+200 pontos × R$ 0,05 = R$ 10,00 de desconto
+```
+
+O domínio calcula com `Decimal` e quantiza em `0.01` usando `ROUND_HALF_UP`, independentemente do arredondamento de concessão. Com pontos inteiros e taxa de duas casas, o produto já é exato em centavos. Persistem o mínimo e o incremento (`PositiveIntegerField`), a taxa aplicada (`Decimal(12,2)`), os pontos (`Decimal(20,0)`), o desconto (`Decimal(32,2)`) e o instante. Alocações usam `Decimal(24,4)` positivo. Valores não representáveis recebem validação tratada e rollback integral, sem truncar ou saturar.
+
+Mudanças posteriores de política ou expiração não modificam esses fatos. Resgate e alocações têm relações `PROTECT`, não admitem edição/exclusão normal e só são criados pelo service `registrar_resgate`. Seus managers públicos também rejeitam `update`, `bulk_update` e `bulk_create`; APIs internas do ORM e SQL bruto continuam fora do contrato de escrita. Não há triggers para invariantes agregadas.
+
+### Idempotência, retries e atomicidade
+
+| Situação | Resultado |
+| --- | --- |
+| Primeira operação válida | `201`, com Resgate e todas as alocações na mesma transação. |
+| Mesma Loja + identificador, Cliente e pontos equivalentes | `200`, retornando o histórico original. |
+| Mesma chave com Cliente ou pontos divergentes | `409 idempotencia_conflitante`. |
+
+A chave é independente da chave de Compra. Outra Loja pode usar o mesmo identificador. Retry equivalente pode usar outra credencial atualmente autorizada, preservando a `credencial_origem` da primeira execução. Retry continua sujeito a autenticação e escopo atuais; não consulta configuração para recalcular, não calcula saldo/desconto, não reavalia expiração, não altera timestamps nem cria alocações. Após falha de rede, reenvie os mesmos fatos e a mesma chave; não gere uma nova chave para repetir a operação.
+
+O fluxo usa PostgreSQL em READ COMMITTED: transação → autorização/normalização → `pg_advisory_xact_lock` da chave → consulta do histórico → lock do Cliente → lock dos Lotes em FEFO → configuração/saldo/desconto → Resgate e alocações → commit. A chave do advisory deriva de SHA-256 de `resgate:{loja_id}:{identificador_normalizado}`, primeiros oito bytes como inteiro signed de 64 bits. Colisão apenas serializa operações independentes: a identidade real permanece Loja + identificador.
+
+Requests com chaves diferentes e mesmo Cliente são serializados pelo lock do Cliente. O segundo calcula o saldo depois do consumo do primeiro, impedindo double-spend. A constraint única protege também a persistência; somente sua violação específica é recuperada após rollback do savepoint para comparar o vencedor. Outros `IntegrityError` são propagados. Falha no desconto, no Resgate, em qualquer alocação ou na soma final desfaz integralmente a nova operação.
+
+Resposta ilustrativa, igual para criação `201` e retry `200`:
+
+```json
+{
+  "id": 42,
+  "identificador_externo": "RESGATE-001",
+  "loja": {"id": 1, "nome": "Centro"},
+  "cliente": {"cpf": "52998224725"},
+  "pontos_resgatados": 200,
+  "valor_desconto": "10.00",
+  "resgatado_em": "2026-09-23T10:35:00-03:00"
+}
+```
+
+Pontos retornam como inteiro JSON e desconto como string de duas casas. Não são expostos alocações, locks ou credenciais. Não há GET público de saldo, cancelamento, estorno, edição, exclusão ou vínculo obrigatório com Compra nesta fase. Métodos não implementados recebem `405`.
+
 ## Contrato externo e serializers
 
 O model interno não é automaticamente o contrato público.
@@ -385,6 +471,9 @@ Mapeamento implementado:
 | HTTP | Código | Mensagem |
 | --- | --- | --- |
 | 400 | `requisicao_invalida` | Dados inválidos. |
+| 400 | `pontos_abaixo_do_minimo` | Pontos abaixo do mínimo para Resgate. |
+| 400 | `incremento_resgate_invalido` | Pontos incompatíveis com o incremento de Resgate. |
+| 400 | `saldo_insuficiente` | Saldo insuficiente para Resgate. |
 | 401 | `credencial_invalida` | Credencial de integração inválida. |
 | 403 | `acesso_negado` | Acesso negado. |
 | 404 | `nao_encontrado` | Recurso não encontrado. |
@@ -411,7 +500,6 @@ Exceções internas inesperadas são relançadas pelo DRF para preservar logging
 
 Códigos de negócio possíveis no futuro incluem:
 
-- `saldo_insuficiente`;
 - `resgate_invalido`;
 - `campanha_conflitante`.
 
@@ -455,10 +543,9 @@ Direção inicial:
 ```text
 GET  /api/v1/clientes/por-cpf/{cpf}/
 GET  /api/v1/clientes/{id}/saldo/
-POST /api/v1/resgates/
 ```
 
-Os endpoints de Cliente e Resgate acima são direção de produto, não estão disponíveis e não aparecem no OpenAPI. Cada endpoint deve ganhar critérios de aceite antes da implementação.
+Os endpoints de Cliente e saldo acima são direção de produto, não estão disponíveis e não aparecem no OpenAPI. Cada endpoint deve ganhar critérios de aceite antes da implementação.
 
 Endpoints administrativos adicionais podem ser expostos somente quando houver necessidade real.
 
@@ -484,9 +571,9 @@ As três rotas são públicas no MVP:
 /api/redoc/       -> ReDoc
 ```
 
-O schema pode ser obtido como JSON com `Accept: application/vnd.oai.openapi+json`; YAML também está disponível. Ele descreve health, contexto e `POST /api/v1/compras/`, sem endpoints futuros. Compra possui serializers reais de request/response, incluindo `fidelidade` nullable com pontos em strings de quatro casas e expiração, e respostas documentadas `201`, `200`, `400`, `401`, `403`, `404`, `409` e `405`.
+O schema pode ser obtido como JSON com `Accept: application/vnd.oai.openapi+json`; YAML também está disponível. Ele descreve health, contexto, `POST /api/v1/compras/` e `POST /api/v1/resgates/`, sem endpoints futuros. Compra possui serializers reais de request/response, incluindo `fidelidade` nullable com pontos em strings de quatro casas e expiração. Resgate descreve pontos inteiros, desconto como string decimal, rejeição de campos extras e ausência de backdating. Ambos documentam respostas `201`, `200`, `400`, `401`, `403`, `404`, `409` e `405`.
 
-O security scheme se chama `X-API-Key`, com `type: apiKey`, `in: header` e `name: X-API-Key`. Health não exige autenticação; contexto e Compra exigem esse scheme. No Swagger, use **Authorize** e informe a chave completa `<identificador>.<segredo>` para testar os endpoints protegidos. A autorização não é persistida pelo Swagger entre carregamentos. Documentação pública não concede acesso aos dados.
+O security scheme se chama `X-API-Key`, com `type: apiKey`, `in: header` e `name: X-API-Key`. Health não exige autenticação; contexto, Compra e Resgate exigem esse scheme. No Swagger, use **Authorize** e informe a chave completa `<identificador>.<segredo>` para testar os endpoints protegidos. A autorização não é persistida pelo Swagger entre carregamentos. Documentação pública não concede acesso aos dados.
 
 ## Documentação conceitual
 
@@ -561,6 +648,8 @@ Na F2.06, a cobertura adicionada está em `apps/api/tests.py`, `apps/empresas/te
 Na F3.01, `apps/fidelidade/test_compras.py`, `apps/fidelidade/test_concorrencia_compras.py`, `apps/fidelidade/test_migrations.py` e `apps/api/test_compras.py` cobrem domínio, limites monetários e de identificador, tenancy, retries, conflitos, preservação da origem, concorrência real via conexões independentes, HTTP, OpenAPI e preservação do domínio anterior à migration inicial de Compra. Os testes de concorrência têm PostgreSQL como referência.
 
 Na F3.02, `apps/fidelidade/test_pontos.py`, `apps/fidelidade/test_migration_pontos.py` e `apps/api/test_pontos.py` acrescentam cobertura de cálculo, calendário, limites representáveis, snapshots, imutabilidade, rollback, legado e contrato de fidelidade. Os testes de parâmetros e concorrência existentes foram ampliados para a política corporativa e uma Compra + um Lote.
+
+Na F3.04, `apps/fidelidade/test_resgates.py`, `apps/fidelidade/test_concorrencia_resgates.py`, `apps/fidelidade/test_migration_resgates.py` e `apps/api/test_resgates.py` contêm testes de FEFO, frações, expiração estrita, parâmetros, histórico, Decimal, rollback, autorização, HTTP, OpenAPI e migration. As disputas usam PostgreSQL real com conexões independentes, incluindo idempotência divergente, double-spend e defesa residual por constraint. Esses testes integram a suíte de regressão do projeto.
 
 Os endpoints de negócio futuros também deverão ter testes para:
 

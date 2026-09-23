@@ -94,7 +94,7 @@ class FidelidadeOpenAPITests(SimpleTestCase):
         resposta = self.client.get('/api/schema/', HTTP_ACCEPT='application/vnd.oai.openapi+json')
         self.assertEqual(resposta.status_code, 200)
         schema = json.loads(resposta.content)
-        self.assertEqual(set(schema['paths']), {'/api/v1/health/', '/api/v1/contexto/', '/api/v1/compras/'})
+        self.assertEqual(set(schema['paths']), {'/api/v1/health/', '/api/v1/contexto/', '/api/v1/compras/', '/api/v1/resgates/'})
         post = schema['paths']['/api/v1/compras/']['post']
         self.assertEqual(post['security'], [{'X-API-Key': []}])
         for status in ('200', '201', '400', '409'):
@@ -112,5 +112,5 @@ class FidelidadeOpenAPITests(SimpleTestCase):
             self.assertEqual(pontos[campo]['format'], 'decimal')
             self.assertIn('quatro casas decimais', pontos[campo]['description'])
         self.assertEqual(pontos['expira_em']['format'], 'date-time')
-        for nome in ('LotePontos', 'Evento', 'Campanha', 'Resgate', 'Nivel'):
+        for nome in ('LotePontos', 'Evento', 'Campanha', 'AlocacaoResgate', 'Nivel'):
             self.assertNotIn(nome, tipos)

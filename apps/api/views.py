@@ -9,10 +9,12 @@ from rest_framework.views import APIView
 
 from apps.empresas.services import lojas_autorizadas
 from apps.fidelidade.services import registrar_compra
+from apps.fidelidade.resgates import registrar_resgate
 
 from .exceptions import envelope_erro
 from .serializers import ContextoSerializer, EnvelopeErroSerializer, HealthSerializer
 from .serializers import CompraSerializer, RegistrarCompraSerializer
+from .serializers import RegistrarResgateSerializer, ResgateSerializer
 
 
 class HealthView(APIView):
@@ -67,6 +69,34 @@ class CompraView(APIView):
         entrada.is_valid(raise_exception=True)
         compra, criada = registrar_compra(credencial=request.auth, **entrada.validated_data)
         return Response(CompraSerializer(compra).data, status=201 if criada else 200)
+
+
+@method_decorator(never_cache, name='dispatch')
+class ResgateView(APIView):
+    http_method_names = ['post', 'options']
+
+    @extend_schema(
+        request=RegistrarResgateSerializer,
+        responses={
+            201: OpenApiResponse(ResgateSerializer, description='Resgate e alocações criados atomicamente.'),
+            200: OpenApiResponse(ResgateSerializer, description='Retry retorna histórico original, sem recalcular ou consumir novamente.'),
+            400: OpenApiResponse(EnvelopeErroSerializer, description='requisicao_invalida, pontos_abaixo_do_minimo, incremento_resgate_invalido ou saldo_insuficiente'),
+            401: OpenApiResponse(EnvelopeErroSerializer, description='credencial_invalida'),
+            403: OpenApiResponse(EnvelopeErroSerializer, description='loja_fora_do_escopo'),
+            404: OpenApiResponse(EnvelopeErroSerializer, description='cliente_nao_encontrado'),
+            409: OpenApiResponse(EnvelopeErroSerializer, description='idempotencia_conflitante'),
+            405: OpenApiResponse(EnvelopeErroSerializer, description='metodo_nao_permitido'),
+        },
+        description=('Resgate idempotente por Loja + identificador externo. Pontos inteiros positivos; '
+                     'mínimo e (pontos - mínimo) % incremento == 0. Consumo FEFO por expiração, aquisição e pk. '
+                     'Instante exclusivo do servidor, sem campos adicionais ou backdating; expira_em deve ser estritamente maior. '
+                     'Desconto em centavos com HALF_UP e snapshots históricos. Retry não consulta configuração nem saldo.'),
+    )
+    def post(self, request):
+        entrada = RegistrarResgateSerializer(data=request.data)
+        entrada.is_valid(raise_exception=True)
+        resgate, criado = registrar_resgate(credencial=request.auth, **entrada.validated_data)
+        return Response(ResgateSerializer(resgate).data, status=201 if criado else 200)
 
 
 @csrf_exempt
