@@ -29,3 +29,11 @@ class EventoFidelidadeForm(forms.Form):
         if 'escopo' in dados and 'lojas' in dados:
             validar_escopo_evento(self.empresa, dados['escopo'], dados['lojas'])
         return dados
+
+
+class NivelFidelidadeForm(forms.Form):
+    nome = forms.CharField(label='Nome', max_length=255, strip=True)
+    pontos_minimos = forms.DecimalField(
+        label='Pontos mínimos', max_digits=24, decimal_places=4, min_value=Decimal('0'),
+        help_text='Total histórico de pontos concedidos. O primeiro nível deve começar em zero.',
+    )

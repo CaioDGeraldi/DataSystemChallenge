@@ -548,3 +548,78 @@ def _proteger_historico_resgates(sender, instance, **kwargs):
     from django.db.models.deletion import ProtectedError
 
     raise ProtectedError('Resgates e alocações históricas não podem ser excluídos.', [instance])
+
+
+class _NivelFidelidadeQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise ValidationError('Use os services de Gestão para configurar níveis.')
+
+    def bulk_update(self, objs, fields, batch_size=None):
+        raise ValidationError('Use os services de Gestão para configurar níveis.')
+
+    def bulk_create(self, objs, **kwargs):
+        raise ValidationError('Use os services de Gestão para configurar níveis.')
+
+    def delete(self):
+        raise ValidationError('Use excluir_nivel para preservar a configuração da Empresa.')
+
+
+class NivelFidelidade(models.Model):
+    empresa = models.ForeignKey('empresas.Empresa', on_delete=models.PROTECT, related_name='niveis_fidelidade')
+    # Mesmo limite de Empresa, Loja e EventoFidelidade.
+    nome = models.CharField(max_length=255)
+    pontos_minimos = models.DecimalField(max_digits=24, decimal_places=4,
+                                        validators=[MinValueValidator(Decimal('0'))])
+
+    objects = _NivelFidelidadeQuerySet.as_manager()
+
+    class Meta:
+        ordering = ['pontos_minimos']
+        constraints = [
+            models.UniqueConstraint(fields=['empresa', 'pontos_minimos'], name='nivel_empresa_threshold_unico'),
+            models.CheckConstraint(condition=models.Q(pontos_minimos__gte=0), name='nivel_threshold_nao_negativo'),
+        ]
+
+    def clean_fields(self, exclude=None):
+        if 'nome' not in (exclude or ()):
+            if not isinstance(self.nome, str) or not self.nome.strip():
+                raise ValidationError({'nome': 'Informe um nome textual não vazio.'})
+            self.nome = self.nome.strip()
+        if 'pontos_minimos' not in (exclude or ()):
+            if not isinstance(self.pontos_minimos, Decimal) or not self.pontos_minimos.is_finite():
+                raise ValidationError({'pontos_minimos': 'Informe um Decimal finito, sem float.'})
+        super().clean_fields(exclude=exclude)
+
+    def clean(self):
+        super().clean()
+        self.clean_fields()  # full_clean também chama clean após erros de campos.
+        if self.pk is not None:
+            original = type(self)._base_manager.filter(pk=self.pk).values_list('empresa_id', flat=True).first()
+            if original is not None and self.empresa_id != original:
+                raise ValidationError({'empresa': 'A Empresa não pode ser alterada após a criação.'})
+        if self.pontos_minimos != 0 and not type(self).objects.filter(
+                empresa_id=self.empresa_id, pontos_minimos=0).exclude(pk=self.pk).exists():
+            raise ValidationError({'pontos_minimos': 'A configuração deve começar com um nível em zero.'})
+
+    def save(self, *args, **kwargs):
+        from .escrita_niveis import _exigir_escrita_nivel
+
+        _exigir_escrita_nivel(self)
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        from .escrita_niveis import _exigir_escrita_nivel
+
+        _exigir_escrita_nivel(self)
+        return super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return self.nome
+
+
+@receiver(pre_delete, sender=NivelFidelidade)
+def _proteger_configuracao_niveis(sender, instance, **kwargs):
+    from .escrita_niveis import _exigir_escrita_nivel
+
+    _exigir_escrita_nivel(instance)
