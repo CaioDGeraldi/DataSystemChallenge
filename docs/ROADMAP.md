@@ -227,7 +227,7 @@ Entregue:
 - OpenAPI refletindo somente endpoints realmente implementados;
 - testes de autenticação, tenancy, HTTP, CSRF, migration e schema.
 
-Compra e idempotência transacional foram entregues posteriormente na F3.01. O motor base de pontos e `LotePontos` foi entregue na F3.02. Campanhas/eventos temporários foram entregues na F3.03. Resgate idempotente e consumo histórico de Lotes foram entregues na F3.04. Cliente REST e níveis permanecem futuros.
+Compra e idempotência transacional foram entregues posteriormente na F3.01. O motor base de pontos e `LotePontos` foi entregue na F3.02. Campanhas/eventos temporários foram entregues na F3.03. Resgate idempotente e consumo histórico de Lotes foram entregues na F3.04. Níveis configuráveis foram entregues na F3.05. Cliente REST permanece futuro.
 
 ## Fase 3 — Motor de fidelidade
 
@@ -282,7 +282,7 @@ Entregue:
 - OpenAPI, `docs/API.md` e `docs/APRESENTACAO.md` atualizados;
 - validação em PostgreSQL com 87 testes focais e 291 testes totais, além dos gates de migrations, diff, lock e OpenAPI.
 
-Limitações deliberadas da F3.02: não havia backfill automático, saldo consumível, Resgate, campanhas/eventos, níveis ou versionamento temporal completo de configurações. Campanhas/eventos foram entregues posteriormente na F3.03 e Resgate/saldo consumível foram entregues na F3.04. Operações bulk, `QuerySet.update` e SQL bruto continuam fora dos caminhos normais protegidos pelo model.
+Limitações deliberadas da F3.02: não havia backfill automático, saldo consumível, Resgate, campanhas/eventos, níveis ou versionamento temporal completo de configurações. Campanhas/eventos foram entregues posteriormente na F3.03, Resgate/saldo consumível na F3.04 e níveis configuráveis na F3.05. Operações bulk, `QuerySet.update` e SQL bruto continuam fora dos caminhos normais protegidos pelo model.
 
 ### F3.03 — Eventos/Campanhas ✅ P0
 
@@ -313,7 +313,7 @@ Entregue:
 - `docs/API.md` e `docs/APRESENTACAO.md` atualizados para o fluxo real;
 - validação em PostgreSQL com 99 testes focais e 325 testes totais, além de `check`, `makemigrations --check`, migration aplicada, OpenAPI, `git diff --check` e `uv lock --check`.
 
-Limitações deliberadas: somente `MULTIPLICADOR_PONTOS` é operacional; não há `BONUS_PONTOS_PERCENTUAL`, `DESCONTO_GERAL_PERCENTUAL`, níveis, backfill de campanhas, combinação automática de campanhas conflitantes nem versionamento temporal completo das configurações permanentes. Na F3.03 ainda não havia saldo consumível nem Resgate; esse fluxo foi entregue posteriormente na F3.04. Operações bulk, `QuerySet.update` e SQL bruto continuam fora dos caminhos normais protegidos pelo domínio.
+Limitações deliberadas: somente `MULTIPLICADOR_PONTOS` é operacional; não há `BONUS_PONTOS_PERCENTUAL`, `DESCONTO_GERAL_PERCENTUAL`, backfill de campanhas, combinação automática de campanhas conflitantes nem versionamento temporal completo das configurações permanentes. Na F3.03 ainda não havia saldo consumível, Resgate ou níveis; Resgate foi entregue na F3.04 e níveis configuráveis na F3.05. Operações bulk, `QuerySet.update` e SQL bruto continuam fora dos caminhos normais protegidos pelo domínio.
 
 ### F3.04 — Resgate e consumo de lotes ✅ P0
 
@@ -339,27 +339,41 @@ Entregue:
 - OpenAPI, `docs/API.md` e `docs/APRESENTACAO.md` atualizados para o contrato real;
 - validação em PostgreSQL com 150 testes focais e 377 testes totais, além de `check`, `makemigrations --check`, migration aplicada, OpenAPI, `git diff --check` e `uv lock --check`.
 
-Limitações deliberadas: não há cancelamento, estorno, edição ou backdating de Resgate; não há endpoint público de saldo, níveis, dashboard, vínculo obrigatório Resgate → Compra ou ledger genérico. APIs internas do ORM e SQL bruto continuam fora do contrato normal de escrita.
+Limitações deliberadas: não há cancelamento, estorno, edição ou backdating de Resgate; não há endpoint público de saldo, dashboard, vínculo obrigatório Resgate → Compra ou ledger genérico. Níveis configuráveis foram entregues posteriormente na F3.05. APIs internas do ORM e SQL bruto continuam fora do contrato normal de escrita.
 
-### F3.05 — Níveis configuráveis 🟡 P0
+### F3.05 — Níveis configuráveis ✅ P0
 
-Próxima fase da vertical principal.
+Issue: #53. PR: #55.
 
-A distribuição Bronze/Prata/Ouro faz parte dos indicadores esperados do cenário de demonstração, mas esses nomes não são enums obrigatórios do produto.
+Entregue:
 
-Direção mínima P0:
+- `NivelFidelidade` configurável por Empresa, sem hardcode de Bronze/Prata/Ouro;
+- nome textual livre e `pontos_minimos` em `DecimalField(max_digits=24, decimal_places=4)`;
+- threshold único por Empresa, não negativo e usado como ordenação da faixa;
+- configuração vazia válida; quando existem níveis, o menor threshold deve ser exatamente `0.0000`;
+- classificação derivada por `SUM(LotePontos.pontos_concedidos)` histórico;
+- Lotes expirados continuam contando para nível;
+- Resgates e `AlocacaoResgate` não reduzem o nível;
+- inatividade não reduz o nível e continua sendo dimensão separada;
+- campanhas contam por meio dos `pontos_concedidos` já persistidos, sem recálculo;
+- nível não é materializado no `Cliente`, e não existe campo redundante de pontos acumulados;
+- mudança dos thresholds pode reclassificar o estado atual sem reescrever o histórico de pontos;
+- escrita de configuração restrita aos services transacionais;
+- serialização por Empresa com `FOR NO KEY UPDATE`, seguindo a ordem Empresa → Administrador;
+- gestão web mínima para listar, criar, editar e excluir níveis somente por Administrador ativo;
+- isolamento cross-tenant, CSRF e exclusão somente por POST;
+- sem API REST pública de níveis nesta fase;
+- migration incremental `fidelidade.0005_nivelfidelidade`;
+- `docs/ARQUITETURA_PRODUTO.md` e `docs/APRESENTACAO.md` atualizados;
+- validação local com 32 testes focais e 409 testes totais, além de `check`, `makemigrations --check --dry-run`, migration aplicada, OpenAPI, `git diff --check` e `uv lock --check`.
 
-- níveis por Empresa;
-- nome;
-- ordem;
-- faixa de pontos;
-- classificação do Cliente a partir da configuração.
-
-Benefícios avançados e composição flexível podem ficar em P1. A regra exata do benefício Prata/Ouro do cenário de demonstração continua dependendo de definição inequívoca do requisito antes de ser codificada.
+Benefícios automáticos por nível continuam fora do escopo: a F3.05 não associa Prata/Ouro a desconto, bônus, multiplicador ou conversão especial. Também permanecem futuros histórico de progressão/rebaixamento, janela temporal de qualificação, rebaixamento por inatividade, API pública de níveis e área do Cliente enriquecida.
 
 ## Fase 4 — Dados e visualização
 
-### F4.01 — Seed determinístico e coerente ⏳ P0
+### F4.01 — Seed determinístico e coerente 🟡 P0
+
+Próxima fase da vertical principal.
 
 Objetivo: alimentar a demonstração pela mesma lógica de domínio usada em produção.
 
@@ -379,6 +393,33 @@ Preferência: aproximadamente 36 Clientes e 300 Compras para tornar os indicador
 
 ### F4.02 — Dashboard do Gestor ⏳ P0
 
+O Dashboard continua sendo a entrega central da F4.02, mas a execução foi subdividida para evitar construir visualização final sobre HTML cru e depois refazer a base visual.
+
+#### F4.02A — Base visual mínima + SCSS ⏳ P0
+
+Issue: #54.
+
+Objetivo: criar a fundação visual mínima da Retorna antes do Dashboard funcional.
+
+Direção:
+
+- SCSS pequeno e compreensível, compilado para CSS;
+- tokens iniciais da identidade Retorna (`#0D1426`, `#5EC33D`, branco e neutros de interface);
+- shell de Gestão com header/sidebar/navigation coerentes com papel e escopo;
+- estilos mínimos para botões, formulários, mensagens, cards, tabelas, estados vazios e badges quando necessários;
+- layout utilizável em desktop e mobile;
+- foco visível, labels legíveis, contraste adequado e estados não dependentes somente de cor;
+- processo de compilação SCSS → CSS explicitamente documentado, sem build chain desnecessariamente complexa;
+- preservar Django Templates; não introduzir SPA/React somente para estilização.
+
+Decisão de UX: `Criar empresa` é uma ação estrutural rara e não deve aparecer na navegação operacional do Cliente, Gestor ou Administrador nem no header de todas as telas. A ação pode existir no onboarding público e, futuramente, em um seletor de contexto para identidades que administrem múltiplas Empresas.
+
+O Cliente já possui cadastro público por Empresa; a interface futura deve tornar esse fluxo simples e visível sem depender de Gestor/Administrador para cadastrar cada Cliente.
+
+#### F4.02B — Dashboard funcional ⏳ P0
+
+Objetivo: entregar os indicadores essenciais calculados sobre a vertical real.
+
 Indicadores essenciais:
 
 - clientes ativos;
@@ -394,8 +435,18 @@ Indicadores essenciais:
 Escopo:
 
 - Administrador: Empresa inteira ou Loja selecionada;
-- Gestor: somente Lojas autorizadas;
-- filtros por período e Loja quando aplicável.
+- Gestor: somente Lojas autorizadas.
+
+#### F4.02C — Gráficos, filtros e refinamentos do Dashboard ⏳ P0
+
+Objetivo: consolidar a leitura operacional da F4.02 após os indicadores funcionais.
+
+Direção:
+
+- gráficos de linha/barra para evolução temporal e demais visualizações que agreguem leitura real;
+- filtros por período e Loja quando aplicável;
+- refinamento dos cards/tabelas do Dashboard sem duplicar regra de negócio no frontend;
+- manter toda autorização e cálculo de domínio no backend.
 
 ### F4.03 — Área do Cliente ⏳ P1
 
@@ -403,7 +454,7 @@ Direção:
 
 - saldo;
 - pontos próximos de expirar;
-- nível/benefício quando implementado;
+- nível e benefícios somente quando cada capacidade estiver implementada;
 - histórico de compras/pontos;
 - histórico de resgates.
 
@@ -413,7 +464,9 @@ Interface mobile-first e separada visualmente do painel administrativo.
 
 ### F5.01 — Acessibilidade e acabamento ⏳ P1
 
-- responsividade;
+A F4.02A entrega a base funcional necessária antes do Dashboard. A F5.01 concentra o polimento que não precisa bloquear a vertical P0:
+
+- responsividade refinada;
 - foco de teclado;
 - labels;
 - contraste;
@@ -472,6 +525,7 @@ A equipe deve conseguir explicar arquitetura, parâmetros, segurança, API, uso 
 - níveis configuráveis mínimos para o cenário;
 - resgate mínimo funcional;
 - seed coerente;
+- base visual mínima necessária ao Dashboard;
 - dashboard com os requisitos essenciais;
 - testes dos fluxos críticos e isolamento entre Empresas.
 
