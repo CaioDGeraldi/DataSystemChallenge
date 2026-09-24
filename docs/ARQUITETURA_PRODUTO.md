@@ -177,30 +177,43 @@ ConfiguracaoLoja
 
 A implementação concreta será definida em Issue própria antes do código.
 
-## Níveis de fidelidade
+## Níveis de fidelidade — F3.05
 
-Bronze, Prata e Ouro não devem ser tratados como estruturas obrigatórias do produto. Eles representam a configuração atual do caso de demonstração.
+`NivelFidelidade` pertence a uma Empresa por FK obrigatória com `PROTECT`. Seus campos de configuração são `nome` e `pontos_minimos`. O nome é textual, não vazio após trim e tem limite de 255 caracteres, seguindo Empresa, Loja e Evento. Os pontos mínimos usam `Decimal(24,4)`, são não negativos e únicos por Empresa. Empresas diferentes podem usar os mesmos thresholds.
 
-A direção desejada é permitir níveis configuráveis por Empresa, por exemplo:
+Bronze, Prata e Ouro são exemplos de nomes configuráveis, não enums nem registros criados automaticamente. Uma Empresa poderia configurar Bronze em `0.0000`, Prata em `1000.0000` e Ouro em `5000.0000`; outra poderia escolher Standard e VIP. Não há seed FATECalçados nesta fase.
+
+O threshold determina a ordem crescente e o início de cada faixa. O próximo threshold determina seu limite superior exclusivo; o último nível não tem teto. Não existem campos `ordem` ou `pontos_maximos`. Toda configuração não vazia começa em zero. É possível excluir o último nível e deixar a Empresa sem configuração; não é possível mover o zero para um valor positivo ou excluí-lo mantendo outros níveis.
+
+### Nível, saldo e atividade são distintos
 
 ```text
-Empresa A
-- Bronze
-- Prata
-- Ouro
-
-Empresa B
-- Standard
-- VIP
-
-Empresa C
-- Bronze
-- Prata
-- Ouro
-- Diamond
+pontos_para_nivel = SUM(LotePontos.pontos_concedidos)
+nível atual = maior pontos_minimos <= pontos_para_nivel, na Empresa do Cliente
 ```
 
-Faixas, ordem e benefícios devem pertencer ao domínio configurável, respeitando as capacidades suportadas pelo motor de fidelidade.
+`classificar_cliente(cliente)` em `apps.fidelidade.niveis` reconsulta o vínculo persistido para validar identidade e tenant e retorna `ClassificacaoNivel`, com `nivel: NivelFidelidade | None` e `pontos_para_nivel: Decimal`. Sem Lotes, o total é zero. Sem níveis configurados, o nível é `None`, sem default implícito. A soma histórica pode exceder a capacidade de um único Lote ou threshold, sem truncamento.
+
+A classificação inclui Lotes expirados e usa apenas os pontos concedidos persistidos, que já incorporam campanhas. Não consulta alocações de Resgate nem recalcula concessões. Não há campo de nível ou pontos acumulados no Cliente. A classificação usa a configuração atual e não constitui histórico de progressão: alterar thresholds pode mudar o nível atual sem modificar Lotes.
+
+Com 5.200 pontos históricos, um Cliente pode estar em Ouro. Ao resgatar 5.000 pontos válidos, o saldo disponível cai, mas os pontos para nível continuam sendo 5.200. Expiração e inatividade também não reduzem esse total. `periodo_cliente_ativo_dias` permanece separado; um Cliente pode ser Ouro e ativo ou Ouro e inativo.
+
+### Gestão e concorrência
+
+Somente Administrador ativo pode listar, criar, editar e excluir níveis da Empresa de seu contexto. Gestor não tem acesso à Gestão de níveis. As rotas web são:
+
+- `GET /gestao/niveis/`;
+- `GET/POST /gestao/niveis/novo/`;
+- `GET/POST /gestao/niveis/<id>/editar/`;
+- `POST /gestao/niveis/<id>/excluir/`.
+
+Os POSTs exigem CSRF e reutilizam services de domínio. Empresa vem da sessão autorizada, nunca do formulário. Edição e exclusão filtram o ID pelo tenant; a listagem segue `pontos_minimos ASC`.
+
+Escritas seguem o padrão de Eventos e parâmetros corporativos: `transaction.atomic` → lock `FOR NO KEY UPDATE` da Empresa → lock/revalidação do Administrador → alteração → validação da configuração final → commit. O lock da Empresa serializa inclusive a primeira criação. Uma exclusão que deixaria níveis sem zero é revertida integralmente. UniqueConstraint e CheckConstraint são a defesa SQL para duplicidade e valor negativo.
+
+O model restringe escrita aos services; os managers públicos bloqueiam update, bulk e delete direto. Como nas fases anteriores, SQL bruto e APIs internas do ORM ficam fora do contrato de escrita; não há trigger para a invariante agregada de existência do zero.
+
+Benefícios não estão implementados: nível não concede desconto automático, bônus, multiplicador ou conversão especial de Resgate. Também ficam fora desta fase API pública de níveis, área do Cliente, dashboard, janela temporal de qualificação, rebaixamento por inatividade e histórico de mudanças de nível.
 
 ## Eventos e campanhas
 
@@ -400,7 +413,6 @@ Devem ganhar Issues próprias antes da implementação:
 
 - modelagem definitiva de `MembroEmpresa` e `AcessoLoja`;
 - estrutura concreta dos parâmetros tipados;
-- níveis de fidelidade configuráveis;
 - política de conflito/composição entre eventos;
 - auditoria de alterações de configuração;
 - vigência/versionamento de configurações;

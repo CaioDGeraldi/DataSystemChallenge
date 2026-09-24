@@ -1,0 +1,22 @@
+{% extends "datasystem/base.html" %}
+{% block titulo %}Níveis de fidelidade{% endblock %}
+{% block conteudo %}
+<h1>Níveis — {{ empresa }}</h1>
+<p>O nível representa o total histórico de pontos concedidos. Resgate, expiração e inatividade não reduzem esse total.</p>
+<p>A classificação atual acompanha os limites configurados. Níveis não concedem benefícios automáticos.</p>
+<p><a href="{% url 'fidelidade:novo_nivel' %}">Criar nível</a></p>
+<table>
+<caption>Níveis da Empresa, em ordem crescente de pontos mínimos</caption>
+<thead><tr><th scope="col">Nome</th><th scope="col">Pontos mínimos</th><th scope="col">Ações</th></tr></thead>
+<tbody>
+{% for nivel in niveis %}
+<tr>
+<td>{{ nivel.nome }}</td><td>{{ nivel.pontos_minimos }}</td>
+<td><a href="{% url 'fidelidade:editar_nivel' nivel.pk %}">Editar {{ nivel.nome }}</a>
+<form method="post" action="{% url 'fidelidade:excluir_nivel' nivel.pk %}">{% csrf_token %}<button type="submit">Excluir {{ nivel.nome }}</button></form></td>
+</tr>
+{% empty %}<tr><td colspan="3">Nenhum nível configurado. Clientes ficam sem nível; comece com um nível em zero.</td></tr>{% endfor %}
+</tbody></table>
+<p>A faixa de cada nível termina onde começa o próximo. O último nível não tem limite superior.</p>
+<p><a href="{% url 'empresas:area' %}">Voltar à gestão</a></p>
+{% endblock %}

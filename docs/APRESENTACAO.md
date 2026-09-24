@@ -296,7 +296,7 @@ A demonstração final deve procurar seguir uma única venda ao longo do sistema
 9. Dashboard reflete a operação (etapa futura)
 ```
 
-Na F3.04, o roteiro inclui criar uma campanha 2x, registrar a venda e mostrar os pontos e a expiração. Em seguida, enviar `POST /api/v1/resgates/` com 200 pontos e mostrar o desconto. Repetir Compra e Resgate evidencia que o histórico não é recalculado nem consumido novamente, inclusive após mudar a política. O Resgate calcula saldo a partir dos Lotes válidos e consumos anteriores; não existe saldo materializado nem endpoint público de consulta. Bônus/descontos percentuais, níveis e dashboard continuam futuros.
+Na F3.04, o roteiro inclui criar uma campanha 2x, registrar a venda e mostrar os pontos e a expiração. Em seguida, enviar `POST /api/v1/resgates/` com 200 pontos e mostrar o desconto. Repetir Compra e Resgate evidencia que o histórico não é recalculado nem consumido novamente, inclusive após mudar a política. O Resgate calcula saldo a partir dos Lotes válidos e consumos anteriores; não existe saldo materializado nem endpoint público de consulta. Bônus/descontos percentuais e dashboard continuam futuros.
 
 Exemplo para a FATECalçados:
 
@@ -309,6 +309,12 @@ Exemplo para a FATECalçados:
 > A Retorna consome primeiro os pontos que vencem antes. Se o PDV repetir o pedido por falha de conexão, recebe o mesmo desconto, sem consumir pontos novamente.
 
 O instante do Resgate vem do servidor: o PDV não pode informar uma data passada para usar pontos expirados. A quantidade solicitada é inteira, mas pode consumir frações de vários Lotes. O desconto e os parâmetros aplicados permanecem registrados mesmo quando a Empresa muda suas regras.
+
+Na F3.05, a Gestão permite ao Administrador configurar nomes e pontos mínimos dos níveis por Empresa. Para a FATECalçados, Bronze em zero, Prata em 1.000 e Ouro em 5.000 são exemplos que podem ser cadastrados, sem nomes fixos no produto nem seed automático. A classificação está disponível como serviço de domínio; não há tela do Cliente nem API pública de níveis nesta fase.
+
+> O nível reconhece o progresso histórico. Um Cliente que acumulou 5.200 pontos permanece Ouro ao resgatar 5.000. O saldo cai, mas o progresso não é apagado. Ele pode ser Ouro e estar ativo ou inativo.
+
+Expiração e inatividade não reduzem o nível. Alterar as faixas da Empresa pode mudar a classificação atual. Não associar Prata/Ouro a percentuais ou benefícios: descontos por nível, bônus e outras vantagens continuam fora desta entrega. A validação local da F3.05 deve preceder sua demonstração.
 
 Não abrir módulos sem relação com a história principal.
 
@@ -424,11 +430,19 @@ As mensagens abaixo contemplam a F3.02 validada e sua integração junto com est
 - O saldo é derivado, e o fluxo transacional serializa disputas pelo mesmo Cliente.
 - Não há backdating, cancelamento, estorno ou consulta pública de saldo nesta fase.
 
+### Mensagens da F3.05
+
+- Administrador configura níveis da própria Empresa, com nomes livres e thresholds em ordem crescente.
+- Uma configuração com níveis começa em zero; Empresa sem configuração não atribui nível implícito.
+- Nível usa pontos historicamente concedidos, incluindo Lotes expirados, sem descontar Resgates.
+- Saldo, nível e atividade representam dimensões distintas do Cliente.
+- Alterações nas faixas mudam a classificação atual sem reescrever o histórico de pontos.
+- A classificação é um serviço de domínio; não há API pública, área do Cliente ou benefícios por nível nesta fase.
+
 ### Mensagens previstas para a vertical final
 
 Estas só devem migrar para o bloco de mensagens implementadas depois da respectiva entrega:
 
-- níveis configuráveis;
 - indicadores do dashboard calculados sobre o fluxo completo.
 
 ## Como registrar uma nova entrega aqui
@@ -505,6 +519,10 @@ Porque não havia registro da política aplicada a essas Compras. Não inventamo
 ### "O que a API devolve depois de registrar uma Compra?"
 
 Além dos dados da Compra, devolve o bloco `fidelidade` com `pontos_base`, `pontos_concedidos` e `expira_em`. Os pontos aparecem como strings com quatro casas decimais. Uma nova operação retorna 201; um retry equivalente retorna 200 com o mesmo histórico. Isso ainda não representa saldo disponível para Resgate.
+
+### "Resgatar ou deixar os pontos expirarem reduz meu nível?"
+
+Não. O nível usa todos os pontos já concedidos; saldo disponível e atividade são conceitos separados. Com 5.200 pontos históricos e Ouro a partir de 5.000, o Cliente continua Ouro após um Resgate ou a expiração de Lotes. A Empresa pode alterar os thresholds e, com isso, mudar a classificação atual. Níveis não concedem benefícios automáticos nesta fase.
 
 ### "Como os pontos viram desconto?"
 
