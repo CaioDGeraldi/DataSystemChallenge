@@ -371,33 +371,39 @@ Benefícios automáticos por nível continuam fora do escopo: a F3.05 não assoc
 
 ## Fase 4 — Dados e visualização
 
-### F4.01 — Seed determinístico e coerente 🟡 P0
+### F4.01 — Seed determinístico e coerente ✅ P0
 
-Próxima fase da vertical principal.
+Issue: #58. PR: #59.
 
-Objetivo: alimentar a demonstração pela mesma lógica de domínio usada em produção.
+Entregue:
 
-Cenário FATECalçados:
+- management command `seed_fatecalcados --data-base YYYY-MM-DD`;
+- data-base obrigatória com referência `T` às 12:00 em `America/Sao_Paulo`;
+- cenário one-shot por banco de demonstração, sem `reset`, `TRUNCATE` ou exclusão destrutiva;
+- 1 Empresa FATECalçados, 12 Lojas, 36 Clientes, 300 Compras e 300 Lotes;
+- níveis Bronze/Prata/Ouro configurados como dados do tenant em `0 / 1000 / 5000`, sem benefício automático;
+- uma campanha `2x` com 24 aplicações históricas geradas pelo motor real;
+- 8 Resgates reais, com consumo FEFO e 22 alocações no cenário de referência;
+- Compras, Lotes, campanhas, Resgates e alocações criados pelos services reais do domínio;
+- simulação temporal restrita ao seed para os Resgates históricos, sem alterar API ou contrato operacional da F3.04;
+- proteção contra colisões e reexecução, com pré-checagem, `pg_advisory_xact_lock` e segunda verificação sob o lock;
+- rollback integral em qualquer falha intermediária ou divergência da validação final;
+- personagens narrativos para demonstrar nível ≠ saldo ≠ atividade, expiração, campanha e FEFO;
+- `docs/SEED_FATECALCADOS.md` documentando composição, execução, determinismo, recriação e limitações;
+- nenhuma migration nova e nenhum contrato F3.01–F3.05 alterado;
+- validação local com 17 testes focais e 426 testes totais, além de `check`, `makemigrations --check --dry-run`, OpenAPI, `git diff --check` e `uv lock --check`.
 
-- 12 Lojas como dados, não constante de código;
-- pelo menos 20 Clientes;
-- pelo menos 200 Compras;
-- múltiplos níveis/faixas;
-- clientes recorrentes e não recorrentes;
-- resgates;
-- pontos próximos de expirar;
-- eventos/campanhas;
-- distribuição temporal suficiente para gráficos.
-
-Preferência: aproximadamente 36 Clientes e 300 Compras para tornar os indicadores mais convincentes, desde que o prazo comporte.
+A modelagem de dados vigente também está consolidada em `docs/MODELAGEM_DE_DADOS.md`, separando entidades persistidas de informações derivadas como saldo, pontos para nível, nível atual e atividade.
 
 ### F4.02 — Dashboard do Gestor ⏳ P0
 
 O Dashboard continua sendo a entrega central da F4.02, mas a execução foi subdividida para evitar construir visualização final sobre HTML cru e depois refazer a base visual.
 
-#### F4.02A — Base visual mínima + SCSS ⏳ P0
+#### F4.02A — Base visual mínima + SCSS 🟡 P0
 
 Issue: #54.
+
+Próxima fase da vertical principal.
 
 Objetivo: criar a fundação visual mínima da Retorna antes do Dashboard funcional.
 
