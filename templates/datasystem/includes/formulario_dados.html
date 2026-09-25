@@ -1,0 +1,39 @@
+{% with etapas=form.etapas_formulario %}
+<div class="retorna-form-layout{% if ilustracao_onboarding %} retorna-form-layout--illustrated{% endif %}">
+<form method="post" class="form-stack retorna-data-form{% if etapas %} retorna-composed-form{% endif %}"{% if etapas %} data-composed-form{% endif %}>
+  {% csrf_token %}
+  {% if form.errors %}
+  <div class="form-errors retorna-form-error-summary" role="alert" tabindex="-1" data-form-error-summary>
+    <p><strong>Revise os campos indicados.</strong></p>
+    {{ form.non_field_errors }}
+    <ul>{% for field in form %}{% if field.errors %}<li>{{ field.label }}: {{ field.errors }}</li>{% endif %}{% endfor %}</ul>
+  </div>
+  {% endif %}
+  {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+  {% if etapas %}
+  <div class="retorna-stepper-toolbar">
+    <p data-form-step-status aria-live="polite" hidden></p>
+    <button class="button button--secondary" type="button" data-form-mode-toggle hidden>Exibir tudo</button>
+  </div>
+  <ol class="retorna-stepper-list" data-form-step-list hidden>
+    {% for etapa in etapas %}<li class="retorna-stepper-item" data-form-step-indicator>
+      <span class="retorna-stepper-number">{{ forloop.counter }}</span><span>{{ etapa.rotulo }}{% if etapa.tem_erros %} — Revise os campos{% endif %}</span>
+    </li>{% endfor %}
+  </ol>
+  {% for etapa in etapas %}
+  <fieldset data-form-step data-step-label="{{ etapa.rotulo }}"{% if etapa.tem_erros %} data-step-has-errors{% endif %}>
+    <legend tabindex="-1">Etapa {{ forloop.counter }} — {{ etapa.rotulo }}</legend>
+    {% for field in etapa.campos %}{% include 'datasystem/includes/campo_formulario.html' %}{% endfor %}
+  </fieldset>
+  {% endfor %}
+  {% else %}
+    {% for field in form.visible_fields %}{% include 'datasystem/includes/campo_formulario.html' %}{% endfor %}
+  {% endif %}
+  <div class="form-actions retorna-form-actions">
+    {% if etapas %}<button class="button button--secondary" type="button" data-form-step-previous hidden>Anterior</button><button class="button" type="button" data-form-step-next hidden>Próximo</button>{% endif %}
+    <button class="button" type="submit" data-form-final-submit>{{ botao }}</button>
+  </div>
+</form>
+{% if ilustracao_onboarding %}{% include 'datasystem/includes/illustration.html' %}{% endif %}
+</div>
+{% endwith %}

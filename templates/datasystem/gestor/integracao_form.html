@@ -1,28 +1,11 @@
-{% extends "datasystem/base.html" %}
-{% block titulo %}Criar credencial de integração{% endblock %}
+{% extends "datasystem/gestao_base.html" %}
+{% load static %}
+{% block titulo %}Criar chave de integração — Retorna{% endblock %}
+{% block titulo_pagina %}Criar chave de integração{% endblock %}
 {% block conteudo %}
-<h1>Criar credencial de integração</h1>
-<p>EMPRESA autoriza todas as Lojas atuais e futuras. LOJAS autoriza somente as selecionadas.</p>
-<form method="post">
-{% csrf_token %}
-{{ form.non_field_errors }}
-{{ form.nome.as_field_group }}
-{{ form.escopo.as_field_group }}
-<div id="selecao-lojas">{{ form.lojas.as_field_group }}</div>
-<button type="submit">Criar credencial</button>
-</form>
-<p><a href="{% url 'empresas:integracoes' %}">Voltar às integrações</a></p>
-<script>
-const escopo = document.getElementById('id_escopo');
-const lojas = document.getElementById('id_lojas');
-function atualizarLojas() {
-    const restrito = escopo.value === 'LOJAS';
-    document.getElementById('selecao-lojas').hidden = !restrito;
-    lojas.disabled = !restrito;
-    lojas.required = restrito;
-    if (!restrito) Array.from(lojas.options).forEach(option => { option.selected = false; });
-}
-escopo.addEventListener('change', atualizarLojas);
-atualizarLojas();
-</script>
+<div class="panel form-panel">
+<header class="retorna-form-card-header"><h2>Dados da chave de integração</h2></header>
+<p>Toda a empresa inclui as lojas atuais e futuras. Lojas específicas inclui somente as selecionadas.</p>
+{% include 'datasystem/includes/formulario_dados.html' with botao='Criar chave de integração' selecao_lojas=True %}
+</div>
 {% endblock %}

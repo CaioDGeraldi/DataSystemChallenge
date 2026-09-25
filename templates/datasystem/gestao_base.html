@@ -1,0 +1,9 @@
+{% extends "datasystem/base.html" %}
+{% block classe_corpo %}management-shell{% endblock %}
+{% block estrutura %}
+{% include "datasystem/includes/navegacao_gestao.html" %}
+{% include "datasystem/includes/topbar.html" %}
+<div class="sidebar-backdrop" data-sidebar-backdrop hidden aria-hidden="true"></div>
+{% endblock %}
+{% block main_class %}main{% endblock %}
+{% block contexto_pagina %}{{ gestao.empresa }}{% endblock %}

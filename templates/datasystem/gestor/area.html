@@ -1,17 +1,31 @@
-{% extends "datasystem/base.html" %}
-{% block titulo %}Área de Gestão{% endblock %}
+{% extends "datasystem/gestao_base.html" %}
+{% block titulo %}Lojas — Retorna{% endblock %}
+{% block titulo_pagina %}{% if pode_criar_loja %}Lojas{% else %}Lojas permitidas{% endif %}{% endblock %}
+{% block acoes_pagina %}{% if pode_criar_loja %}<a class="button" href="{% url 'empresas:criar_loja' %}">Criar Loja</a>{% endif %}{% endblock %}
 {% block conteudo %}
-<h1>Área de Gestão — {{ membro.empresa }}</h1>
-<p>Olá, {{ user.get_full_name }}.</p>
-<p>Papel: {{ membro.get_papel_display }}</p>
-<h2>Lojas</h2>
-{% if pode_criar_loja %}<p><a href="{% url 'fidelidade:eventos' %}">Eventos de fidelidade</a></p>{% endif %}
-{% if pode_criar_loja %}<p><a href="{% url 'fidelidade:niveis' %}">Níveis de fidelidade</a></p>{% endif %}
-{% if pode_criar_loja %}<p><a href="{% url 'empresas:integracoes' %}">Credenciais de integração</a></p>{% endif %}
-<ul>
+<div class="panel">
+<p>Olá, {{ user.get_full_name }}. Estas são as Lojas disponíveis no seu contexto.</p>
+<div class="table-scroll retorna-table-region retorna-desktop-presentation" role="region" aria-label="Lojas disponíveis" tabindex="0">
+<table>
+<caption>Lojas — {{ membro.empresa }}</caption>
+<thead><tr><th scope="col">Nome</th><th scope="col">Cidade</th>{% if pode_criar_loja %}<th scope="col" class="retorna-table-actions">Ação</th>{% endif %}</tr></thead>
+<tbody>
 {% for loja in lojas %}
-<li>{{ loja.nome }} — {{ loja.cidade }}{% if pode_criar_loja %} <a href="{% url 'empresas:configuracao_loja' loja.pk %}">Configuração</a>{% endif %}</li>
-{% empty %}<li>Nenhuma Loja disponível neste contexto.</li>{% endfor %}
-</ul>
-{% if pode_criar_loja %}<p><a href="{% url 'empresas:configuracao_empresa' %}">Configuração de fidelidade da Empresa</a></p><p><a href="{% url 'empresas:membros' %}">Membros e convites</a></p><p><a href="{% url 'empresas:criar_loja' %}">Criar Loja</a></p>{% endif %}
+<tr><td>{{ loja.nome }}</td><td>{{ loja.cidade }}</td>{% if pode_criar_loja %}<td class="retorna-table-actions">{% include "datasystem/gestor/partials/acao_loja.html" %}</td>{% endif %}</tr>
+{% empty %}<tr><td class="empty-state" colspan="{% if pode_criar_loja %}3{% else %}2{% endif %}">Nenhuma Loja disponível neste contexto.</td></tr>{% endfor %}
+</tbody></table>
+</div>
+<div class="retorna-mobile-presentation"><ul class="retorna-mobile-list" aria-label="Lojas disponíveis">
+{% for loja in lojas %}
+<li class="retorna-mobile-card">
+<div class="retorna-mobile-card-header"><h3>{{ loja.nome }}</h3>{% include "datasystem/gestor/partials/acao_loja.html" %}</div>
+
+<dl class="retorna-mobile-details">
+<dt>Cidade</dt><dd>{{ loja.cidade }}</dd>
+</dl>
+
+</li>
+{% empty %}<li class="empty-state">Nenhuma Loja disponível neste contexto.</li>{% endfor %}
+</ul></div>
+</div>
 {% endblock %}

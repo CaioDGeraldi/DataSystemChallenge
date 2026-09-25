@@ -1,25 +1,57 @@
-{% extends "datasystem/base.html" %}
-{% block titulo %}Membros — {{ empresa }}{% endblock %}
+{% extends "datasystem/gestao_base.html" %}
+{% block titulo %}Membros — Retorna{% endblock %}
+{% block titulo_pagina %}Membros e convites{% endblock %}
+{% block acoes_pagina %}<a class="button" href="{% url 'empresas:convidar_membro' %}">Convidar membro</a>{% endblock %}
 {% block conteudo %}
-<h1>Membros — {{ empresa }}</h1>
-<p><a href="{% url 'empresas:convidar_membro' %}">Convidar membro</a></p>
+<div class="panel"><div class="table-scroll retorna-table-region retorna-desktop-presentation" role="region" aria-label="Membros da Empresa" tabindex="0">
 <table>
 <caption>Membros da Empresa</caption>
-<thead><tr><th>Nome</th><th>CPF</th><th>Papel</th><th>Ativo</th></tr></thead>
+<thead><tr><th scope="col">Nome</th><th scope="col">CPF</th><th scope="col">Papel</th><th scope="col">Ativo</th></tr></thead>
 <tbody>{% for membro in membros %}<tr>
 <td>{{ membro.usuario.get_full_name }}</td>
 <td>{{ membro.usuario.cpf|slice:':3' }}.{{ membro.usuario.cpf|slice:'3:6' }}.{{ membro.usuario.cpf|slice:'6:9' }}-{{ membro.usuario.cpf|slice:'9:' }}</td>
-<td>{{ membro.get_papel_display }}</td><td>{{ membro.ativo|yesno:'Sim,Não' }}</td>
-</tr>{% empty %}<tr><td colspan="4">Nenhum membro.</td></tr>{% endfor %}</tbody>
-</table>
+<td>{{ membro.get_papel_display }}</td><td><span class="badge{% if membro.ativo %} badge--success{% endif %}">{{ membro.ativo|yesno:'Sim,Não' }}</span></td>
+</tr>{% empty %}<tr><td class="empty-state" colspan="4">Nenhum membro.</td></tr>{% endfor %}</tbody>
+</table></div>
+<div class="retorna-mobile-presentation"><ul class="retorna-mobile-list" aria-label="Membros da Empresa">
+{% for membro in membros %}
+<li class="retorna-mobile-card">
+<div class="retorna-mobile-card-header"><h3>{{ membro.usuario.get_full_name }}</h3></div>
+
+<dl class="retorna-mobile-details">
+<dt>CPF</dt><dd>{{ membro.usuario.cpf|slice:':3' }}.{{ membro.usuario.cpf|slice:'3:6' }}.{{ membro.usuario.cpf|slice:'6:9' }}-{{ membro.usuario.cpf|slice:'9:' }}</dd>
+<dt>Papel</dt><dd>{{ membro.get_papel_display }}</dd>
+<dt>Ativo</dt><dd><span class="badge">{{ membro.ativo|yesno:'Sim,Não' }}</span></dd>
+</dl>
+
+</li>
+{% empty %}<li class="empty-state">Nenhum membro.</li>{% endfor %}
+</ul></div>
+</div>
+<div class="panel"><div class="table-scroll retorna-table-region retorna-desktop-presentation" role="region" aria-label="Convites" tabindex="0">
 <table>
 <caption>Convites</caption>
-<thead><tr><th>CPF</th><th>Papel</th><th>Estado</th><th>Expiração</th><th>Ação</th></tr></thead>
+<thead><tr><th scope="col">CPF</th><th scope="col">Papel</th><th scope="col">Estado</th><th scope="col">Expiração</th><th scope="col">Ação</th></tr></thead>
 <tbody>{% for convite in convites %}<tr>
 <td>{{ convite.cpf|slice:':3' }}.{{ convite.cpf|slice:'3:6' }}.{{ convite.cpf|slice:'6:9' }}-{{ convite.cpf|slice:'9:' }}</td>
-<td>{{ convite.get_papel_display }}</td><td>{{ convite.estado|capfirst }}</td><td>{{ convite.expira_em }}</td>
-<td>{% if convite.pode_revogar %}<form method="post" action="{% url 'empresas:revogar_convite' convite.pk %}">{% csrf_token %}<button type="submit">Revogar</button></form>{% endif %}</td>
-</tr>{% empty %}<tr><td colspan="5">Nenhum convite.</td></tr>{% endfor %}</tbody>
-</table>
-<p><a href="{% url 'empresas:area' %}">Voltar à Gestão</a></p>
+<td>{{ convite.get_papel_display }}</td><td><span class="badge">{{ convite.estado|capfirst }}</span></td><td>{{ convite.expira_em }}</td>
+<td>{% include "datasystem/gestor/partials/acoes_convite.html" %}</td>
+</tr>{% empty %}<tr><td class="empty-state" colspan="5">Nenhum convite.</td></tr>{% endfor %}</tbody>
+</table></div>
+<div class="retorna-mobile-presentation"><ul class="retorna-mobile-list" aria-label="Convites">
+{% for convite in convites %}
+<li class="retorna-mobile-card">
+<div class="retorna-mobile-card-header"><h3>{{ convite.cpf|slice:':3' }}.{{ convite.cpf|slice:'3:6' }}.{{ convite.cpf|slice:'6:9' }}-{{ convite.cpf|slice:'9:' }}</h3></div>
+
+<dl class="retorna-mobile-details">
+<dt>Papel</dt><dd>{{ convite.get_papel_display }}</dd>
+<dt>Estado</dt><dd><span class="badge">{{ convite.estado|capfirst }}</span></dd>
+<dt>Expiração</dt><dd>{{ convite.expira_em }}</dd>
+</dl>
+<div class="retorna-mobile-actions">{% include "datasystem/gestor/partials/acoes_convite.html" %}</div>
+</li>
+{% empty %}<li class="empty-state">Nenhum convite.</li>{% endfor %}
+</ul></div>
+</div>
+
 {% endblock %}

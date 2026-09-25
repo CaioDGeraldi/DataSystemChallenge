@@ -1,0 +1,11 @@
+<script>
+(() => {
+  let s = {};
+  try { s = JSON.parse(localStorage.getItem('retorna.interface.v1')) || {}; } catch {}
+  const r = document.documentElement;
+  const t = ['system', 'light', 'dark'].includes(s.theme) ? s.theme : 'system';
+  r.dataset.retornaTheme = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  r.dataset.retornaFontScale = [100, 110, 120].includes(s.fontScale) ? s.fontScale : 100;
+  r.dataset.retornaFormMode = ['steps', 'all'].includes(s.formMode) ? s.formMode : 'steps';
+})();
+</script>

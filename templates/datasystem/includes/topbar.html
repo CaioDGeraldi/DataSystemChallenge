@@ -1,0 +1,24 @@
+<header class="topbar">
+  <div class="topbar-left">
+    <button class="sidebar-toggle" type="button" aria-label="Recolher menu principal" aria-controls="retorna-sidebar" aria-expanded="true" data-sidebar-toggle>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <ol class="retorna-breadcrumb-list{% if breadcrumbs|length > 2 %} retorna-breadcrumb-list-compactable{% endif %}">
+      {% for item in breadcrumbs %}
+        {% if forloop.last and breadcrumbs|length > 2 %}<li class="retorna-breadcrumb-compact-ellipsis" aria-hidden="true">…</li>{% endif %}
+        <li>{% if forloop.last %}<span aria-current="page">{{ item.rotulo }}</span>{% elif item.url %}<a href="{{ item.url }}">{{ item.rotulo }}</a>{% else %}<span>{{ item.rotulo }}</span>{% endif %}</li>
+      {% endfor %}
+      </ol>
+    </nav>
+  </div>
+  <div class="topbar-right"><div class="retorna-user-menu">
+    <button class="retorna-user-trigger" type="button" aria-label="Menu de {{ user.get_full_name }}" aria-controls="retorna-user-dropdown" aria-expanded="false" data-user-menu-trigger>
+      <span class="tb-avatar" aria-hidden="true">{{ user.get_full_name|first|upper }}</span><span class="retorna-user-name">{{ user.get_full_name }}</span><span aria-hidden="true">⌄</span>
+    </button>
+    <div class="retorna-user-dropdown" id="retorna-user-dropdown" data-user-menu hidden>
+      <button type="button" data-appearance-open hidden>Aparência e acessibilidade</button>
+      <form method="post" action="{% url 'usuarios:logout' %}">{% csrf_token %}<button type="submit">Sair</button></form>
+    </div>
+  </div></div>
+</header>

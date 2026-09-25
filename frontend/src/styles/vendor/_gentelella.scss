@@ -1,0 +1,6 @@
+// Único ponto de acoplamento SCSS com o pacote vendor.
+// Somente as primitivas necessárias da v4 entram no bundle do Retorna.
+@use "gentelella/scss/v4/tokens";
+@use "gentelella/scss/v4/layout";
+@use "gentelella/scss/v4/components";
+@use "gentelella/scss/v4/forms";

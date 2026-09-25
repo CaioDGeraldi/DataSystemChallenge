@@ -1,9 +1,10 @@
-{% extends "datasystem/base.html" %}
-{% block titulo %}Credencial criada{% endblock %}
+{% extends "datasystem/gestao_base.html" %}
+{% block titulo %}Chave de integração criada — Retorna{% endblock %}
+{% block titulo_pagina %}Chave de integração criada — {{ nome }}{% endblock %}
 {% block conteudo %}
-<h1>Credencial criada — {{ nome }}</h1>
+<div class="panel">
 <p><strong>Copie a chave agora. O segredo é exibido somente na criação e não poderá ser exibido novamente.</strong></p>
-<pre><code>X-API-Key: {{ chave }}</code></pre>
-<p>Guarde a chave em local seguro. Se perdê-la, desative esta credencial e crie outra.</p>
-<p><a href="{% url 'empresas:integracoes' %}">Voltar às integrações</a></p>
+<pre class="secret-value"><code>X-API-Key: {{ chave }}</code></pre>
+<p>Guarde a chave em local seguro. Se perdê-la, desative esta chave de integração e crie outra.</p>
+</div>
 {% endblock %}

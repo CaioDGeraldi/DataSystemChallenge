@@ -1,0 +1,3 @@
+<div class="field{% if field.errors %} field--invalid{% endif %}"{% if field.name == 'lojas' and selecao_lojas %} id="selecao-lojas" data-has-errors="{% if field.errors %}true{% else %}false{% endif %}"{% endif %}{% if field.name == 'lojas' and form.selecao_lojas_campanha %} data-campaign-stores data-has-errors="{% if field.errors %}true{% else %}false{% endif %}"{% endif %}>
+  {{ field.as_field_group }}
+</div>

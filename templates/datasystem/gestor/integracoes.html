@@ -1,19 +1,37 @@
-{% extends "datasystem/base.html" %}
-{% block titulo %}Integrações{% endblock %}
+{% extends "datasystem/gestao_base.html" %}
+{% block titulo %}Integrações — Retorna{% endblock %}
+{% block titulo_pagina %}Integrações{% endblock %}
+{% block acoes_pagina %}<a class="button" href="{% url 'empresas:nova_integracao' %}">Criar chave de integração</a>{% endblock %}
 {% block conteudo %}
-<h1>Integrações — {{ empresa }}</h1>
-<p><a href="{% url 'empresas:nova_integracao' %}">Criar credencial</a></p>
+<div class="panel"><div class="table-scroll retorna-table-region retorna-desktop-presentation" role="region" aria-label="Chaves de integração da Empresa" tabindex="0">
 <table>
-<caption>Credenciais da Empresa</caption>
-<thead><tr><th scope="col">Nome</th><th scope="col">Identificador</th><th scope="col">Escopo</th><th scope="col">Estado</th><th scope="col">Criada em</th><th scope="col">Último uso</th><th scope="col">Ação</th></tr></thead>
+<caption>Chaves de integração da Empresa</caption>
+<thead><tr><th scope="col">Nome</th><th scope="col">Identificador</th><th scope="col">Aplicação</th><th scope="col">Estado</th><th scope="col">Criada em</th><th scope="col">Último uso</th><th scope="col">Ação</th></tr></thead>
 <tbody>
 {% for credencial in credenciais %}
 <tr>
-<td>{{ credencial.nome }}</td><td>{{ credencial.identificador }}</td><td>{{ credencial.escopo }}</td>
-<td>{{ credencial.ativa|yesno:"Ativa,Inativa" }}</td><td>{{ credencial.criada_em }}</td><td>{{ credencial.ultimo_uso_em|default_if_none:"Nunca utilizada" }}</td>
-<td>{% if credencial.ativa %}<form method="post" action="{% url 'empresas:desativar_integracao' credencial.id %}">{% csrf_token %}<button type="submit">Desativar {{ credencial.nome }}</button></form>{% endif %}</td>
+<td>{{ credencial.nome }}</td><td class="break-anywhere">{{ credencial.identificador }}</td><td>{% if credencial.escopo == 'EMPRESA' %}Toda a empresa{% else %}Lojas específicas{% endif %}</td>
+<td><span class="badge{% if credencial.ativa %} badge--success{% endif %}">{{ credencial.ativa|yesno:"Ativa,Inativa" }}</span></td><td>{{ credencial.criada_em }}</td><td>{{ credencial.ultimo_uso_em|default_if_none:"Nunca utilizada" }}</td>
+<td>{% include "datasystem/gestor/partials/acoes_credencial.html" %}</td>
 </tr>
-{% empty %}<tr><td colspan="7">Nenhuma credencial criada.</td></tr>{% endfor %}
-</tbody></table>
-<p><a href="{% url 'empresas:area' %}">Voltar à gestão</a></p>
+{% empty %}<tr><td class="empty-state" colspan="7">Nenhuma chave de integração criada.</td></tr>{% endfor %}
+</tbody></table></div>
+<div class="retorna-mobile-presentation"><ul class="retorna-mobile-list" aria-label="Chaves de integração da Empresa">
+{% for credencial in credenciais %}
+<li class="retorna-mobile-card">
+<div class="retorna-mobile-card-header"><h3>{{ credencial.nome }}</h3></div>
+
+<dl class="retorna-mobile-details">
+<dt>Identificador</dt><dd>{{ credencial.identificador }}</dd>
+<dt>Aplicação</dt><dd>{% if credencial.escopo == 'EMPRESA' %}Toda a empresa{% else %}Lojas específicas{% endif %}</dd>
+<dt>Estado</dt><dd><span class="badge">{{ credencial.ativa|yesno:"Ativa,Inativa" }}</span></dd>
+<dt>Criada em</dt><dd>{{ credencial.criada_em }}</dd>
+<dt>Último uso</dt><dd>{{ credencial.ultimo_uso_em|default_if_none:"Nunca utilizada" }}</dd>
+</dl>
+<div class="retorna-mobile-actions">{% include "datasystem/gestor/partials/acoes_credencial.html" %}</div>
+</li>
+{% empty %}<li class="empty-state">Nenhuma chave de integração criada.</li>{% endfor %}
+</ul></div>
+</div>
+
 {% endblock %}

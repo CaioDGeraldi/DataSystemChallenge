@@ -1,0 +1,1 @@
+{% if credencial.ativa %}<form method="post" action="{% url 'empresas:desativar_integracao' credencial.id %}">{% csrf_token %}<button class="button button--danger button--small" type="submit">Desativar {{ credencial.nome }}</button></form>{% endif %}

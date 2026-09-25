@@ -125,6 +125,12 @@ class CriacaoConviteTests(DadosConvites, TestCase):
         self.assertEqual((convite.empresa_id, convite.criado_por_id), (self.empresa.pk, self.membro.pk))
         self.assertContains(resposta, "http://testserver/convites/")
         self.assertContains(resposta, "somente agora")
+        self.assertContains(resposta, 'data-invite-copy')
+        self.assertContains(resposta, 'Copiar link')
+        self.assertContains(resposta, 'data-invite-native-share')
+        self.assertContains(resposta, 'Compartilhar')
+        self.assertContains(resposta, 'aria-live="polite"')
+        self.assertContains(resposta, 'data-company-name=')
         self.assertIn("no-store", resposta["Cache-Control"])
         token = resposta.context["url_aceite"].split("/")[-3]
         self.assertEqual(hash_token(token), convite.token_hash)

@@ -1,9 +1,17 @@
-{% extends "datasystem/base.html" %}
-{% block titulo %}Convite criado{% endblock %}
+{% extends "datasystem/gestao_base.html" %}
+{% block titulo %}Convite criado — Retorna{% endblock %}
+{% block titulo_pagina %}Convite criado{% endblock %}
 {% block conteudo %}
-<h1>Convite criado — {{ convite.empresa }}</h1>
+<div class="panel">
 <p>Copie esta URL e compartilhe com a pessoa convidada. Ela é apresentada somente agora e não pode ser recuperada pela listagem.</p>
-<p><a href="{{ url_aceite }}" rel="noreferrer">{{ url_aceite }}</a></p>
+<div data-invite-share data-company-name="{{ convite.empresa.nome }}">
+<p class="break-anywhere"><a data-invite-url href="{{ url_aceite }}" rel="noreferrer">{{ url_aceite }}</a></p>
+<div class="form-actions">
+  <button class="button button--secondary" type="button" data-invite-copy hidden>Copiar link</button>
+  <button class="button button--secondary" type="button" data-invite-native-share hidden>Compartilhar</button>
+</div>
+<p class="retorna-share-feedback" role="status" aria-live="polite" data-invite-feedback></p>
+</div>
 <p>Válido até {{ convite.expira_em }}.</p>
-<p><a href="{% url 'empresas:membros' %}">Voltar aos membros</a></p>
+</div>
 {% endblock %}

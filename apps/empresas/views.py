@@ -12,6 +12,8 @@ from django.urls import reverse
 
 from apps.usuarios.services import validar_contexto_ativo
 
+from .apresentacao import contexto_gestao
+
 from .forms import (
     AceitarConviteForm,
     ConfiguracaoFidelidadeEmpresaForm,
@@ -47,7 +49,7 @@ def onboarding(request):
         else:
             return redirect("empresas:area")
     return render(request, "datasystem/formulario.html", {
-        "form": form, "titulo": "Criar Empresa e primeira Loja", "botao": "Concluir onboarding"
+        "form": form, "titulo": "Criar Empresa e primeira Loja", "botao": "Criar empresa", "ilustracao_onboarding": True
     })
 
 
@@ -65,6 +67,7 @@ def criar_loja(request):
             messages.success(request, "Loja criada.")
             return redirect("empresas:area")
     return render(request, "datasystem/formulario.html", {
+        **contexto_gestao(membro, 'lojas', 'Nova Loja'),
         "form": form, "titulo": f"Nova Loja — {membro.empresa}", "botao": "Criar Loja"
     })
 
@@ -74,6 +77,7 @@ def criar_loja(request):
 def area(request):
     membro = validar_contexto_ativo(request, "gestao")
     return render(request, "datasystem/gestor/area.html", {
+        **contexto_gestao(membro, 'lojas'),
         "membro": membro, "lojas": resolver_lojas_visiveis(request),
         "pode_criar_loja": membro.papel == MembroEmpresa.Papel.ADMINISTRADOR,
     })
@@ -84,6 +88,7 @@ def area(request):
 def membros(request):
     administrador = exigir_administrador(request)
     return render(request, "datasystem/gestor/membros.html", {
+        **contexto_gestao(administrador, 'membros'),
         "empresa": administrador.empresa,
         "membros": MembroEmpresa.objects.filter(empresa_id=administrador.empresa_id).select_related("usuario").order_by("pk"),
         "convites": ConviteMembro.objects.filter(empresa_id=administrador.empresa_id).order_by("-criado_em"),
@@ -105,12 +110,14 @@ def convidar_membro(request):
             form.add_error(None, exc.messages)
         else:
             resposta = render(request, "datasystem/gestor/convite_criado.html", {
+                **contexto_gestao(administrador, 'membros', 'Convite criado'),
                 "convite": convite,
                 "url_aceite": request.build_absolute_uri(reverse("empresas:aceitar_convite", args=[token])),
             })
             resposta["Referrer-Policy"] = "no-referrer"
             return resposta
     return render(request, "datasystem/formulario.html", {
+        **contexto_gestao(administrador, 'membros', 'Convidar membro'),
         "form": form, "titulo": f"Convidar membro — {administrador.empresa}", "botao": "Criar convite",
     })
 
@@ -168,6 +175,7 @@ def configuracao_empresa(request):
             messages.success(request, "Configuração da Empresa salva.")
             return redirect("empresas:configuracao_empresa")
     return render(request, "datasystem/formulario.html", {
+        **contexto_gestao(membro, 'configuracao'),
         "form": form, "titulo": f"Configuração de fidelidade — {membro.empresa}", "botao": "Salvar configuração",
     })
 
@@ -178,6 +186,7 @@ def configuracao_loja(request, loja_id):
     if "loja_id" in request.POST and request.POST["loja_id"] != str(loja_id):
         raise PermissionDenied("Loja divergente da URL autorizada.")
     contexto = consultar_configuracao_loja(request, loja_id)
+    membro = exigir_administrador(request)
     form = OverrideFidelidadeLojaForm(
         request.POST if request.method == "POST" else None,
         initial={"pontos_por_real": contexto["configuracao"].pontos_por_real},
@@ -188,9 +197,11 @@ def configuracao_loja(request, loja_id):
         except ValidationError as exc:
             form.add_error(None, exc.messages)
         else:
-            messages.success(request, "Override da Loja salvo.")
+            messages.success(request, "Configuração específica da Loja salva.")
             return redirect("empresas:configuracao_loja", loja_id=loja_id)
-    return render(request, "datasystem/gestor/configuracao_loja.html", {**contexto, "form": form})
+    return render(request, "datasystem/gestor/configuracao_loja.html", {
+        **contexto_gestao(membro, 'lojas', f"Configuração — {contexto['loja'].nome}"), **contexto, "form": form,
+    })
 
 
 @login_required
@@ -199,7 +210,7 @@ def remover_override_loja_view(request, loja_id):
     if "loja_id" in request.POST and request.POST["loja_id"] != str(loja_id):
         raise PermissionDenied("Loja divergente da URL autorizada.")
     remover_override_loja(request, loja_id)
-    messages.success(request, "Override removido. A Loja voltou a herdar da Empresa.")
+    messages.success(request, "A Loja voltou a usar a configuração da Empresa.")
     return redirect("empresas:configuracao_loja", loja_id=loja_id)
 
 
@@ -212,6 +223,7 @@ def integracoes(request):
         "-criada_em", "-pk",
     ).values("id", "nome", "identificador", "escopo", "ativa", "criada_em", "ultimo_uso_em")
     return render(request, "datasystem/gestor/integracoes.html", {
+        **contexto_gestao(administrador, 'integracoes'),
         "empresa": administrador.empresa, "credenciais": credenciais,
     })
 
@@ -232,16 +244,19 @@ def nova_integracao(request):
             form.add_error(None, exc.messages)
         else:
             resposta = render(request, "datasystem/gestor/integracao_criada.html", {
+                **contexto_gestao(administrador, 'integracoes', 'Chave de integração criada'),
                 "nome": credencial.nome, "chave": chave,
             })
             resposta["Referrer-Policy"] = "no-referrer"
             return resposta
-    return render(request, "datasystem/gestor/integracao_form.html", {"form": form})
+    return render(request, "datasystem/gestor/integracao_form.html", {
+        **contexto_gestao(administrador, 'integracoes', 'Criar chave de integração'), "form": form,
+    })
 
 
 @login_required
 @require_POST
 def desativar_integracao(request, credencial_id):
     desativar_credencial(request, credencial_id)
-    messages.success(request, "Credencial desativada.")
+    messages.success(request, "Chave de integração desativada.")
     return redirect("empresas:integracoes")

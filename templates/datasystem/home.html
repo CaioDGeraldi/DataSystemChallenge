@@ -1,0 +1,58 @@
+{% extends "datasystem/base.html" %}
+{% block titulo %}Retorna{% endblock %}
+{% block contexto_pagina %}Retorna{% endblock %}
+{% block titulo_pagina %}{% if user.is_authenticated %}Olá{% if user.first_name %}, {{ user.first_name }}{% endif %}{% else %}Suas compras podem render novas vantagens.{% endif %}{% endblock %}
+{% block conteudo %}
+{% if user.is_authenticated %}
+  <p>Escolha onde deseja continuar.</p>
+  {% if contextos %}
+  <div class="retorna-home-contexts">
+    {% for contexto in contextos %}
+    <section class="panel">
+      <h2>{{ contexto.titulo }}</h2>
+      {% if contexto.ativo %}
+        <a class="button" href="{% url contexto.destino %}">{% if contexto.tipo_contexto == 'cliente' %}Continuar como Cliente{% else %}Continuar para gestão{% endif %}</a>
+      {% elif not contexto_ativo %}
+        <form method="post" action="{% url 'usuarios:selecionar_contexto' %}">
+          {% csrf_token %}
+          <input type="hidden" name="contexto" value="{{ contexto.tipo_contexto }}:{{ contexto.vinculo_id }}">
+          <button type="submit" class="button">{% if contexto.tipo_contexto == 'cliente' %}Continuar como Cliente{% else %}Continuar para gestão{% endif %}</button>
+        </form>
+      {% else %}
+        <p>Para escolher este acesso, encerre a sessão pelo botão Sair e entre novamente.</p>
+      {% endif %}
+    </section>
+    {% endfor %}
+  </div>
+  {% else %}
+    <section class="panel"><p>Você ainda não possui uma Empresa ou programa disponível.</p>
+      <a class="button button--secondary" href="{% url 'empresas:onboarding' %}">Criar empresa</a>
+    </section>
+  {% endif %}
+{% else %}
+<div class="retorna-landing">
+  <section>
+    <p class="retorna-landing-lead">O Retorna conecta você aos programas de fidelidade das empresas das quais participa. Acumule pontos e aproveite recompensas conforme as regras de cada programa.</p>
+    <div class="form-actions"><a class="button" href="{% url 'usuarios:login' %}">Entrar</a><a href="{% url 'usuarios:para_empresas' %}">Sou uma empresa</a></div>
+  </section>
+  <section aria-labelledby="como-funciona"><h2 id="como-funciona">Como funciona para você</h2>
+    <ol class="retorna-landing-grid">
+      <li class="panel"><h3>1. Compre</h3><p>Faça suas compras normalmente nas empresas participantes.</p></li>
+      <li class="panel"><h3>2. Acumule</h3><p>Suas compras podem gerar pontos conforme as regras de cada empresa.</p></li>
+      <li class="panel"><h3>3. Aproveite</h3><p>Troque seus pontos pelas recompensas disponíveis no programa.</p></li>
+    </ol>
+  </section>
+  <section aria-labelledby="vantagens"><h2 id="vantagens">Entenda as vantagens do seu programa</h2>
+    <div class="retorna-landing-grid">
+      <article class="panel"><h3>Pontos</h3><p>Compras que somam oportunidades para aproveitar depois.</p></article>
+      <article class="panel"><h3>Campanhas</h3><p>Períodos especiais podem ajudar você a acumular mais pontos.</p></article>
+      <article class="panel"><h3>Níveis</h3><p>Seu progresso é reconhecido de acordo com as regras da empresa.</p></article>
+      <article class="panel"><h3>Recompensas</h3><p>Use seus pontos em resgates oferecidos pelo programa.</p></article>
+    </div>
+  </section>
+  <section class="panel"><h2>Já participa de um programa?</h2><a class="button" href="{% url 'usuarios:login' %}">Entrar</a>
+    <p class="public-secondary">Quer oferecer o Retorna aos seus clientes? <a href="{% url 'usuarios:para_empresas' %}">Conheça a solução para empresas.</a></p>
+  </section>
+</div>
+{% endif %}
+{% endblock %}

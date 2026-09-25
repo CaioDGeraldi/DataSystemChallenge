@@ -37,6 +37,8 @@ Use `POSTGRES_HOST=127.0.0.1` e `POSTGRES_PORT=5434` para o acesso local conform
 
 ## Arquitetura, integração e identidade
 
+Para editar os estilos, execute `cd frontend`, `npm ci` e `npm run build`. Veja a [arquitetura visual e o build SCSS](docs/FRONTEND.md).
+
 - [Roadmap do produto](docs/ROADMAP.md)
 - [Arquitetura do produto](docs/ARQUITETURA_PRODUTO.md)
 - [Estratégia e convenções da API](docs/API.md)
