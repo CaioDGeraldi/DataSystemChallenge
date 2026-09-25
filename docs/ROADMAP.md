@@ -395,34 +395,34 @@ Entregue:
 
 A modelagem de dados vigente também está consolidada em `docs/MODELAGEM_DE_DADOS.md`, separando entidades persistidas de informações derivadas como saldo, pontos para nível, nível atual e atividade.
 
-### F4.02 — Dashboard do Gestor ⏳ P0
+### F4.02 — Dashboard do Gestor 🟡 P0
 
 O Dashboard continua sendo a entrega central da F4.02, mas a execução foi subdividida para evitar construir visualização final sobre HTML cru e depois refazer a base visual.
 
-#### F4.02A — Base visual mínima + SCSS 🟡 P0
+#### F4.02A — Base visual mínima + SCSS ✅ P0
 
-Issue: #54.
+Issue: #54. PR: #63.
+
+Entregue:
+
+- frontend server-rendered com Django Templates, mantendo a regra de negócio e autorização no backend;
+- Vite + Sass para build de assets e integração seletiva do Gentelella 4.2.0, sem SPA/React;
+- shell de Gestão responsivo com sidebar, rail desktop, drawer mobile, topbar e breadcrumbs;
+- navegação administrativa limitada às superfícies realmente autorizadas para Administrador e Gestor;
+- páginas públicas Home e Para empresas com rotas reais e linguagem de produto;
+- preferências locais de tema Automático/Claro/Escuro, escala de texto 100/110/120% e modo de formulários;
+- formulários compostos com progressive enhancement e funcionamento completo sem JavaScript;
+- tabelas semânticas no desktop e cards equivalentes no mobile a partir da mesma coleção server-side;
+- Storyset restrito ao onboarding inicial, com variantes light/dark locais e atribuição preservada;
+- foco visível, reduced motion, forced-colors, alvos de interação mínimos e estados sem depender somente de cor;
+- documentação do frontend em `docs/FRONTEND.md` e testes estruturais em `apps.empresas.test_interface`;
+- validação local com validator Node, `npm ci`, build Vite, staticfiles, `check`, `makemigrations --check --dry-run`, OpenAPI, `uv lock --check`, `git diff --check` e 455 testes totais aprovados.
+
+`Criar empresa` permanece como ação de onboarding/contexto, fora da navegação operacional geral. O Cliente continua sem shell administrativo. A F4.02A não introduziu Dashboard nem alterou regras de domínio, models, migrations ou contratos da API.
+
+#### F4.02B — Dashboard funcional 🟡 P0
 
 Próxima fase da vertical principal.
-
-Objetivo: criar a fundação visual mínima da Retorna antes do Dashboard funcional.
-
-Direção:
-
-- SCSS pequeno e compreensível, compilado para CSS;
-- tokens iniciais da identidade Retorna (`#0D1426`, `#5EC33D`, branco e neutros de interface);
-- shell de Gestão com header/sidebar/navigation coerentes com papel e escopo;
-- estilos mínimos para botões, formulários, mensagens, cards, tabelas, estados vazios e badges quando necessários;
-- layout utilizável em desktop e mobile;
-- foco visível, labels legíveis, contraste adequado e estados não dependentes somente de cor;
-- processo de compilação SCSS → CSS explicitamente documentado, sem build chain desnecessariamente complexa;
-- preservar Django Templates; não introduzir SPA/React somente para estilização.
-
-Decisão de UX: `Criar empresa` é uma ação estrutural rara e não deve aparecer na navegação operacional do Cliente, Gestor ou Administrador nem no header de todas as telas. A ação pode existir no onboarding público e, futuramente, em um seletor de contexto para identidades que administrem múltiplas Empresas.
-
-O Cliente já possui cadastro público por Empresa; a interface futura deve tornar esse fluxo simples e visível sem depender de Gestor/Administrador para cadastrar cada Cliente.
-
-#### F4.02B — Dashboard funcional ⏳ P0
 
 Objetivo: entregar os indicadores essenciais calculados sobre a vertical real.
 
@@ -470,15 +470,13 @@ Interface mobile-first e separada visualmente do painel administrativo.
 
 ### F5.01 — Acessibilidade e acabamento ⏳ P1
 
-A F4.02A entrega a base funcional necessária antes do Dashboard. A F5.01 concentra o polimento que não precisa bloquear a vertical P0:
+A F4.02A já entregou a base responsiva, temas claro/escuro/automático, escala de texto, foco visível, reduced motion e forced-colors. A F5.01 concentra o refinamento que não precisa bloquear a vertical P0:
 
-- responsividade refinada;
-- foco de teclado;
-- labels;
-- contraste;
-- estados sem depender apenas de cor;
-- modo claro/escuro quando viável;
-- tamanho de texto e alto contraste como melhorias priorizadas se não comprometerem P0.
+- auditoria e correção fina de responsividade nas superfícies finais;
+- validação ampliada de navegação por teclado e tecnologias assistivas;
+- refinamento de contraste, mensagens, estados e hierarquia visual conforme o produto completo;
+- ajustes de alto contraste e forced-colors em casos especiais identificados durante a validação final;
+- acabamento de densidade, espaçamento e consistência visual após Dashboard e Área do Cliente.
 
 ### F5.02 — Documentação final e API ⏳ P0
 
