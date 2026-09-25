@@ -1,22 +1,37 @@
-{% extends "datasystem/base.html" %}
-{% block titulo %}Níveis de fidelidade{% endblock %}
+{% extends "datasystem/gestao_base.html" %}
+{% block titulo %}Níveis de fidelidade — Retorna{% endblock %}
+{% block titulo_pagina %}Níveis de fidelidade{% endblock %}
+{% block acoes_pagina %}<a class="button" href="{% url 'fidelidade:novo_nivel' %}">Criar nível</a>{% endblock %}
 {% block conteudo %}
-<h1>Níveis — {{ empresa }}</h1>
+<div class="panel">
 <p>O nível representa o total histórico de pontos concedidos. Resgate, expiração e inatividade não reduzem esse total.</p>
 <p>A classificação atual acompanha os limites configurados. Níveis não concedem benefícios automáticos.</p>
-<p><a href="{% url 'fidelidade:novo_nivel' %}">Criar nível</a></p>
-<table>
+<div class="table-scroll retorna-table-region retorna-desktop-presentation" role="region" aria-label="Níveis da Empresa" tabindex="0">
+<table class="retorna-level-table">
+<colgroup><col><col class="retorna-level-points"><col class="retorna-level-actions"></colgroup>
 <caption>Níveis da Empresa, em ordem crescente de pontos mínimos</caption>
-<thead><tr><th scope="col">Nome</th><th scope="col">Pontos mínimos</th><th scope="col">Ações</th></tr></thead>
+<thead><tr><th scope="col">Nome</th><th scope="col" class="numeric">Pontos mínimos</th><th scope="col">Ações</th></tr></thead>
 <tbody>
 {% for nivel in niveis %}
 <tr>
-<td>{{ nivel.nome }}</td><td>{{ nivel.pontos_minimos }}</td>
-<td><a href="{% url 'fidelidade:editar_nivel' nivel.pk %}">Editar {{ nivel.nome }}</a>
-<form method="post" action="{% url 'fidelidade:excluir_nivel' nivel.pk %}">{% csrf_token %}<button type="submit">Excluir {{ nivel.nome }}</button></form></td>
+<td>{{ nivel.nome }}</td><td class="numeric">{{ nivel.pontos_minimos }}</td>
+<td>{% include "datasystem/gestor/partials/acoes_nivel.html" %}</td>
 </tr>
-{% empty %}<tr><td colspan="3">Nenhum nível configurado. Clientes ficam sem nível; comece com um nível em zero.</td></tr>{% endfor %}
-</tbody></table>
+{% empty %}<tr><td class="empty-state" colspan="3">Nenhum nível configurado. Clientes ficam sem nível; comece com um nível em zero.</td></tr>{% endfor %}
+</tbody></table></div>
+<div class="retorna-mobile-presentation"><ul class="retorna-mobile-list" aria-label="Níveis da Empresa">
+{% for nivel in niveis %}
+<li class="retorna-mobile-card">
+<div class="retorna-mobile-card-header"><h3>{{ nivel.nome }}</h3></div>
+
+<dl class="retorna-mobile-details">
+<dt>Pontos mínimos</dt><dd>{{ nivel.pontos_minimos }}</dd>
+</dl>
+<div class="retorna-mobile-actions">{% include "datasystem/gestor/partials/acoes_nivel.html" %}</div>
+</li>
+{% empty %}<li class="empty-state">Nenhum nível configurado. Clientes ficam sem nível; comece com um nível em zero.</li>{% endfor %}
+</ul></div>
+
 <p>A faixa de cada nível termina onde começa o próximo. O último nível não tem limite superior.</p>
-<p><a href="{% url 'empresas:area' %}">Voltar à gestão</a></p>
+</div>
 {% endblock %}

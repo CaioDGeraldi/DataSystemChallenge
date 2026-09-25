@@ -1,0 +1,1 @@
+{% if convite.pode_revogar %}<form method="post" action="{% url 'empresas:revogar_convite' convite.pk %}">{% csrf_token %}<button class="button button--danger button--small" type="submit">Revogar<span class="sr-only"> convite para {{ convite.cpf }}</span></button></form>{% endif %}

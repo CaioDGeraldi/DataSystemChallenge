@@ -1,0 +1,10 @@
+{% if messages %}
+<div class="messages">
+  {% for message in messages %}
+  <div class="message{% if message.level == 40 %} message--error{% elif message.level == 30 %} message--warning{% elif message.level == 25 %} message--success{% else %} message--info{% endif %}" role="{% if message.level >= 40 %}alert{% else %}status{% endif %}">
+    <strong>{% if message.level == 40 %}Erro{% elif message.level == 30 %}Atenção{% elif message.level == 25 %}Sucesso{% else %}Informação{% endif %}</strong>
+    <span>{{ message }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

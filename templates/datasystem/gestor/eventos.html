@@ -1,22 +1,39 @@
-{% extends "datasystem/base.html" %}
-{% block titulo %}Eventos de fidelidade{% endblock %}
+{% extends "datasystem/gestao_base.html" %}
+{% block titulo %}Campanhas — Retorna{% endblock %}
+{% block titulo_pagina %}Campanhas{% endblock %}
+{% block acoes_pagina %}<a class="button" href="{% url 'fidelidade:novo_evento' %}">Criar campanha</a>{% endblock %}
 {% block conteudo %}
-<h1>Eventos — {{ empresa }}</h1>
-<p><a href="{% url 'fidelidade:novo_evento' %}">Criar Evento</a></p>
+<div class="panel"><div class="table-scroll retorna-table-region retorna-desktop-presentation" role="region" aria-label="Campanhas da Empresa" tabindex="0">
 <table>
 <caption>Campanhas da Empresa</caption>
-<thead><tr><th scope="col">Nome</th><th scope="col">Período</th><th scope="col">Escopo</th><th scope="col">Multiplicador</th><th scope="col">Estado</th><th scope="col">Ação</th></tr></thead>
+<thead><tr><th scope="col">Nome</th><th scope="col">Período</th><th scope="col">Aplicação</th><th scope="col" class="numeric">Multiplicador</th><th scope="col">Estado</th><th scope="col">Ação</th></tr></thead>
 <tbody>
 {% for evento in eventos %}
 <tr>
 <td>{{ evento.nome }}{% if evento.descricao %}<p>{{ evento.descricao }}</p>{% endif %}</td>
 <td>{{ evento.inicio_em }} até {{ evento.fim_em }}</td>
-<td>{{ evento.get_escopo_display }}{% for acesso in evento.lojas_selecionadas.all %}<br>{{ acesso.loja.nome }}{% endfor %}</td>
-<td>{% for efeito in evento.efeitos.all %}{{ efeito.valor }}x{% endfor %}</td>
-<td>{{ evento.estado }}</td>
-<td>{% if not evento.cancelado_em %}<form method="post" action="{% url 'fidelidade:cancelar_evento' evento.pk %}">{% csrf_token %}<button type="submit">Cancelar {{ evento.nome }}</button></form>{% endif %}</td>
+<td>{% if evento.escopo == 'EMPRESA' %}Toda a empresa{% else %}Lojas específicas{% endif %}{% for acesso in evento.lojas_selecionadas.all %}<br>{{ acesso.loja.nome }}{% endfor %}</td>
+<td class="numeric">{% for efeito in evento.efeitos.all %}{{ efeito.valor }}x{% endfor %}</td>
+<td><span class="badge">{{ evento.estado }}</span></td>
+<td>{% include "datasystem/gestor/partials/acoes_evento.html" %}</td>
 </tr>
-{% empty %}<tr><td colspan="6">Nenhum Evento cadastrado.</td></tr>{% endfor %}
-</tbody></table>
-<p><a href="{% url 'empresas:area' %}">Voltar à gestão</a></p>
+{% empty %}<tr><td class="empty-state" colspan="6">Nenhuma campanha cadastrada.</td></tr>{% endfor %}
+</tbody></table></div>
+<div class="retorna-mobile-presentation"><ul class="retorna-mobile-list" aria-label="Campanhas da Empresa">
+{% for evento in eventos %}
+<li class="retorna-mobile-card">
+<div class="retorna-mobile-card-header"><h3>{{ evento.nome }}</h3></div>
+{% if evento.descricao %}<p>{{ evento.descricao }}</p>{% endif %}
+<dl class="retorna-mobile-details">
+<dt>Período</dt><dd>{{ evento.inicio_em }} até {{ evento.fim_em }}</dd>
+<dt>Aplicação</dt><dd>{% if evento.escopo == 'EMPRESA' %}Toda a empresa{% else %}Lojas específicas{% endif %}{% for acesso in evento.lojas_selecionadas.all %}<br>{{ acesso.loja.nome }}{% endfor %}</dd>
+<dt>Multiplicador</dt><dd>{% for efeito in evento.efeitos.all %}{{ efeito.valor }}x{% endfor %}</dd>
+<dt>Estado</dt><dd><span class="badge">{{ evento.estado }}</span></dd>
+</dl>
+<div class="retorna-mobile-actions">{% include "datasystem/gestor/partials/acoes_evento.html" %}</div>
+</li>
+{% empty %}<li class="empty-state">Nenhuma campanha cadastrada.</li>{% endfor %}
+</ul></div>
+</div>
+
 {% endblock %}

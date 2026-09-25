@@ -217,7 +217,7 @@ class ParametrosHTTPTests(DadosParametros, TestCase):
         self.assertContains(self.client.get(url), "Origem: Empresa")
         self.assertFalse(OverrideFidelidadeLoja.objects.exists())
         self.assertEqual(self.client.post(url, {"pontos_por_real": "0.00"}).status_code, 302)
-        self.assertContains(self.client.get(url), "Origem: Override da Loja")
+        self.assertContains(self.client.get(url), "Origem: Configuração específica da Loja")
         self.assertEqual(OverrideFidelidadeLoja.objects.get().pontos_por_real, Decimal("0"))
         self.assertTrue(self.client.post(url, {"pontos_por_real": ""}).context["form"].errors)
         self.assertEqual(self.client.post(self.urls()[2]).status_code, 302)

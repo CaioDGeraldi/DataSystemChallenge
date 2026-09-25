@@ -30,7 +30,9 @@ def login(request):
             contexto = contextos[0]
             return redirect(ativar_contexto(request, contexto["tipo_contexto"], contexto["vinculo_id"]))
         return redirect("usuarios:selecionar_contexto")
-    return render(request, "datasystem/formulario.html", {"form": form, "titulo": "Entrar", "botao": "Entrar"})
+    return render(request, "datasystem/formulario.html", {
+        "form": form, "titulo": "Entrar", "botao": "Entrar", "mostrar_onboarding": True,
+    })
 
 
 @login_required
@@ -52,3 +54,37 @@ def selecionar_contexto(request):
 def logout(request):
     encerrar_sessao(request)
     return redirect("usuarios:login")
+
+
+@require_http_methods(["GET"])
+def home(request):
+    """Orientação pública e apresentação dos contextos já autorizados."""
+    contextos = []
+    contexto_ativo = None
+    if request.user.is_authenticated:
+        contextos = resolver_contextos(request.user)
+        if CONTEXTO_SESSAO in request.session:
+            try:
+                validar_contexto_ativo(request)
+            except PermissionDenied:
+                # O validador existente remove contexto inválido/obsoleto.
+                pass
+            else:
+                contexto_ativo = request.session[CONTEXTO_SESSAO]
+        for contexto in contextos:
+            contexto["ativo"] = contexto_ativo == {
+                chave: contexto[chave]
+                for chave in ("tipo_contexto", "empresa_id", "vinculo_id")
+            }
+            contexto["destino"] = (
+                "clientes:area" if contexto["tipo_contexto"] == "cliente" else "empresas:area"
+            )
+    return render(request, "datasystem/home.html", {
+        "contextos": contextos, "contexto_ativo": contexto_ativo,
+        "titulo": "Retorna",
+    })
+
+
+@require_http_methods(["GET"])
+def para_empresas(request):
+    return render(request, "datasystem/para_empresas.html", {"titulo": "Retorna para empresas"})

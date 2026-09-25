@@ -1,0 +1,42 @@
+{% extends "datasystem/base.html" %}
+{% block titulo %}Retorna para empresas{% endblock %}
+{% block contexto_pagina %}Fidelidade para o seu negócio{% endblock %}
+{% block titulo_pagina %}Retorna para empresas{% endblock %}
+{% block conteudo %}
+<div class="retorna-landing">
+  <section>
+    <h2>Dê aos seus clientes mais motivos para voltar</h2>
+    <p class="retorna-landing-lead">O Retorna é uma plataforma para empresas criarem e administrarem seus próprios programas de fidelidade. Organize pontos, campanhas, níveis e resgates em um só lugar.</p>
+    <div class="form-actions"><a class="button" href="{% url 'empresas:onboarding' %}">Criar empresa</a><a class="button button--secondary" href="{% url 'usuarios:login' %}">Entrar</a></div>
+  </section>
+  <section class="panel">
+    <h2>Para quem quer continuar o relacionamento após a compra</h2>
+    <p>Para lojas, redes e negócios com uma ou várias unidades que querem incentivar clientes a voltar.</p>
+    <p>Regras espalhadas e diferenças entre lojas tornam um programa difícil de manter. O Retorna ajuda a organizar como os pontos são concedidos e usados, com regras claras para a empresa e seus clientes.</p>
+  </section>
+  <section aria-labelledby="empresa-como-funciona">
+    <h2 id="empresa-como-funciona">Como funciona</h2>
+    <ol class="retorna-landing-grid">
+      <li class="panel"><h3>1. Configure seu programa</h3><p>Defina como clientes acumulam pontos, por quanto tempo eles valem e como podem ser usados.</p></li>
+      <li class="panel"><h3>2. Registre as compras</h3><p>As compras alimentam o programa e geram pontos conforme as regras escolhidas.</p></li>
+      <li class="panel"><h3>3. Crie campanhas e níveis</h3><p>Promova períodos com mais pontos e reconheça o progresso dos clientes com níveis definidos pela empresa.</p></li>
+      <li class="panel"><h3>4. Permita resgates</h3><p>Clientes podem trocar pontos por descontos conforme as regras do programa.</p></li>
+      <li class="panel"><h3>5. Acompanhe a utilização</h3><p>Compras e resgates ficam registrados. As formas de visualizar os resultados continuarão evoluindo.</p></li>
+    </ol>
+  </section>
+  <section aria-labelledby="empresa-recursos"><h2 id="empresa-recursos">O que sua empresa pode organizar</h2>
+    <div class="retorna-landing-grid">
+      <article class="panel"><h3>Pontos por compra</h3><p>Escolha quantos pontos as compras geram e a validade desses pontos.</p></article>
+      <article class="panel"><h3>Campanhas</h3><p>Crie períodos especiais para os clientes acumularem mais pontos.</p></article>
+      <article class="panel"><h3>Níveis</h3><p>Defina nomes e metas de pontos para reconhecer o progresso no programa.</p></article>
+      <article class="panel"><h3>Resgates</h3><p>Estabeleça as condições para trocar pontos por descontos.</p></article>
+      <article class="panel"><h3>Várias lojas</h3><p>Mantenha o programa organizado entre suas unidades e defina diferenças quando necessário.</p></article>
+      <article class="panel"><h3>Gestão da equipe</h3><p>Convide responsáveis e defina quais lojas cada gestor pode acompanhar.</p></article>
+    </div>
+  </section>
+  <section class="panel"><h2>Conecte o programa ao dia a dia da empresa</h2><p>Conecte o Retorna aos sistemas que sua empresa já utiliza, como caixa e vendas. Essa conexão precisa ser preparada com quem cuida desses sistemas.</p></section>
+  <section class="panel"><h2>Comece pelo seu programa</h2><p>Cadastre a empresa e a primeira loja para começar a definir suas regras de fidelidade.</p>
+    <div class="form-actions"><a class="button" href="{% url 'empresas:onboarding' %}">Criar empresa</a><a class="button button--secondary" href="{% url 'usuarios:login' %}">Entrar</a></div>
+  </section>
+</div>
+{% endblock %}

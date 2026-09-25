@@ -1,0 +1,416 @@
+.sidebar {
+  border-inline-end: 1px solid var(--sidebar-border);
+}
+
+.sidebar-brand {
+  color: var(--retorna-text-on-dark);
+}
+
+.retorna-brand-mark {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border-radius: var(--radius);
+  background: var(--retorna-primary);
+}
+
+.retorna-brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.retorna-company {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--sidebar-border);
+  background: var(--retorna-dark-card);
+}
+
+.retorna-company-label {
+  margin-bottom: var(--space-1);
+  color: var(--retorna-text-muted);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.retorna-company-name {
+  overflow: hidden;
+  color: var(--retorna-text-on-dark);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-section-toggle {
+  display: flex;
+  width: calc(100% - 16px);
+  align-items: center;
+  justify-content: space-between;
+  margin: 6px 8px 2px;
+  padding: 7px 10px 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--retorna-text-muted);
+  font: inherit;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-align: left;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.nav-section-toggle:hover {
+  background: var(--sidebar-hover);
+  color: var(--retorna-text-on-dark);
+}
+
+.sidebar-brand:focus-visible,
+.sidebar .nav-link:focus-visible,
+.nav-section-toggle:focus-visible {
+  outline: 2px solid var(--retorna-focus-on-dark);
+  outline-offset: -2px;
+}
+
+.nav-section-chevron {
+  display: inline-block;
+  font-size: 1rem;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform 120ms ease;
+}
+
+.nav-section-toggle[aria-expanded="false"] .nav-section-chevron {
+  transform: rotate(0deg);
+}
+
+.nav-group.is-collapsed .nav-group-items {
+  display: none;
+}
+
+.retorna-nav-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.nav-link.active {
+  box-shadow: inset 3px 0 0 var(--retorna-primary);
+}
+
+.topbar {
+  background: var(--topbar-bg);
+}
+
+.topbar-left {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.topbar { gap: var(--space-3); }
+.topbar-right, .sidebar-toggle { flex: 0 0 auto; }
+
+.breadcrumb {
+  overflow: hidden;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.breadcrumb ol {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+}
+
+.breadcrumb li {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.breadcrumb li + li::before { flex: 0 0 auto; }
+.breadcrumb li > a, .breadcrumb li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.breadcrumb li:last-child { flex: 0 1 auto; }
+
+.breadcrumb li + li::before {
+  margin: 0 var(--space-2);
+  color: var(--text-disabled);
+  content: "/";
+}
+
+.breadcrumb .retorna-breadcrumb-compact-ellipsis {
+  display: none;
+}
+
+.breadcrumb [aria-current="page"] {
+  overflow: hidden;
+  color: var(--text);
+  font-weight: var(--font-weight-medium);
+  text-overflow: ellipsis;
+}
+
+.breadcrumb a:hover {
+  color: var(--retorna-link);
+}
+
+.retorna-user-menu {
+  position: relative;
+}
+
+.retorna-user-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 36px;
+  padding: 3px 8px 3px 4px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.retorna-user-trigger:hover,
+.retorna-user-trigger[aria-expanded="true"] {
+  background: var(--body-bg);
+}
+
+.tb-avatar {
+  color: var(--retorna-on-primary);
+}
+
+.retorna-user-name {
+  max-width: 180px;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.retorna-user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 130;
+  width: 190px;
+  padding: var(--space-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-floating);
+}
+
+.retorna-user-dropdown[hidden] {
+  display: none;
+}
+
+.retorna-user-dropdown a,
+.retorna-user-dropdown button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.8125rem;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.retorna-user-dropdown a:hover,
+.retorna-user-dropdown button:hover {
+  background: var(--body-bg);
+  text-decoration: none;
+}
+
+.retorna-user-dropdown form {
+  margin: 0;
+}
+
+.main {
+  display: flex;
+  min-height: 100dvh;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.page-wrapper {
+  width: 100%;
+  flex: 1 0 auto;
+}
+
+.retorna-main-content {
+  width: 100%;
+  min-width: 0;
+}
+
+.retorna-page-header {
+  margin-bottom: 20px;
+}
+
+.retorna-page-header h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.125rem;
+  font-weight: var(--font-weight-bold);
+  line-height: 1.3;
+}
+
+.retorna-page-lead {
+  margin: 3px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.retorna-page-context {
+  margin: 0 0 2px;
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+body.sidebar-rail .retorna-company {
+  display: none;
+}
+
+body.sidebar-rail .retorna-brand-mark {
+  width: 30px;
+  height: 30px;
+  flex-basis: 30px;
+}
+
+body.sidebar-rail .nav-section-toggle {
+  display: none;
+}
+
+body.sidebar-rail .nav-group-items,
+body.sidebar-rail .nav-group.is-collapsed .nav-group-items {
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .topbar {
+    padding-inline: var(--space-3);
+  }
+
+  .topbar .breadcrumb {
+    display: block;
+    max-width: 100%;
+  }
+
+  .retorna-breadcrumb-list-compactable > li:not(:first-child):not(:last-child):not(.retorna-breadcrumb-compact-ellipsis) {
+    display: none;
+  }
+
+  .breadcrumb .retorna-breadcrumb-compact-ellipsis {
+    display: flex;
+    flex: 0 0 auto;
+  }
+
+  .retorna-breadcrumb-list-compactable > li:first-child {
+    flex: 0 1 auto;
+    max-width: 35%;
+  }
+
+  .retorna-breadcrumb-list-compactable > li:last-child {
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+
+  .retorna-breadcrumb-list-compactable > li:last-child > [aria-current="page"] {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .retorna-user-name {
+    display: none;
+  }
+
+  .retorna-user-trigger {
+    padding-inline-end: 4px;
+  }
+
+  .retorna-user-dropdown {
+    position: fixed;
+    top: 52px;
+    right: var(--space-3);
+  }
+
+  .retorna-main-content {
+    width: 100%;
+  }
+}
+
+// Same fluid page-wrapper and offsets as the selective vendor layout.
+.retorna-brand-compact { display: none; }
+.retorna-brand-full { max-width: 100%; height: auto; }
+body.sidebar-rail .retorna-brand-full { display: none; }
+body.sidebar-rail .retorna-brand-compact { display: block; }
+.tb-avatar { background: var(--primary); }
+.sidebar-backdrop { position: fixed; inset: 0; z-index: 95; background: rgb(13 20 38 / 45%); }
+[hidden] { display: none !important; }
+.retorna-footer { padding: 16px 24px; border-top: 1px solid var(--border); color: var(--text-muted); background: var(--surface); font-size: .75rem; }
+.retorna-back-navigation { margin-bottom: 16px; font-size: .8125rem; }
+.retorna-back-navigation a { text-decoration: none; }
+.retorna-back-navigation a:hover { text-decoration: underline; }
+.retorna-public-page { min-height: 100dvh; display: flex; flex-direction: column; }
+.retorna-public-header { background: var(--surface); border-bottom: 1px solid var(--border); }
+.retorna-public-header-inner { display: flex; align-items: center; justify-content: space-between; width: min(1180px, calc(100% - 48px)); min-height: 72px; margin: auto; }
+.retorna-public-logo { width: 175px; height: auto; }
+.retorna-public-main { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.retorna-public-main > .page-wrapper { width: min(820px, 100%); margin-inline: auto; padding-block: 32px; }
+@media (max-width: 768px) {
+  .sidebar:not(.open) { visibility: hidden; }
+  .sidebar.open { visibility: visible; }
+  .retorna-footer { padding: 12px; }
+}
+
+.sidebar-toggle, .retorna-user-trigger, .retorna-user-dropdown button, .nav-section-toggle, .sidebar .nav-link { min-height: 44px; }
+.sidebar-toggle { min-width: 44px; }
+.retorna-user-dropdown { width: min(18rem, calc(100vw - 24px)); }
+.retorna-public-header-inner { flex-wrap: wrap; gap: 12px; padding-block: 12px; }
+.retorna-logo-dark { display: none; }
+[data-retorna-theme='dark'] .retorna-logo-light { display: none; }
+[data-retorna-theme='dark'] .retorna-logo-dark { display: block; }
+.sidebar-backdrop { background: var(--backdrop); }
+
+// Navigation and logout remain usable when enhancement is unavailable.
+html:not([data-retorna-user-menu-enhanced]) .retorna-user-trigger { display: none; }
+html:not([data-retorna-user-menu-enhanced]) .retorna-user-dropdown[hidden] { display: block !important; position: static; width: auto; box-shadow: none; }
+@media (max-width: 768px) {
+  html:not([data-retorna-shell-enhanced]) .sidebar { position: static; width: 100%; height: auto; max-height: none; transform: none; visibility: visible; }
+  html:not([data-retorna-shell-enhanced]) .topbar { position: static; margin: 0; width: 100%; }
+  html:not([data-retorna-shell-enhanced]) .sidebar-toggle { display: none; }
+  html:not([data-retorna-shell-enhanced]) .main { margin: 0; padding-top: 0; }
+}
+
+.sidebar .nav-link, .breadcrumb { font-size: .8125rem; }
+.sidebar .nav-link { white-space: normal; overflow-wrap: anywhere; }

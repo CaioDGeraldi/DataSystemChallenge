@@ -1,0 +1,5 @@
+{% if back_url %}
+<nav class="retorna-back-navigation" aria-label="Navegação de retorno">
+  <a href="{{ back_url }}"><span aria-hidden="true">←</span> {{ back_label|default:"Voltar" }}</a>
+</nav>
+{% endif %}

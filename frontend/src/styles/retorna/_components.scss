@@ -1,0 +1,203 @@
+.panel { padding: 16px; margin-bottom: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); min-width: 0; }
+.form-panel { width: 100%; }
+.button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 36px;
+  max-width: 100%;
+  padding: .55rem var(--space-4);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  background: var(--primary);
+  color: var(--primary-text);
+  font-size: .8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.button:hover { background: var(--primary-hover); border-color: var(--primary-hover); color: var(--primary-text); text-decoration: none; }
+.button--secondary { color: var(--text); background: var(--surface); border-color: var(--border); }
+.button--secondary:hover { color: var(--text); background: var(--surface-secondary); border-color: var(--text-muted); }
+.button--danger { color: var(--danger); background: var(--surface); border-color: var(--danger); }
+.button--danger:hover { color: var(--danger); background: var(--danger-surface); border-color: var(--danger); }
+.button--small { min-height: 34px; padding: .4rem var(--space-3); font-size: .8125rem; }
+.button:disabled { cursor: not-allowed; opacity: .6; }
+.table-actions, .form-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+.form-actions { padding-top: var(--space-3); }
+.separated-action { margin-top: var(--space-5); padding-top: var(--space-5); border-top: 1px solid var(--border); }
+.back-link, .public-secondary { font-size: .8125rem; margin-top: var(--space-5); }
+.empty-state { padding: var(--space-6) !important; text-align: center; color: var(--text-muted); }
+.secret-value { padding: var(--space-4); background: var(--surface-secondary); border: 1px solid var(--border); border-radius: var(--radius); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.form-stack { display: grid; gap: 14px; }
+.field { min-width: 0; }
+.field label, .field legend { display: block; margin-bottom: var(--space-2); font-size: .8125rem; font-weight: 600; }
+.field input:not([type='checkbox']):not([type='radio']):not([type='hidden']), .field select, .field textarea {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  padding: .55rem var(--space-3);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.field textarea { min-height: 8rem; resize: vertical; }
+.field select[multiple] { min-height: 8rem; }
+.field input[type='radio'], .field input[type='checkbox'] { width: 1rem; height: 1rem; margin: 0 var(--space-2) 0 0; vertical-align: middle; accent-color: var(--primary); }
+.field fieldset > div > div { padding-block: var(--space-1); }
+.field fieldset > div label { font-weight: 400; padding-block: var(--space-2); }
+.helptext { margin-bottom: var(--space-2); color: var(--text-muted); font-size: .8125rem; overflow-wrap: anywhere; }
+.helptext ul { padding-inline-start: var(--space-5); }
+.field [aria-invalid='true'] { border-color: var(--danger) !important; }
+.field :disabled { background: var(--surface-secondary); cursor: not-allowed; }
+
+.table-scroll { max-width: 100%; overflow-x: auto; }
+table { width: 100%; min-width: 36rem; font-size: .8125rem; }
+caption { padding: 0 0 var(--space-4); text-align: start; color: var(--text); font-size: .9375rem; font-weight: 650; }
+th, td { padding: .7rem var(--space-3); text-align: start; vertical-align: top; border-bottom: 1px solid var(--border); }
+th { color: var(--text-muted); background: var(--surface-secondary); font-size: .75rem; font-weight: 650; letter-spacing: .025em; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--surface-secondary); }
+td p { margin: var(--space-2) 0 0; color: var(--text-muted); }
+.numeric { text-align: end; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.table-actions { min-width: 10rem; }
+
+.messages { display: grid; gap: var(--space-3); margin-bottom: var(--space-5); }
+.message { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-inline-start-width: 3px; border-radius: var(--radius); overflow-wrap: anywhere; }
+.message--success { color: var(--success); background: var(--success-surface); border-inline-start-color: var(--success); }
+.message--error { color: var(--danger); background: var(--danger-surface); border-inline-start-color: var(--danger); }
+.message--warning { color: var(--warning); background: var(--warning-surface); border-inline-start-color: var(--warning); }
+.message--info { color: var(--info); background: var(--info-surface); border-inline-start-color: var(--info); }
+.errorlist { padding-inline-start: var(--space-5); margin: var(--space-2) 0; color: var(--danger); font-size: .8125rem; }
+.form-errors { padding: var(--space-3) var(--space-4); background: var(--danger-surface); border-inline-start: 3px solid var(--danger); border-radius: var(--radius); }
+.badge { display: inline-block; padding: .2rem var(--space-2); border-radius: var(--radius); font-size: .75rem; font-weight: 600; background: var(--surface-secondary); color: var(--text-muted); }
+.badge--success { color: var(--success); background: var(--success-surface); }
+
+.page-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.page-header > div { min-width: 0; }
+.page-actions:empty { display: none; }
+.retorna-table-actions { width: 1%; white-space: nowrap; }
+.retorna-icon-action {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--primary);
+}
+.retorna-icon-action svg { width: 24px; height: 24px; }
+.retorna-icon-action { border-color: var(--text-muted); }
+.retorna-icon-action:hover { background: var(--surface-secondary); border-color: var(--primary); }
+.retorna-icon-action:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.retorna-table-region { overscroll-behavior-inline: contain; }
+.retorna-mobile-presentation { display: none; }
+.retorna-mobile-list { display: grid; gap: var(--space-2); margin: 0; padding: var(--space-2); list-style: none; }
+.retorna-mobile-card { display: grid; min-width: 0; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.retorna-mobile-card-header { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: var(--space-2); }
+.retorna-mobile-card-header h3 { min-width: 0; margin: 0; font-size: .9375rem; line-height: 1.35; overflow-wrap: anywhere; }
+.retorna-mobile-card p { margin: 0; overflow-wrap: anywhere; }
+.retorna-mobile-details { display: grid; grid-template-columns: minmax(80px, auto) minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: 0; }
+.retorna-mobile-details dt { color: var(--text-muted); font-size: .6875rem; font-weight: 500; text-transform: uppercase; overflow-wrap: anywhere; }
+.retorna-mobile-details dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.retorna-mobile-actions, .retorna-mobile-actions .table-actions { display: grid; min-width: 0; gap: var(--space-2); }
+.retorna-mobile-actions form { min-width: 0; margin: 0; }
+.retorna-mobile-actions button, .retorna-mobile-actions a { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; padding: 8px; overflow-wrap: anywhere; text-align: center; }
+@media (max-width: 600px) {
+  .retorna-desktop-presentation { display: none; }
+  .retorna-mobile-presentation { display: block; }
+}
+@media (max-width: 600px) { .page-header { align-items: stretch; flex-direction: column; } .form-actions .button, .page-actions .button { width: 100%; } }
+
+// Refinements for existing forms and actions.
+.retorna-store-choices { display: grid; gap: var(--space-2); }
+.field .retorna-store-choices label { display: flex; align-items: center; gap: var(--space-2); min-height: 48px; padding: var(--space-3); margin: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow-wrap: anywhere; cursor: pointer; }
+.retorna-store-choices label:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.retorna-store-choices label:has(input:checked) { border-color: var(--primary); background: var(--surface-secondary); }
+.retorna-store-choices input { flex: 0 0 auto; }
+.retorna-level-table { table-layout: fixed; width: 100%; }
+.retorna-level-table td { overflow-wrap: anywhere; }
+.retorna-level-points { width: 30%; }
+.retorna-level-actions { width: 13rem; }
+.retorna-level-table .table-actions { flex-wrap: nowrap; gap: var(--space-2); }
+.retorna-share-feedback { min-height: 1.5em; margin-top: var(--space-3); color: var(--text-muted); }
+[data-invite-share] .button { min-height: 48px; }
+
+.retorna-form-card-header { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.form-panel { max-width: 800px; margin-inline: auto; }
+.form-panel--illustrated { max-width: 1120px; }
+.retorna-form-card-header h2 { margin: 0; font-size: .9375rem; }
+.retorna-form-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+.retorna-data-form { min-width: 0; width: 100%; }
+.retorna-data-form fieldset[data-form-step] { display: grid; min-width: 0; gap: 14px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); }
+.retorna-data-form legend { padding-inline: 6px; font-size: .8125rem; font-weight: 600; }
+.retorna-form-actions { gap: 8px; }
+.retorna-form-actions .button, .retorna-stepper-toolbar .button { min-height: 44px; }
+.retorna-stepper-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.retorna-stepper-toolbar p { margin: 0; color: var(--text-muted); }
+.retorna-stepper-list { display: flex; gap: 12px; margin: 0; padding: 12px 0; list-style: none; border-block: 1px solid var(--border); }
+.retorna-stepper-item { display: flex; flex: 1 1 0; min-width: 0; gap: 8px; align-items: center; overflow-wrap: anywhere; color: var(--text-muted); }
+.retorna-stepper-number { display: inline-flex; flex: 0 0 28px; width: 28px; height: 28px; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 50%; }
+.retorna-stepper-item[aria-current='step'] { color: var(--text); font-weight: 700; }
+.retorna-stepper-item[aria-current='step'] .retorna-stepper-number { background: var(--primary); color: var(--primary-text); }
+.retorna-stepper-item[data-step-state='visited'] > span:last-child::after { content: ' ✓'; }
+.retorna-form-error-summary { outline-offset: 3px; }
+.retorna-form-error-summary ul { padding-inline-start: 20px; }
+.retorna-illustration-frame { width: 100%; max-width: 260px; margin: 0; position: sticky; top: 76px; }
+.retorna-illustration { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; }
+@media (max-width: 1100px) { .retorna-form-layout { grid-template-columns: minmax(0, 1fr); } .retorna-illustration-frame { position: static; justify-self: center; max-width: 180px; } }
+@media (max-width: 768px) { .retorna-illustration-frame { display: none; } .retorna-stepper-list { flex-direction: column; } }
+@media (max-width: 600px) { .retorna-form-actions { display: grid; grid-template-columns: minmax(0, 1fr); } .retorna-stepper-toolbar { align-items: stretch; flex-direction: column; } }
+
+// Controls remain identifiable independently of the surrounding surface.
+.button, .button--small { min-height: 44px; }
+.button--secondary { border-color: var(--control-border); }
+.button:disabled { color: var(--text-muted); background: var(--surface-secondary); border-color: var(--control-border); opacity: 1; }
+.field input:not([type='checkbox']):not([type='radio']):not([type='hidden']), .field select, .field textarea {
+  min-height: 44px;
+  border-color: var(--control-border);
+}
+.field fieldset > div label { min-height: 44px; }
+.field input:autofill { box-shadow: 0 0 0 1000px var(--surface-secondary) inset; -webkit-text-fill-color: var(--text); }
+.retorna-form-layout--illustrated { grid-template-columns: minmax(0, 760px) minmax(180px, 260px); }
+.retorna-illustration-frame { background: transparent; padding: 0; }
+.retorna-illustration--dark { display: none; }
+[data-retorna-theme="dark"] .retorna-illustration--light { display: none; }
+[data-retorna-theme="dark"] .retorna-illustration--dark { display: block; }
+@media (max-width: 1100px) { .retorna-form-layout--illustrated { grid-template-columns: minmax(0, 1fr); } }
+.retorna-appearance {
+  width: min(30rem, calc(100% - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  padding: var(--space-5);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-lg);
+}
+.retorna-appearance::backdrop { background: var(--backdrop); }
+.retorna-appearance fieldset { margin-block: var(--space-4); }
+.retorna-appearance legend { font-weight: 650; }
+.retorna-appearance label { display: flex; align-items: center; gap: var(--space-3); min-height: 44px; padding: var(--space-2); cursor: pointer; }
+.retorna-appearance input { accent-color: var(--primary); flex-shrink: 0; }
+.retorna-appearance label:focus-within { outline: 2px solid var(--focus); outline-offset: 1px; }
+.retorna-appearance .form-actions > button { flex: 1 1 10rem; }
+
+.retorna-home-contexts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: var(--space-4); }
+.retorna-home-contexts .panel { margin: 0; }
+
+.retorna-landing { display: grid; gap: var(--space-6); }
+.retorna-landing-lead { font-size: 1rem; max-width: 42rem; }
+.retorna-landing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--space-4); padding: 0; list-style: none; }
+.retorna-landing-grid .panel { margin: 0; }
+.retorna-landing h3 { font-size: 1rem; margin-top: 0; }
+.retorna-public-nav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.retorna-public-nav a { display: inline-flex; align-items: center; min-height: 44px; }
+.retorna-landing .form-actions > a { display: inline-flex; align-items: center; min-height: 44px; }

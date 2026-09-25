@@ -1,8 +1,12 @@
 {% extends "datasystem/base.html" %}
-{% block titulo %}Aceitar convite{% endblock %}
+{% block titulo %}Aceitar convite — Retorna{% endblock %}
+{% block contexto_pagina %}{{ convite.empresa }}{% endblock %}
+{% block titulo_pagina %}Aceitar convite{% endblock %}
 {% block conteudo %}
-<h1>Aceitar convite — {{ convite.empresa }}</h1>
+<div class="panel form-panel">
+<header class="retorna-form-card-header"><h2>Confirmar acesso</h2></header>
 <p>Papel: {{ convite.get_papel_display }}</p>
 <p>CPF destinatário: {{ convite.cpf|slice:':3' }}.{{ convite.cpf|slice:'3:6' }}.{{ convite.cpf|slice:'6:9' }}-{{ convite.cpf|slice:'9:' }}</p>
-<form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Aceitar convite</button></form>
+{% include 'datasystem/includes/formulario_dados.html' with botao='Aceitar convite' %}
+</div>
 {% endblock %}

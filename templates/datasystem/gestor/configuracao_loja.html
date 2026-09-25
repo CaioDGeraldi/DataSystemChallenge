@@ -1,12 +1,15 @@
-{% extends "datasystem/base.html" %}
-{% block titulo %}Configuração — {{ loja }}{% endblock %}
+{% extends "datasystem/gestao_base.html" %}
+{% block titulo %}Configuração — {{ loja }} — Retorna{% endblock %}
+{% block titulo_pagina %}Configuração — {{ loja }}{% endblock %}
 {% block conteudo %}
-<h1>Configuração — {{ loja }}</h1>
+<div class="panel form-panel">
+<header class="retorna-form-card-header"><h2>Configuração específica da Loja</h2></header>
 <p>Pontos por real efetivos: {{ configuracao.pontos_por_real|floatformat:2 }}</p>
-<p>Origem: {% if tem_override %}Override da Loja{% else %}Empresa{% endif %}</p>
-<form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Definir/alterar override</button></form>
+<p>Origem: {% if tem_override %}Configuração específica da Loja{% else %}Empresa{% endif %}</p>
+{% include 'datasystem/includes/formulario_dados.html' with botao='Salvar configuração específica da Loja' %}
 {% if tem_override %}
-<form method="post" action="{% url 'empresas:remover_override_loja' loja.pk %}">{% csrf_token %}<button type="submit">Remover override e herdar da Empresa</button></form>
+<form class="separated-action" method="post" action="{% url 'empresas:remover_override_loja' loja.pk %}">{% csrf_token %}<button class="button button--danger" type="submit">Usar configuração da Empresa</button></form>
 {% endif %}
-<p><a href="{% url 'empresas:area' %}">Voltar à Gestão</a></p>
+</div>
+
 {% endblock %}

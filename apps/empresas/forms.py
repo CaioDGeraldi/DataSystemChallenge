@@ -1,4 +1,5 @@
 from django import forms
+from .formularios import FormularioCompostoMixin
 
 from apps.usuarios.validators import normalizar_cpf, validar_cpf
 
@@ -9,7 +10,12 @@ from .services import validar_lojas_credencial
 from .validators import normalizar_cnpj, validar_cnpj
 
 
-class OnboardingEmpresaForm(forms.Form):
+class OnboardingEmpresaForm(FormularioCompostoMixin, forms.Form):
+    grupos_formulario = (
+        ('Empresa', ('nome_empresa', 'cnpj')),
+        ('Primeira Loja', ('nome_loja', 'cidade_loja')),
+        ('Administrador', ('cpf', 'first_name', 'last_name', 'senha', 'confirmacao')),
+    )
     cpf = forms.CharField(label="CPF", max_length=32)
     first_name = forms.CharField(label="Nome", max_length=150, required=False,
                                  help_text="Obrigatório somente para uma nova conta.")
@@ -39,7 +45,8 @@ class LojaForm(forms.Form):
     cidade = forms.CharField(label="Cidade", max_length=255)
 
 
-class ConviteMembroForm(forms.Form):
+class ConviteMembroForm(FormularioCompostoMixin, forms.Form):
+    grupos_formulario = (('Pessoa', ('cpf',)), ('Acesso', ('papel', 'lojas')))
     cpf = forms.CharField(label="CPF", max_length=32)
     papel = forms.ChoiceField(label="Papel", choices=MembroEmpresa.Papel.choices)
     lojas = forms.ModelMultipleChoiceField(
@@ -62,11 +69,12 @@ class ConviteMembroForm(forms.Form):
         if dados.get("papel") == MembroEmpresa.Papel.GESTOR and not lojas:
             self.add_error("lojas", "Selecione ao menos uma Loja.")
         if dados.get("papel") == MembroEmpresa.Papel.ADMINISTRADOR and lojas:
-            self.add_error("lojas", "Administrador não recebe escopo por Loja.")
+            self.add_error("lojas", "Administrador tem acesso a todas as Lojas; deixe a seleção vazia.")
         return dados
 
 
-class AceitarConviteForm(forms.Form):
+class AceitarConviteForm(FormularioCompostoMixin, forms.Form):
+    grupos_formulario = (('Identificação', ('first_name', 'last_name')), ('Acesso', ('senha', 'confirmacao')))
     first_name = forms.CharField(label="Nome", max_length=150, required=False)
     last_name = forms.CharField(label="Sobrenome", max_length=150, required=False)
     senha = forms.CharField(label="Senha", strip=False, widget=forms.PasswordInput)
@@ -83,7 +91,19 @@ class AceitarConviteForm(forms.Form):
         # ainda não existir no momento da operação, inclusive após concorrência.
 
 
-class ConfiguracaoFidelidadeEmpresaForm(forms.ModelForm):
+class ConfiguracaoFidelidadeEmpresaForm(FormularioCompostoMixin, forms.ModelForm):
+    grupos_formulario = (
+        ('Acúmulo de pontos', ('pontos_por_real', 'precisao_pontos', 'modo_arredondamento_pontos')),
+        ('Validade e atividade', ('validade_pontos_meses', 'periodo_cliente_ativo_dias')),
+        ('Resgate', ('resgate_minimo_pontos', 'incremento_resgate_pontos', 'valor_monetario_por_ponto')),
+    )
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        campo = self.fields['modo_arredondamento_pontos']
+        campo.label = 'Arredondamento dos pontos'
+        campo.choices = [('HALF_UP', 'Mais próximo (5 para cima)'),
+                         ('DOWN', 'Sempre para baixo'), ('UP', 'Sempre para cima')]
+
     class Meta:
         model = ConfiguracaoFidelidadeEmpresa
         fields = (
@@ -99,12 +119,13 @@ class OverrideFidelidadeLojaForm(forms.ModelForm):
         fields = ("pontos_por_real",)
 
 
-class CredencialIntegracaoForm(forms.Form):
+class CredencialIntegracaoForm(FormularioCompostoMixin, forms.Form):
+    grupos_formulario = (('Identificação', ('nome',)), ('Acesso', ('escopo', 'lojas')))
     nome = forms.CharField(label="Nome", max_length=255)
-    escopo = forms.ChoiceField(label="Escopo", choices=CredencialIntegracao.Escopo.choices)
+    escopo = forms.ChoiceField(label="Aplicação", choices=[('EMPRESA', 'Toda a empresa'), ('LOJAS', 'Lojas específicas')])
     lojas = forms.ModelMultipleChoiceField(
         label="Lojas", queryset=Loja.objects.none(), required=False,
-        help_text="Somente para LOJAS: selecione uma ou mais. Para EMPRESA, deixe vazio.",
+        help_text="Selecione uma ou mais lojas para aplicação em lojas específicas. Para toda a empresa, deixe vazio.",
     )
 
     def __init__(self, *args, empresa, **kwargs):

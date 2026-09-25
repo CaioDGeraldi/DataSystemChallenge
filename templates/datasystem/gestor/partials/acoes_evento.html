@@ -1,0 +1,1 @@
+{% if not evento.cancelado_em %}<form method="post" action="{% url 'fidelidade:cancelar_evento' evento.pk %}">{% csrf_token %}<button class="button button--danger button--small" type="submit">Cancelar {{ evento.nome }}</button></form>{% endif %}

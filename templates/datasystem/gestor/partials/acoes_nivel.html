@@ -1,0 +1,2 @@
+<div class="table-actions"><a class="button button--secondary button--small" href="{% url 'fidelidade:editar_nivel' nivel.pk %}" aria-label="Editar nível {{ nivel.nome }}">Editar</a>
+<form method="post" action="{% url 'fidelidade:excluir_nivel' nivel.pk %}">{% csrf_token %}<button class="button button--danger button--small" type="submit" aria-label="Excluir nível {{ nivel.nome }}">Excluir</button></form></div>

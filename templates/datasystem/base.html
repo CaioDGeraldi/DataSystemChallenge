@@ -1,14 +1,42 @@
+{% load static %}
 <!doctype html>
-<html lang="pt-BR">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{% block titulo %}DataSystem{% endblock %}</title></head>
-<body>
-<main>
-<p><a href="{% url 'empresas:onboarding' %}">Criar Empresa</a></p>
-{% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
-{% block conteudo %}{% endblock %}
-{% if user.is_authenticated %}
-<form method="post" action="{% url 'usuarios:logout' %}">{% csrf_token %}<button type="submit">Sair</button></form>
-{% else %}<p><a href="{% url 'usuarios:login' %}">Entrar</a></p>{% endif %}
-</main>
+<html lang="pt-BR" data-retorna-theme="light" data-retorna-font-scale="100" data-retorna-form-mode="steps">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Retorna{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="{% static 'retorna/brand/retorna-icon.svg' %}">
+  {% include "datasystem/includes/appearance_bootstrap.html" %}
+  <link rel="stylesheet" href="{% static 'retorna.css' %}">
+</head>
+<body class="{% block classe_corpo %}retorna-public-page{% endblock %}">
+  <a class="skip-link" href="#conteudo">Ir para o conteúdo</a>
+  {% block estrutura %}
+  <header class="retorna-public-header"><div class="retorna-public-header-inner">
+    <a href="{% url 'usuarios:home' %}"><img class="retorna-public-logo retorna-logo-light" src="{% static 'retorna/brand/retorna-logo-light.svg' %}" alt="Retorna" width="175"><img class="retorna-public-logo retorna-logo-dark" src="{% static 'retorna/brand/retorna-logo-dark.svg' %}" alt="Retorna" width="175"></a>
+    <nav class="retorna-public-nav" aria-label="Navegação pública">
+      <a href="{% url 'usuarios:home' %}">Home</a>
+      <a href="{% url 'usuarios:para_empresas' %}">Para empresas</a>
+      {% if not user.is_authenticated %}<a href="{% url 'usuarios:login' %}">Entrar</a>{% endif %}
+    </nav>
+    <button type="button" class="button button--secondary" data-appearance-open hidden>Aparência e acessibilidade</button>
+    {% if user.is_authenticated %}<form method="post" action="{% url 'usuarios:logout' %}">{% csrf_token %}<button class="button button--secondary" type="submit">Sair</button></form>{% endif %}
+  </div></header>
+  {% endblock %}
+  <main id="conteudo" class="{% block main_class %}retorna-public-main{% endblock %}" tabindex="-1">
+    <div class="page-wrapper"><div class="retorna-main-content">
+      {% include 'datasystem/includes/mensagens.html' %}
+      {% include 'datasystem/includes/back_link.html' %}
+      <div class="page-header retorna-page-header">
+        <div><p class="eyebrow">{% block contexto_pagina %}Programa de fidelidade{% endblock %}</p><h1>{% block titulo_pagina %}{{ titulo|default:'Retorna' }}{% endblock %}</h1></div>
+        <div class="page-actions">{% block acoes_pagina %}{% endblock %}</div>
+      </div>
+      {% block conteudo %}{% endblock %}
+    </div></div>
+    {% include 'datasystem/includes/footer.html' %}
+  </main>
+  {% include "datasystem/includes/appearance.html" %}
+  <script type="module" src="{% static 'retorna.js' %}"></script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>
