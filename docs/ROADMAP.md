@@ -367,7 +367,36 @@ Entregue:
 - `docs/ARQUITETURA_PRODUTO.md` e `docs/APRESENTACAO.md` atualizados;
 - validação local com 32 testes focais e 409 testes totais, além de `check`, `makemigrations --check --dry-run`, migration aplicada, OpenAPI, `git diff --check` e `uv lock --check`.
 
-Benefícios automáticos por nível continuam fora do escopo: a F3.05 não associa Prata/Ouro a desconto, bônus, multiplicador ou conversão especial. Também permanecem futuros histórico de progressão/rebaixamento, janela temporal de qualificação, rebaixamento por inatividade, API pública de níveis e área do Cliente enriquecida.
+Na F3.05, benefícios automáticos por nível permaneceram fora do escopo: a fase não associava Prata/Ouro a desconto, bônus, multiplicador ou conversão especial. Benefícios configuráveis por nível, suspensão opcional por inatividade e promoção de retorno foram entregues posteriormente na F3.06A. Permanecem futuros histórico explícito de mudanças de nível, API pública de fidelidade do Cliente e área do Cliente enriquecida.
+
+### F3.06A — Benefícios por nível, inatividade e promoção de retorno ✅ P0
+
+Issue: #66. PR: #76.
+
+Entregue:
+
+- `NivelFidelidade` com `bonus_pontos_percentual` e `desconto_percentual` independentes, sem regras hardcoded para Bronze/Prata/Ouro;
+- atividade baseada na última Compra anterior à operação e em `periodo_cliente_ativo_dias`, sem rebaixar o nível histórico;
+- suspensão opcional de benefícios de nível por inatividade;
+- primeira Compra tratada separadamente de retorno após inatividade: `ativo_antes=False`, `retorno=False`, sem promoção de retorno e com benefícios do nível inicial preservados;
+- política configurável para a primeira Compra de retorno com `SEM_BENEFICIOS_NIVEL` ou `COM_BENEFICIOS_NIVEL`;
+- promoção de retorno opcional, com bônus de pontos e desconto percentual independentes;
+- combinação de descontos `ADITIVO` ou `SEQUENCIAL`, com valor final nunca negativo;
+- ordem configurável do desconto monetário de Resgate antes ou depois dos descontos percentuais;
+- base de cálculo de pontos `BRUTO` ou `LIQUIDO`;
+- desconto monetário de nível sempre baseado no nível histórico anterior à Compra;
+- `ANTES_DA_COMPRA` ou `ATINGIDO_NA_COMPRA` controlando somente o nível que fornece bônus de pontos;
+- classificação provisória em passagem única usando progresso histórico + efeito da campanha, sem reclassificação causada pelo próprio bônus de nível ou pelo bônus de retorno;
+- campanha, nível e retorno combinados de forma aditiva sobre os mesmos pontos base;
+- avaliação central reutilizável em `apps/fidelidade/beneficios.py`, com `Decimal` e contexto próprio;
+- snapshot versionado em `LotePontos.beneficios_aplicados`, preservando lotes legados com `NULL`, sem backfill ou recálculo;
+- retry idempotente preservando o snapshot original sem reavaliar benefícios;
+- serialização conservadora do fluxo real por lock `Empresa → Cliente`, evitando duas promoções simultâneas para o mesmo retorno;
+- migrations incrementais `empresas.0010_beneficios_fidelidade` e `fidelidade.0006_beneficios_fidelidade`;
+- `docs/ARQUITETURA_PRODUTO.md` atualizado para o contrato efetivamente implementado;
+- validação final com 75 testes focais e 475 testes totais aprovados, além de `check`, `makemigrations --check --dry-run`, `git diff --check` e `uv lock --check`.
+
+Ficam fora da F3.06A os endpoints de consulta/simulação da F3.06B em diante, estorno de Resgate e o vínculo efetivo entre desconto de Resgate e Compra. O avaliador já aceita o valor monetário do Resgate para reutilização futura, mas o fluxo real de Compra continua passando zero nesta fase.
 
 ## Fase 4 — Dados e visualização
 
