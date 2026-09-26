@@ -175,7 +175,7 @@ A configuração corporativa ativa `data-form-sections`: os títulos são botõe
 nativos com `aria-controls` e `aria-current="step"`, navegáveis com Tab e
 Enter/Espaço. O foco segue para a legenda da seção aberta. Anterior/Próximo são
 auxiliares e não bloqueiam a navegação por campos inválidos. Há um único submit
-na última seção, com validação de todos os campos. Erros do servidor abrem a
+disponível em todas as seções, com validação de todos os campos. Erros do servidor abrem a
 primeira seção inválida e são indicados também por texto nos títulos.
 
 Somente essa tela deixa de oferecer Exibir tudo e ignora a preferência global de
