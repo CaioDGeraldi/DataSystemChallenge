@@ -6,7 +6,7 @@ A API REST é uma interface de primeira classe do DataSystemChallenge. Ela exist
 
 A API utiliza Django REST Framework sobre a mesma camada de domínio utilizada pela interface web.
 
-A F2.06 entrega credenciais de integração, health, contexto e OpenAPI. A F3.01 acrescenta registro de Compra e idempotência; a F3.02 acrescenta cálculo base de pontos e LotePontos histórico. A F3.03 acrescenta campanhas temporárias com multiplicador de pontos. A F3.04 acrescenta Resgate idempotente com consumo de Lotes e desconto histórico. A F3.06B acrescenta consulta autenticada do estado atual de fidelidade do Cliente para integrações.
+A F2.06 entrega credenciais de integração, health, contexto e OpenAPI. A F3.01 acrescenta registro de Compra e idempotência; a F3.02 acrescenta cálculo base de pontos e LotePontos histórico. A F3.03 acrescenta campanhas temporárias com multiplicador de pontos. A F3.04 acrescenta Resgate idempotente com consumo de Lotes e desconto histórico. A F3.06B acrescenta consulta autenticada do estado atual de fidelidade do Cliente para integrações. A F3.06C acrescenta simulação de Compra sem persistência para o PDV consultar os efeitos atuais de fidelidade antes de finalizar a venda.
 
 ```text
 Django Templates ─┐
@@ -43,6 +43,7 @@ Endpoints implementados:
 GET  /api/v1/health/
 GET  /api/v1/contexto/
 GET  /api/v1/clientes/fidelidade/
+POST /api/v1/compras/simular/
 POST /api/v1/compras/
 POST /api/v1/resgates/
 ```
@@ -264,6 +265,109 @@ A promoção de retorno só é marcada como aplicável quando o Cliente está ef
 A consulta é somente leitura, usa o instante do servidor, não cria snapshots e não garante o mesmo estado para uma operação posterior. Compra ou Resgate efetivos devem recalcular e revalidar todas as regras.
 
 Loja inexistente ou não autorizada retorna `403 loja_fora_do_escopo`. Cliente inexistente ou pertencente somente a outro tenant retorna `404 cliente_nao_encontrado`, sem revelar informação externa.
+
+A resposta utiliza `Cache-Control: no-store`.
+
+## Simulação de Compra e benefícios — F3.06C
+
+```http
+POST /api/v1/compras/simular/
+X-API-Key: <identificador>.<segredo>
+Content-Type: application/json
+```
+
+Entrada:
+
+```json
+{
+  "loja_id": 1,
+  "cliente_cpf": "52998224725",
+  "valor": "199.90"
+}
+```
+
+A simulação usa o instante atual do servidor. Não aceita `ocorrida_em`, identificador externo, pontos, percentuais, multiplicadores ou descontos calculados pelo PDV.
+
+`valor` segue o mesmo contrato monetário da Compra real: string decimal positiva, com até duas casas, entre `0.01` e `9999999999.99`. Float não é aceito.
+
+Exemplo de resposta:
+
+```json
+{
+  "cliente": {
+    "cpf": "52998224725",
+    "nome": "Ana Silva"
+  },
+  "simulada_em": "2026-09-26T13:00:00-03:00",
+  "atividade": {
+    "ativo": true,
+    "retorno": false,
+    "ultima_compra_em": "2026-09-20T10:00:00-03:00"
+  },
+  "nivel": {
+    "atual": {
+      "nome": "Prata",
+      "pontos_minimos": "1000.0000"
+    },
+    "bonus_pontos": {
+      "nome": "Prata",
+      "pontos_minimos": "1000.0000"
+    },
+    "beneficios_aplicaveis": true,
+    "bonus_pontos_percentual": "10.0000",
+    "desconto_percentual": "5.0000"
+  },
+  "campanha": {
+    "aplicavel": true,
+    "nome": "Semana do Cliente",
+    "multiplicador_pontos": "2.0000"
+  },
+  "promocao_retorno": {
+    "aplicavel": false,
+    "bonus_pontos_percentual": "0.0000",
+    "desconto_percentual": "0.0000"
+  },
+  "valores": {
+    "bruto": "199.90",
+    "desconto_total": "9.99",
+    "final": "189.91",
+    "elegivel_pontos": "199.90"
+  },
+  "pontos": {
+    "base": "199.9000",
+    "apos_campanha": "399.8000",
+    "bonus_nivel": "19.9900",
+    "bonus_retorno": "0.0000",
+    "total_estimado": "419.7900"
+  }
+}
+```
+
+`nivel.atual` representa o nível determinado pelo progresso histórico anterior à Compra simulada.
+
+`nivel.bonus_pontos` representa o nível efetivamente usado para o bônus de pontos. Ele pode divergir de `nivel.atual` quando a política utiliza `ATINGIDO_NA_COMPRA`.
+
+`nivel.beneficios_aplicaveis` informa se os benefícios de nível podem ser usados naquele instante. Os percentuais configurados continuam visíveis mesmo quando estão suspensos por inatividade; nesse caso, os componentes efetivamente calculados refletem a suspensão.
+
+Sem campanha aplicável, `campanha.aplicavel` é `false`, `nome` é `null` e `multiplicador_pontos` é `1.0000`.
+
+`valores.elegivel_pontos` informa qual valor efetivamente serviu de base monetária para geração de pontos após a política `BRUTO` ou `LIQUIDO`.
+
+Os componentes de pontos são apresentados separadamente:
+
+- `base`: pontos antes de campanha e bônus;
+- `apos_campanha`: pontos depois do multiplicador da campanha;
+- `bonus_nivel`: componente adicional do nível;
+- `bonus_retorno`: componente adicional da promoção de retorno;
+- `total_estimado`: concessão estimada para a Compra.
+
+A simulação reutiliza a mesma avaliação de domínio da Compra efetiva para atividade, retorno, nível, descontos e pontos. A seleção de campanha também segue as mesmas regras de Empresa, Loja e período.
+
+A operação não cria `Compra`, `LotePontos`, aplicação de campanha, Resgate ou snapshot, não consome saldo e não altera atividade persistida.
+
+O resultado não constitui reserva. Configuração, campanha, nível e demais condições são recalculados quando a Compra efetiva for registrada.
+
+Loja inexistente ou fora do escopo retorna `403 loja_fora_do_escopo`. Cliente inexistente ou pertencente somente a outro tenant retorna `404 cliente_nao_encontrado`.
 
 A resposta utiliza `Cache-Control: no-store`.
 

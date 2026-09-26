@@ -83,22 +83,53 @@ def cancelar_evento(request, evento_id):
     return evento
 
 
-@transaction.atomic
-def resolver_efeito_evento(loja, ocorrida_em):
-    # Dentro de registrar_compra, este lock dura até o commit de Compra + Lote + aplicação.
+def _loja_persistida_para_evento(loja):
     persistida = Loja.objects.get(pk=loja.pk)
     if persistida.empresa_id != loja.empresa_id:
-        raise ValidationError('Loja divergente do tenant persistido.')
-    Empresa.objects.select_for_update(no_key=True).get(pk=persistida.empresa_id)
-    efeitos = list(EfeitoEvento.objects.select_related('evento').filter(
-        tipo=EfeitoEvento.Tipo.MULTIPLICADOR_PONTOS,
-        evento__empresa_id=persistida.empresa_id, evento__cancelado_em__isnull=True,
-        evento__inicio_em__lte=ocorrida_em, evento__fim_em__gte=ocorrida_em,
-    ).filter(Q(evento__escopo='EMPRESA') | Q(evento__escopo='LOJAS', evento__lojas_selecionadas__loja_id=persistida.pk)).distinct())
+        raise ValidationError("Loja divergente do tenant persistido.")
+    return persistida
+
+
+def _buscar_efeito_evento(persistida, ocorrida_em):
+    efeitos = list(
+        EfeitoEvento.objects.select_related("evento")
+        .filter(
+            tipo=EfeitoEvento.Tipo.MULTIPLICADOR_PONTOS,
+            evento__empresa_id=persistida.empresa_id,
+            evento__cancelado_em__isnull=True,
+            evento__inicio_em__lte=ocorrida_em,
+            evento__fim_em__gte=ocorrida_em,
+        )
+        .filter(
+            Q(evento__escopo="EMPRESA")
+            | Q(
+                evento__escopo="LOJAS",
+                evento__lojas_selecionadas__loja_id=persistida.pk,
+            )
+        )
+        .distinct()
+    )
     if len(efeitos) > 1:
-        # Corrupção via bulk/raw não autoriza escolher prioridade nem combinar campanhas.
-        raise ValidationError('Há campanhas conflitantes para esta operação.')
+        raise ValidationError(
+            "Há campanhas conflitantes para esta operação.",
+        )
     return efeitos[0] if efeitos else None
+
+
+def consultar_efeito_evento(loja, ocorrida_em):
+    """Consulta corrente sem lock para operações não persistentes."""
+    persistida = _loja_persistida_para_evento(loja)
+    return _buscar_efeito_evento(persistida, ocorrida_em)
+
+
+@transaction.atomic
+def resolver_efeito_evento(loja, ocorrida_em):
+    """Resolve e trava a configuração para a Compra que será persistida."""
+    persistida = _loja_persistida_para_evento(loja)
+    Empresa.objects.select_for_update(no_key=True).get(
+        pk=persistida.empresa_id,
+    )
+    return _buscar_efeito_evento(persistida, ocorrida_em)
 
 
 def registrar_aplicacao_evento(lote, efeito):
