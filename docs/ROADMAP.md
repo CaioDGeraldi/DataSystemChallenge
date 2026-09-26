@@ -227,7 +227,7 @@ Entregue:
 - OpenAPI refletindo somente endpoints realmente implementados;
 - testes de autenticação, tenancy, HTTP, CSRF, migration e schema.
 
-Compra e idempotência transacional foram entregues posteriormente na F3.01. O motor base de pontos e `LotePontos` foi entregue na F3.02. Campanhas/eventos temporários foram entregues na F3.03. Resgate idempotente e consumo histórico de Lotes foram entregues na F3.04. Níveis configuráveis foram entregues na F3.05. Cliente REST permanece futuro.
+Compra e idempotência transacional foram entregues posteriormente na F3.01. O motor base de pontos e `LotePontos` foi entregue na F3.02. Campanhas/eventos temporários foram entregues na F3.03. Resgate idempotente e consumo histórico de Lotes foram entregues na F3.04. Níveis configuráveis foram entregues na F3.05. A consulta REST de fidelidade do Cliente foi entregue na F3.06B.
 
 ## Fase 3 — Motor de fidelidade
 
@@ -339,7 +339,7 @@ Entregue:
 - OpenAPI, `docs/API.md` e `docs/APRESENTACAO.md` atualizados para o contrato real;
 - validação em PostgreSQL com 150 testes focais e 377 testes totais, além de `check`, `makemigrations --check`, migration aplicada, OpenAPI, `git diff --check` e `uv lock --check`.
 
-Limitações deliberadas: não há cancelamento, estorno, edição ou backdating de Resgate; não há endpoint público de saldo, dashboard, vínculo obrigatório Resgate → Compra ou ledger genérico. Níveis configuráveis foram entregues posteriormente na F3.05. APIs internas do ORM e SQL bruto continuam fora do contrato normal de escrita.
+Na F3.04 ainda não havia estorno, endpoint de consulta de fidelidade ou simulações públicas. A consulta foi entregue na F3.06B, as simulações na F3.06C/F3.06D e o estorno integral na F3.06E. Permanecem fora do contrato edição/backdating de Resgate, vínculo obrigatório Resgate → Compra e ledger genérico. APIs internas do ORM e SQL bruto continuam fora do contrato normal de escrita.
 
 ### F3.05 — Níveis configuráveis ✅ P0
 
@@ -367,7 +367,7 @@ Entregue:
 - `docs/ARQUITETURA_PRODUTO.md` e `docs/APRESENTACAO.md` atualizados;
 - validação local com 32 testes focais e 409 testes totais, além de `check`, `makemigrations --check --dry-run`, migration aplicada, OpenAPI, `git diff --check` e `uv lock --check`.
 
-Na F3.05, benefícios automáticos por nível permaneceram fora do escopo: a fase não associava Prata/Ouro a desconto, bônus, multiplicador ou conversão especial. Benefícios configuráveis por nível, suspensão opcional por inatividade e promoção de retorno foram entregues posteriormente na F3.06A. Permanecem futuros histórico explícito de mudanças de nível, API pública de fidelidade do Cliente e área do Cliente enriquecida.
+Na F3.05, benefícios automáticos por nível permaneceram fora do escopo: a fase não associava Prata/Ouro a desconto, bônus, multiplicador ou conversão especial. Benefícios configuráveis por nível, suspensão opcional por inatividade e promoção de retorno foram entregues posteriormente na F3.06A. A consulta pública do estado de fidelidade do Cliente foi entregue na F3.06B. Permanecem futuros histórico explícito de mudanças de nível e área do Cliente enriquecida.
 
 ### F3.06A — Benefícios por nível, inatividade e promoção de retorno ✅ P0
 
@@ -396,7 +396,92 @@ Entregue:
 - `docs/ARQUITETURA_PRODUTO.md` atualizado para o contrato efetivamente implementado;
 - validação final com 75 testes focais e 475 testes totais aprovados, além de `check`, `makemigrations --check --dry-run`, `git diff --check` e `uv lock --check`.
 
-Ficam fora da F3.06A os endpoints de consulta/simulação da F3.06B em diante, estorno de Resgate e o vínculo efetivo entre desconto de Resgate e Compra. O avaliador já aceita o valor monetário do Resgate para reutilização futura, mas o fluxo real de Compra continua passando zero nesta fase.
+Os endpoints de consulta e simulação previstos após a F3.06A foram entregues nas F3.06B–F3.06D, e o estorno integral de Resgate foi entregue na F3.06E. Permanece pendente a reconciliação do contrato efetivo da Compra com benefícios e Resgate, tratada na F3.06F.
+
+### F3.06B — Consulta de fidelidade do Cliente ✅ P0
+
+Issue: #67. PR: #81.
+
+Entregue:
+
+- `GET /api/v1/clientes/fidelidade/` autenticado por `X-API-Key`;
+- consulta por `loja_id` e `cliente_cpf`, respeitando tenant e escopos `EMPRESA`/`LOJAS`;
+- instante atual definido pelo servidor, sem aceitar backdating;
+- reutilização do avaliador canônico da F3.06A para atividade, retorno e aplicabilidade de benefícios;
+- separação entre progresso histórico usado para nível e saldo atualmente utilizável;
+- exposição do nível atual, benefícios aplicáveis, promoção de retorno e parâmetros de Resgate;
+- saldo derivado somente de Lotes ainda válidos e consumo efetivo;
+- operação somente leitura, sem snapshots ou mutação de domínio;
+- `Cache-Control: no-store`, OpenAPI e `docs/API.md` atualizados;
+- validação com 6 testes específicos e 90 testes de regressão focada, além de `check`, OpenAPI, migrations sem mudanças e `git diff --check`.
+
+### F3.06C — Simulação de Compra ✅ P0
+
+Issue: #68. PR: #82.
+
+Entregue:
+
+- `POST /api/v1/compras/simular/` autenticado por `X-API-Key`;
+- payload reduzido a Loja, Cliente e valor, rejeitando identificador externo, backdating e campos calculados pelo consumidor;
+- instante atual definido pelo servidor;
+- reutilização da avaliação canônica de fidelidade da F3.06A;
+- consulta do Evento/Campanha aplicável sem persistência nem bloqueio de escrita;
+- distinção entre nível histórico atual e nível usado exclusivamente para bônus quando `ATINGIDO_NA_COMPRA` está configurado;
+- exposição dos descontos, componentes de pontos, atividade, retorno, campanha e promoção aplicáveis;
+- ausência de persistência, idempotência ou efeitos colaterais na simulação;
+- equivalência de regras com a Compra efetiva sem enfraquecer o fluxo transacional real;
+- OpenAPI e `docs/API.md` atualizados;
+- validação com 125 testes focados, além de `check`, OpenAPI, migrations sem mudanças e `git diff --check`.
+
+### F3.06D — Simulação de Resgate ✅ P0
+
+Issue: #69. PR: #83.
+
+Entregue:
+
+- `POST /api/v1/resgates/simular/` autenticado por `X-API-Key`;
+- quantidade de pontos inteira, positiva e limitada pelo mesmo contrato do Resgate real;
+- cálculo de saldo, mínimo, incremento e desconto reutilizando as mesmas regras materiais do Resgate efetivo;
+- saldo projetado após o Resgate sem reservar ou persistir pontos;
+- seleção dos Lotes ainda válidos sem `select_for_update`, advisory lock ou alteração de histórico;
+- isolamento de tenant/Loja e ocultação de existência coerentes com o Resgate real;
+- payload estrito, sem backdating, identificador externo ou campos derivados;
+- OpenAPI e `docs/API.md` atualizados;
+- validação final com 66 testes focados após as correções, além de `check`, OpenAPI, migrations sem mudanças e `git diff --check`.
+
+### F3.06E — Estorno histórico e idempotente de Resgate ✅ P0
+
+Issue: #70. PR: #84.
+
+Entregue:
+
+- `POST /api/v1/resgates/estornar/` para estorno sempre integral;
+- `EstornoResgate` como fato histórico imutável, com no máximo um estorno por Resgate e chave idempotente própria por Loja;
+- parâmetro corporativo `devolver_pontos_ao_estornar_resgate`, com default `true` e sem override por Loja nesta fase;
+- snapshot `devolve_pontos_aplicado`, impedindo que mudanças futuras de configuração alterem estornos passados;
+- regra fixa de domínio: pontos já expirados nunca voltam, a validade nunca é renovada e nenhum Lote substituto é criado;
+- quando o snapshot é `true`, apenas alocações de Lotes ainda válidos deixam de representar consumo efetivo; com `false`, o consumo original permanece;
+- consumo efetivo centralizado e reutilizado pela consulta, simulação, Resgate real e validação de capacidade das alocações;
+- retry equivalente `200`, criação `201`, conflitos explícitos para chave reutilizada ou Resgate já estornado;
+- serialização por advisory lock próprio e pelo mesmo lock de Cliente usado no Resgate real, preservando resultados serializáveis em concorrência;
+- migrations `empresas.0011_configuracaofidelidadeempresa_devolver_pontos_ao_estornar_resgate` e `fidelidade.0007_estornoresgate`;
+- OpenAPI, `docs/API.md` e `docs/MODELAGEM_DE_DADOS.md` atualizados;
+- validação com 194 testes focados e 58 testes complementares aprovados, incluindo concorrência em PostgreSQL, além de `check`, OpenAPI, migrations sem mudanças e `git diff --check`.
+
+### F3.06F — Reconciliar contrato efetivo da Compra com benefícios e Resgate 🟡 P0
+
+Issue: #71.
+
+Próxima etapa da F3.06.
+
+Objetivo:
+
+- manter `Compra` como fonte histórica da venda;
+- recalcular e validar no backend os benefícios realmente aplicáveis;
+- impedir que o PDV envie nível, bônus, desconto, pontos ou saldo como decisões autoritativas;
+- preservar snapshots suficientes para explicar o resultado histórico;
+- reconciliar o valor elegível após desconto de Resgate sem inventar silenciosamente um vínculo relacional obrigatório `Resgate → Compra`;
+- preservar idempotência, tenancy, compatibilidade do contrato e equivalência entre simulação e operação real.
 
 ## Fase 4 — Dados e visualização
 
@@ -424,9 +509,9 @@ Entregue:
 
 A modelagem de dados vigente também está consolidada em `docs/MODELAGEM_DE_DADOS.md`, separando entidades persistidas de informações derivadas como saldo, pontos para nível, nível atual e atividade.
 
-### F4.02 — Dashboard do Gestor 🟡 P0
+### F4.02 — Dashboard do Gestor ⏳ P0
 
-O Dashboard continua sendo a entrega central da F4.02, mas a execução foi subdividida para evitar construir visualização final sobre HTML cru e depois refazer a base visual.
+O Dashboard continua sendo a entrega central da F4.02, mas a execução foi subdividida para evitar construir visualização final sobre HTML cru e depois refazer a base visual. A F3.06F é a próxima etapa antes de retomar o Dashboard funcional.
 
 #### F4.02A — Base visual mínima + SCSS ✅ P0
 
@@ -449,9 +534,7 @@ Entregue:
 
 `Criar empresa` permanece como ação de onboarding/contexto, fora da navegação operacional geral. O Cliente continua sem shell administrativo. A F4.02A não introduziu Dashboard nem alterou regras de domínio, models, migrations ou contratos da API.
 
-#### F4.02B — Dashboard funcional 🟡 P0
-
-Próxima fase da vertical principal.
+#### F4.02B — Dashboard funcional ⏳ P0
 
 Objetivo: entregar os indicadores essenciais calculados sobre a vertical real.
 
