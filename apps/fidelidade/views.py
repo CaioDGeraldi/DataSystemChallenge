@@ -19,38 +19,68 @@ def eventos(request):
     membro = exigir_administrador(request)
     registros = EventoFidelidade.objects.filter(empresa_id=membro.empresa_id).prefetch_related(
         'efeitos', 'lojas_selecionadas__loja',
-    ).order_by('-inicio_em', '-pk')
-    return render(request, 'datasystem/gestor/eventos.html', {
-        **contexto_gestao(membro, 'campanhas'), 'empresa': membro.empresa, 'eventos': registros,
-    })
+    ).order_by(
+        '-inicio_em',
+        '-pk',
+    )
+    return render(
+        request,
+        'datasystem/gestor/eventos.html',
+        {
+            **contexto_gestao(membro, 'campanhas'),
+            'empresa': membro.empresa,
+            'eventos': registros,
+        },
+    )
 
 
 @login_required
 @require_http_methods(['GET', 'POST'])
 def novo_evento(request):
     membro = exigir_administrador(request)
-    form = EventoFidelidadeForm(request.POST if request.method == 'POST' else None, empresa=membro.empresa)
+    form = EventoFidelidadeForm(
+        request.POST if request.method == 'POST' else None,
+        empresa=membro.empresa,
+    )
     if request.method == 'POST' and form.is_valid():
         dados = dict(form.cleaned_data)
         multiplicador = dados.pop('multiplicador')
         try:
-            criar_evento(request, **dados, efeitos=[{'tipo': EfeitoEvento.Tipo.MULTIPLICADOR_PONTOS, 'valor': multiplicador}])
+            criar_evento(
+                request,
+                **dados,
+                efeitos=[
+                    {
+                        'tipo': EfeitoEvento.Tipo.MULTIPLICADOR_PONTOS,
+                        'valor': multiplicador,
+                    },
+                ],
+            )
         except ValidationError as exc:
             form.add_error(None, exc.messages)
         else:
             messages.success(request, 'Campanha criada.')
             return redirect('fidelidade:eventos')
-    return render(request, 'datasystem/formulario.html', {
-        **contexto_gestao(membro, 'campanhas', 'Criar campanha'),
-        'form': form, 'titulo': 'Criar campanha de fidelidade', 'botao': 'Criar campanha',
-    })
+    return render(
+        request,
+        'datasystem/formulario.html',
+        {
+            **contexto_gestao(membro, 'campanhas', 'Criar campanha'),
+            'form': form,
+            'titulo': 'Criar campanha de fidelidade',
+            'botao': 'Criar campanha',
+        },
+    )
 
 
 @login_required
 @require_POST
 def cancelar_evento_view(request, evento_id):
     cancelar_evento(request, evento_id)
-    messages.success(request, 'Campanha cancelada. O histórico concedido foi preservado.')
+    messages.success(
+        request,
+        'Campanha cancelada. O histórico concedido foi preservado.',
+    )
     return redirect('fidelidade:eventos')
 
 
@@ -58,10 +88,15 @@ def cancelar_evento_view(request, evento_id):
 @require_GET
 def niveis(request):
     membro = exigir_administrador(request)
-    return render(request, 'datasystem/gestor/niveis.html', {
-        **contexto_gestao(membro, 'niveis'),
-        'empresa': membro.empresa, 'niveis': listar_niveis(request),
-    })
+    return render(
+        request,
+        'datasystem/gestor/niveis.html',
+        {
+            **contexto_gestao(membro, 'niveis'),
+            'empresa': membro.empresa,
+            'niveis': listar_niveis(request),
+        },
+    )
 
 
 @login_required
@@ -77,10 +112,16 @@ def novo_nivel(request):
         else:
             messages.success(request, 'Nível criado.')
             return redirect('fidelidade:niveis')
-    return render(request, 'datasystem/formulario.html', {
-        **contexto_gestao(membro, 'niveis', 'Criar nível'),
-        'form': form, 'titulo': 'Criar nível de fidelidade', 'botao': 'Criar nível',
-    })
+    return render(
+        request,
+        'datasystem/formulario.html',
+        {
+            **contexto_gestao(membro, 'niveis', 'Criar nível'),
+            'form': form,
+            'titulo': 'Criar nível de fidelidade',
+            'botao': 'Criar nível',
+        },
+    )
 
 
 @login_required
@@ -88,20 +129,36 @@ def novo_nivel(request):
 def editar_nivel_view(request, nivel_id):
     nivel = nivel_para_gestao(request, nivel_id)
     membro = exigir_administrador(request)
-    form = NivelFidelidadeForm(request.POST if request.method == 'POST' else None,
-                              initial={'nome': nivel.nome, 'pontos_minimos': nivel.pontos_minimos})
+    form = NivelFidelidadeForm(
+        request.POST if request.method == 'POST' else None,
+        initial={
+            'nome': nivel.nome,
+            'pontos_minimos': nivel.pontos_minimos,
+            'bonus_pontos_percentual': nivel.bonus_pontos_percentual,
+            'desconto_percentual': nivel.desconto_percentual,
+        },
+    )
     if request.method == 'POST' and form.is_valid():
         try:
             editar_nivel(request, nivel_id, **form.cleaned_data)
         except ValidationError as exc:
             form.add_error(None, exc.messages)
         else:
-            messages.success(request, 'Nível atualizado. A classificação atual usa os novos limites.')
+            messages.success(
+                request,
+                'Nível atualizado. A classificação atual usa os novos limites.',
+            )
             return redirect('fidelidade:niveis')
-    return render(request, 'datasystem/formulario.html', {
-        **contexto_gestao(membro, 'niveis', 'Editar nível'),
-        'form': form, 'titulo': 'Editar nível de fidelidade', 'botao': 'Salvar nível',
-    })
+    return render(
+        request,
+        'datasystem/formulario.html',
+        {
+            **contexto_gestao(membro, 'niveis', 'Editar nível'),
+            'form': form,
+            'titulo': 'Editar nível de fidelidade',
+            'botao': 'Salvar nível',
+        },
+    )
 
 
 @login_required

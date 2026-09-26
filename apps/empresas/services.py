@@ -48,7 +48,9 @@ def _criar_empresa(nome, cnpj):
                 return Empresa.objects.create(nome=nome, cnpj=cnpj, slug=slug)
         except (IntegrityError, ValidationError) as exc:
             if Empresa.objects.filter(cnpj=cnpj).exists():
-                raise ValidationError({"cnpj": "Já existe uma Empresa com este CNPJ."}) from exc
+                raise ValidationError(
+                    {"cnpj": "Já existe uma Empresa com este CNPJ."},
+                ) from exc
             colisao_slug = Empresa.objects.filter(slug=slug).exists()
             erro_de_slug = isinstance(exc, IntegrityError) or (
                 hasattr(exc, "message_dict") and set(exc.message_dict) == {"slug"}
@@ -64,25 +66,43 @@ def _criar_loja(empresa, nome, cidade):
     return loja
 
 
-def concluir_onboarding(request, *, nome_empresa, cnpj, nome_loja, cidade_loja,
-                        cpf="", first_name="", last_name="", senha="", confirmacao=""):
+def concluir_onboarding(
+    request,
+    *,
+    nome_empresa,
+    cnpj,
+    nome_loja,
+    cidade_loja,
+    cpf="",
+    first_name="",
+    last_name="",
+    senha="",
+    confirmacao="",
+):
     with transaction.atomic():
         if request.user.is_authenticated:
             usuario = get_user_model().objects.select_for_update().filter(
-                pk=request.user.pk, is_active=True
+                pk=request.user.pk,
+                is_active=True,
             ).first()
             if usuario is None:
                 raise PermissionDenied("A conta não está ativa.")
         else:
             usuario = resolver_identidade(
-                request=request, cpf=cpf, senha=senha, confirmacao=confirmacao,
-                first_name=first_name, last_name=last_name,
+                request=request,
+                cpf=cpf,
+                senha=senha,
+                confirmacao=confirmacao,
+                first_name=first_name,
+                last_name=last_name,
             )
         empresa = _criar_empresa(nome_empresa, cnpj)
         _criar_loja(empresa, nome_loja, cidade_loja)
         membro = MembroEmpresa.objects.create(
-            usuario=usuario, empresa=empresa,
-            papel=MembroEmpresa.Papel.ADMINISTRADOR, ativo=True,
+            usuario=usuario,
+            empresa=empresa,
+            papel=MembroEmpresa.Papel.ADMINISTRADOR,
+            ativo=True,
         )
 
     if not request.user.is_authenticated:
@@ -110,11 +130,16 @@ def criar_loja_no_contexto(request, *, nome, cidade):
     with transaction.atomic():
         contexto = exigir_administrador(request)
         membro = MembroEmpresa.objects.select_for_update().filter(
-            pk=contexto.pk, usuario_id=request.user.pk, empresa_id=contexto.empresa_id,
-            ativo=True, papel=MembroEmpresa.Papel.ADMINISTRADOR,
+            pk=contexto.pk,
+            usuario_id=request.user.pk,
+            empresa_id=contexto.empresa_id,
+            ativo=True,
+            papel=MembroEmpresa.Papel.ADMINISTRADOR,
         ).first()
         if membro is None:
-            raise PermissionDenied("O vínculo administrativo não está mais disponível.")
+            raise PermissionDenied(
+                "O vínculo administrativo não está mais disponível.",
+            )
         return _criar_loja(membro.empresa, nome, cidade)
 
 
@@ -135,8 +160,11 @@ def hash_token(token):
 def _administrador_bloqueado(request):
     contexto = exigir_administrador(request)
     membro = MembroEmpresa.objects.select_for_update().filter(
-        pk=contexto.pk, usuario_id=request.user.pk, empresa_id=contexto.empresa_id,
-        ativo=True, papel=MembroEmpresa.Papel.ADMINISTRADOR,
+        pk=contexto.pk,
+        usuario_id=request.user.pk,
+        empresa_id=contexto.empresa_id,
+        ativo=True,
+        papel=MembroEmpresa.Papel.ADMINISTRADOR,
     ).first()
     if membro is None:
         raise PermissionDenied("Vínculo administrativo indisponível.")
@@ -150,7 +178,9 @@ def criar_convite(request, *, cpf, papel, lojas=()):
         contexto = exigir_administrador(request)
         # Serializa convites da Empresa, inclusive quando ainda não há convite
         # para o CPF. NO KEY UPDATE permite inserções de FKs durante aceites.
-        Empresa.objects.select_for_update(no_key=True).get(pk=contexto.empresa_id)
+        Empresa.objects.select_for_update(no_key=True).get(
+            pk=contexto.empresa_id,
+        )
         criador = _administrador_bloqueado(request)
         ids = {loja.pk for loja in lojas}
         selecionadas = list(Loja.objects.filter(pk__in=ids, empresa_id=criador.empresa_id))
@@ -162,17 +192,28 @@ def criar_convite(request, *, cpf, papel, lojas=()):
             raise ValidationError("Administrador não recebe escopo por Loja.")
         if papel == MembroEmpresa.Papel.GESTOR and not ids:
             raise ValidationError("Selecione ao menos uma Loja para o Gestor.")
-        if MembroEmpresa.objects.filter(empresa_id=criador.empresa_id, usuario__cpf=cpf).exists():
+        if MembroEmpresa.objects.filter(
+            empresa_id=criador.empresa_id,
+            usuario__cpf=cpf,
+        ).exists():
             raise ValidationError("Este CPF já possui vínculo com a Empresa.")
         if ConviteMembro.objects.filter(
-            empresa_id=criador.empresa_id, cpf=cpf, aceito_em__isnull=True,
-            revogado_em__isnull=True, expira_em__gt=timezone.now(),
+            empresa_id=criador.empresa_id,
+            cpf=cpf,
+            aceito_em__isnull=True,
+            revogado_em__isnull=True,
+            expira_em__gt=timezone.now(),
         ).exists():
-            raise ValidationError("Já existe convite pendente para este CPF nesta Empresa.")
+            raise ValidationError(
+                "Já existe convite pendente para este CPF nesta Empresa.",
+            )
         token = secrets.token_urlsafe(32)
         convite = ConviteMembro.objects.create(
-            empresa_id=criador.empresa_id, criado_por=criador, cpf=cpf,
-            papel=papel, token_hash=hash_token(token),
+            empresa_id=criador.empresa_id,
+            criado_por=criador,
+            cpf=cpf,
+            papel=papel,
+            token_hash=hash_token(token),
         )
         for loja in selecionadas:
             ConviteAcessoLoja.objects.create(convite=convite, loja=loja)
@@ -187,48 +228,72 @@ def _exigir_convite_pendente(convite):
 
 def localizar_convite(token):
     return _exigir_convite_pendente(
-        ConviteMembro.objects.select_related("empresa").filter(token_hash=hash_token(token)).first()
+        ConviteMembro.objects.select_related("empresa").filter(token_hash=hash_token(token)).first(),
     )
 
 
-def _identidade_do_convite(request, convite, *, senha="", confirmacao="", first_name="", last_name=""):
+def _identidade_do_convite(
+    request,
+    convite,
+    *,
+    senha="",
+    confirmacao="",
+    first_name="",
+    last_name="",
+):
     Usuario = get_user_model()
     usuario = Usuario.objects.select_for_update().filter(cpf=convite.cpf).first()
     if request.user.is_authenticated:
         if (usuario is None or usuario.pk != request.user.pk
                 or request.user.cpf != convite.cpf or not usuario.is_active):
-            raise PermissionDenied("Entre com a identidade destinatária deste convite.")
+            raise PermissionDenied(
+                "Entre com a identidade destinatária deste convite.",
+            )
         return usuario
     if usuario is not None:
         # Aceite de identidade existente solicita somente senha, sem confirmação.
         autenticado = authenticate(request, cpf=convite.cpf, password=senha)
         if autenticado is None or autenticado.pk != usuario.pk:
-            raise ValidationError("Não foi possível autenticar com a senha informada.")
+            raise ValidationError(
+                "Não foi possível autenticar com a senha informada.",
+            )
         return autenticado
     # Somente a criação usa a semântica de nome, senha e confirmação. O helper
     # também trata uma identidade criada concorrentemente antes do INSERT.
     return resolver_identidade(
-        request=request, cpf=convite.cpf, senha=senha, confirmacao=confirmacao,
-        first_name=first_name, last_name=last_name,
+        request=request,
+        cpf=convite.cpf,
+        senha=senha,
+        confirmacao=confirmacao,
+        first_name=first_name,
+        last_name=last_name,
     )
 
 
 def aceitar_convite(request, token, **identidade):
     with transaction.atomic():
         convite = _exigir_convite_pendente(
-            ConviteMembro.objects.select_for_update().filter(token_hash=hash_token(token)).first()
+            ConviteMembro.objects.select_for_update().filter(token_hash=hash_token(token)).first(),
         )
         usuario = _identidade_do_convite(request, convite, **identidade)
-        if MembroEmpresa.objects.filter(usuario=usuario, empresa_id=convite.empresa_id).exists():
+        if MembroEmpresa.objects.filter(
+            usuario=usuario,
+            empresa_id=convite.empresa_id,
+        ).exists():
             raise ValidationError("Esta identidade já possui vínculo com a Empresa.")
         escopos = list(convite.acessos_lojas.select_related("loja"))
         if convite.papel == MembroEmpresa.Papel.GESTOR:
             if not escopos or any(e.loja.empresa_id != convite.empresa_id for e in escopos):
-                raise ValidationError("O convite deve possuir Lojas válidas da própria Empresa.")
+                raise ValidationError(
+                    "O convite deve possuir Lojas válidas da própria Empresa.",
+                )
         elif convite.papel != MembroEmpresa.Papel.ADMINISTRADOR or escopos:
             raise ValidationError("Papel ou escopo de convite inválido.")
         membro = MembroEmpresa.objects.create(
-            usuario=usuario, empresa_id=convite.empresa_id, papel=convite.papel, ativo=True,
+            usuario=usuario,
+            empresa_id=convite.empresa_id,
+            papel=convite.papel,
+            ativo=True,
         )
         for escopo in escopos:
             AcessoLoja.objects.create(membro=membro, loja=escopo.loja)
@@ -252,7 +317,8 @@ def revogar_convite(request, convite_id):
     with transaction.atomic():
         contexto = exigir_administrador(request)
         convite = ConviteMembro.objects.select_for_update().filter(
-            pk=convite_id, empresa_id=contexto.empresa_id,
+            pk=convite_id,
+            empresa_id=contexto.empresa_id,
         ).first()
         _administrador_bloqueado(request)
         if convite is None:
@@ -279,17 +345,40 @@ def resolver_configuracao(empresa, loja=None):
         override = OverrideFidelidadeLoja.objects.filter(loja_id=loja.pk).first()
         if override is not None:
             valores["pontos_por_real"] = override.pontos_por_real
-    return ConfiguracaoEfetiva(empresa_id=empresa.pk, loja_id=loja.pk if loja is not None else None, **valores)
+    return ConfiguracaoEfetiva(
+        empresa_id=empresa.pk,
+        loja_id=loja.pk if loja is not None else None,
+        **valores,
+    )
 
 
-def salvar_configuracao_empresa(request, *, pontos_por_real, validade_pontos_meses,
-                                resgate_minimo_pontos, incremento_resgate_pontos,
-                                valor_monetario_por_ponto, periodo_cliente_ativo_dias,
-                                precisao_pontos, modo_arredondamento_pontos):
+def salvar_configuracao_empresa(
+    request,
+    *,
+    pontos_por_real,
+    validade_pontos_meses,
+    resgate_minimo_pontos,
+    incremento_resgate_pontos,
+    valor_monetario_por_ponto,
+    periodo_cliente_ativo_dias,
+    precisao_pontos,
+    modo_arredondamento_pontos,
+    inatividade_suspende_beneficios_nivel=None,
+    promocao_retorno_ativa=None,
+    beneficio_primeira_compra_apos_inatividade=None,
+    modo_combinacao_descontos_percentuais=None,
+    ordem_aplicacao_resgate=None,
+    base_calculo_pontos=None,
+    modo_aplicacao_nivel=None,
+    bonus_pontos_retorno_percentual=None,
+    desconto_retorno_percentual=None,
+):
     with transaction.atomic():
         contexto = exigir_administrador(request)
         # O lock da Empresa também serializa a primeira edição, sem linha prévia.
-        empresa = Empresa.objects.select_for_update(no_key=True).get(pk=contexto.empresa_id)
+        empresa = Empresa.objects.select_for_update(no_key=True).get(
+            pk=contexto.empresa_id,
+        )
         _administrador_bloqueado(request)
         configuracao = ConfiguracaoFidelidadeEmpresa.objects.filter(empresa=empresa).first()
         if configuracao is None:
@@ -302,13 +391,43 @@ def salvar_configuracao_empresa(request, *, pontos_por_real, validade_pontos_mes
         configuracao.incremento_resgate_pontos = incremento_resgate_pontos
         configuracao.valor_monetario_por_ponto = valor_monetario_por_ponto
         configuracao.periodo_cliente_ativo_dias = periodo_cliente_ativo_dias
+        if inatividade_suspende_beneficios_nivel is not None:
+            configuracao.inatividade_suspende_beneficios_nivel = (
+                inatividade_suspende_beneficios_nivel
+            )
+        if promocao_retorno_ativa is not None:
+            configuracao.promocao_retorno_ativa = promocao_retorno_ativa
+        if beneficio_primeira_compra_apos_inatividade is not None:
+            configuracao.beneficio_primeira_compra_apos_inatividade = (
+                beneficio_primeira_compra_apos_inatividade
+            )
+        if modo_combinacao_descontos_percentuais is not None:
+            configuracao.modo_combinacao_descontos_percentuais = (
+                modo_combinacao_descontos_percentuais
+            )
+        if ordem_aplicacao_resgate is not None:
+            configuracao.ordem_aplicacao_resgate = ordem_aplicacao_resgate
+        if base_calculo_pontos is not None:
+            configuracao.base_calculo_pontos = base_calculo_pontos
+        if modo_aplicacao_nivel is not None:
+            configuracao.modo_aplicacao_nivel = modo_aplicacao_nivel
+        if bonus_pontos_retorno_percentual is not None:
+            configuracao.bonus_pontos_retorno_percentual = (
+                bonus_pontos_retorno_percentual
+            )
+        if desconto_retorno_percentual is not None:
+            configuracao.desconto_retorno_percentual = (
+                desconto_retorno_percentual
+            )
         configuracao.save()
         return configuracao
 
 
 def loja_para_configuracao(request, loja_id):
     membro = exigir_administrador(request)
-    loja = Loja.objects.filter(pk=loja_id, empresa_id=membro.empresa_id).select_related("empresa").first()
+    loja = Loja.objects.filter(pk=loja_id, empresa_id=membro.empresa_id).select_related(
+        "empresa",
+    ).first()
     if loja is None:
         raise PermissionDenied("Loja não autorizada neste contexto.")
     return loja
@@ -355,12 +474,21 @@ def validar_lojas_credencial(empresa, escopo, lojas):
         raise ValidationError({"escopo": "Escopo inválido."})
     ids = {loja.pk for loja in lojas}
     if escopo == CredencialIntegracao.Escopo.EMPRESA and ids:
-        raise ValidationError({"lojas": "Credencial EMPRESA não recebe seleção de Lojas."})
+        raise ValidationError(
+            {"lojas": "Credencial EMPRESA não recebe seleção de Lojas."},
+        )
     if escopo == CredencialIntegracao.Escopo.LOJAS and not ids:
         raise ValidationError({"lojas": "Selecione ao menos uma Loja."})
-    selecionadas = list(Loja.objects.filter(pk__in=ids, empresa_id=empresa.pk).order_by("nome", "pk"))
+    selecionadas = list(
+        Loja.objects.filter(pk__in=ids, empresa_id=empresa.pk).order_by(
+            "nome",
+            "pk",
+        ),
+    )
     if len(selecionadas) != len(ids):
-        raise ValidationError({"lojas": "Todas as Lojas devem pertencer à Empresa ativa."})
+        raise ValidationError(
+            {"lojas": "Todas as Lojas devem pertencer à Empresa ativa."},
+        )
     return selecionadas
 
 
@@ -371,12 +499,19 @@ def criar_credencial(request, *, nome, escopo, lojas=()):
         selecionadas = validar_lojas_credencial(criador.empresa, escopo, lojas)
         identificador, segredo = gerar_chave_integracao()
         credencial = CredencialIntegracao.objects.create(
-            empresa_id=criador.empresa_id, criada_por=criador, nome=nome,
-            identificador=identificador, segredo_hash=make_password(segredo), escopo=escopo,
+            empresa_id=criador.empresa_id,
+            criada_por=criador,
+            nome=nome,
+            identificador=identificador,
+            segredo_hash=make_password(segredo),
+            escopo=escopo,
         )
         with _permitir_acessos_iniciais(credencial, selecionadas):
             for loja in selecionadas:
-                CredencialAcessoLoja.objects.create(credencial=credencial, loja=loja)
+                CredencialAcessoLoja.objects.create(
+                    credencial=credencial,
+                    loja=loja,
+                )
         # A chave é um retorno efêmero, nunca atributo do model ou dado de sessão.
         return credencial, f"{identificador}.{segredo}"
 
@@ -385,7 +520,8 @@ def desativar_credencial(request, credencial_id):
     with transaction.atomic():
         administrador = _administrador_bloqueado(request)
         credencial = CredencialIntegracao.objects.select_for_update().filter(
-            pk=credencial_id, empresa_id=administrador.empresa_id,
+            pk=credencial_id,
+            empresa_id=administrador.empresa_id,
         ).first()
         if credencial is None:
             raise PermissionDenied("Credencial não autorizada neste contexto.")
@@ -402,7 +538,9 @@ def autenticar_credencial(chave):
     identificador, segredo = chave.split(".")
     with transaction.atomic():
         # O mesmo lock da desativação evita restaurar estado obsoleto ao registrar uso.
-        credencial = CredencialIntegracao.objects.select_for_update().filter(identificador=identificador).first()
+        credencial = CredencialIntegracao.objects.select_for_update().filter(
+            identificador=identificador,
+        ).first()
         if credencial is None:
             # Custo do hasher também para identificadores inexistentes.
             make_password(segredo)

@@ -17,15 +17,39 @@ class EventoFidelidadeForm(FormularioCompostoMixin, forms.Form):
     )
     nome = forms.CharField(label='Nome', max_length=255)
     descricao = forms.CharField(label='Descrição', required=False, widget=forms.Textarea)
-    inicio_em = forms.DateTimeField(label='Início', widget=forms.DateTimeInput(attrs={'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M'))
-    fim_em = forms.DateTimeField(label='Fim', widget=forms.DateTimeInput(attrs={'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M'))
-    escopo = forms.ChoiceField(label='Aplicação', choices=[('EMPRESA', 'Toda a empresa'), ('LOJAS', 'Lojas específicas')],
-                              widget=forms.Select(attrs={'data-campaign-application': ''}))
-    lojas = forms.ModelMultipleChoiceField(label='Lojas', queryset=Loja.objects.none(), required=False,
-                                          widget=forms.CheckboxSelectMultiple(attrs={'class': 'retorna-store-choices'}),
-                                          help_text='Selecione uma ou mais lojas quando a aplicação for em lojas específicas.')
-    multiplicador = forms.DecimalField(label='Multiplicador de pontos', max_digits=12, decimal_places=4,
-                                      min_value=Decimal('0.0001'), help_text='1,00 = pontos normais; 1,50 = 50% a mais; 2,00 = dobro de pontos.')
+    inicio_em = forms.DateTimeField(
+        label='Início',
+        widget=forms.DateTimeInput(
+            attrs={'type': 'datetime-local'},
+            format='%Y-%m-%dT%H:%M',
+        ),
+    )
+    fim_em = forms.DateTimeField(
+        label='Fim',
+        widget=forms.DateTimeInput(
+            attrs={'type': 'datetime-local'},
+            format='%Y-%m-%dT%H:%M',
+        ),
+    )
+    escopo = forms.ChoiceField(
+        label='Aplicação',
+        choices=[('EMPRESA', 'Toda a empresa'), ('LOJAS', 'Lojas específicas')],
+        widget=forms.Select(attrs={'data-campaign-application': ''}),
+    )
+    lojas = forms.ModelMultipleChoiceField(
+        label='Lojas',
+        queryset=Loja.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'retorna-store-choices'}),
+        help_text='Selecione uma ou mais lojas quando a aplicação for em lojas específicas.',
+    )
+    multiplicador = forms.DecimalField(
+        label='Multiplicador de pontos',
+        max_digits=12,
+        decimal_places=4,
+        min_value=Decimal('0.0001'),
+        help_text='1,00 = pontos normais; 1,50 = 50% a mais; 2,00 = dobro de pontos.',
+    )
 
     selecao_lojas_campanha = True
 
@@ -38,13 +62,46 @@ class EventoFidelidadeForm(FormularioCompostoMixin, forms.Form):
     def clean(self):
         dados = super().clean()
         if 'escopo' in dados and 'lojas' in dados:
-            validar_escopo_evento(self.empresa, dados['escopo'], dados['lojas'])
+            validar_escopo_evento(
+                self.empresa,
+                dados['escopo'],
+                dados['lojas'],
+            )
         return dados
 
 
 class NivelFidelidadeForm(forms.Form):
     nome = forms.CharField(label='Nome', max_length=255, strip=True)
     pontos_minimos = forms.DecimalField(
-        label='Pontos mínimos', max_digits=24, decimal_places=4, min_value=Decimal('0'),
+        label='Pontos mínimos',
+        max_digits=24,
+        decimal_places=4,
+        min_value=Decimal('0'),
         help_text='Total histórico de pontos concedidos. O primeiro nível deve começar em zero.',
     )
+
+    bonus_pontos_percentual = forms.DecimalField(
+        label='Bônus de pontos (%)',
+        max_digits=7,
+        decimal_places=4,
+        min_value=Decimal('0'),
+        max_value=Decimal('100'),
+        required=False,
+        initial=Decimal('0'),
+    )
+    desconto_percentual = forms.DecimalField(
+        label='Desconto nas compras (%)',
+        max_digits=7,
+        decimal_places=4,
+        min_value=Decimal('0'),
+        max_value=Decimal('100'),
+        required=False,
+        initial=Decimal('0'),
+    )
+
+    def clean(self):
+        dados = super().clean()
+        for campo in ('bonus_pontos_percentual', 'desconto_percentual'):
+            if campo in dados and dados[campo] is None:
+                dados[campo] = Decimal('0')
+        return dados
