@@ -1,3 +1,4 @@
+import { bindNavigationSearch } from "./retorna/navigation-search.js";
 import { bindAppearance } from "./retorna/appearance.js";
 import "../styles/retorna.scss";
 import { bindGentelellaShell } from "./integrations/gentelella/shell.js";
@@ -16,3 +17,5 @@ bindIntegracaoForm();
 bindCampaignScope();
 bindInviteShare();
 bindComposedForms();
+
+bindNavigationSearch();

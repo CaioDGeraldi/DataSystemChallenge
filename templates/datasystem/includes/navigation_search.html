@@ -1,0 +1,14 @@
+<div class="retorna-navigation-search" data-navigation-search hidden>
+  <button type="button" class="button button--secondary" data-navigation-search-trigger aria-label="Buscar na Gestão" aria-keyshortcuts="Alt+K" aria-controls="navigation-search-panel" aria-expanded="false">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg>
+    <span class="retorna-search-label">Buscar na Gestão…</span><kbd>Alt + K</kbd>
+  </button>
+  <div class="retorna-search-panel" id="navigation-search-panel" data-navigation-search-panel hidden>
+    <label for="navigation-search-input">Buscar destino na Gestão</label>
+    <input id="navigation-search-input" type="search" autocomplete="off" data-navigation-search-input aria-controls="navigation-search-results">
+    <ul id="navigation-search-results" aria-label="Destinos da Gestão">
+      {% for item in gestao.navegacao %}<li data-navigation-search-item><a href="{{ item.url }}">{{ item.nome }}</a></li>{% endfor %}
+    </ul>
+    <p data-navigation-search-status role="status" aria-live="polite"></p>
+  </div>
+</div>

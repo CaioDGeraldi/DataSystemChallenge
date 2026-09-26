@@ -98,3 +98,5 @@ assert.ok(home.includes("url 'usuarios:para_empresas'"));
 assert.ok(!home.includes('illustration.html'));
 assert.ok(!business.includes('illustration.html'));
 console.log('Landings, uso restrito ao onboarding, SVGs light/dark locais e linguagem pública: OK.');
+
+await import('./validate-navigation.mjs');

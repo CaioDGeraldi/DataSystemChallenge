@@ -12,6 +12,7 @@
       </ol>
     </nav>
   </div>
+  {% include "datasystem/includes/navigation_search.html" %}
   <div class="topbar-right"><div class="retorna-user-menu">
     <button class="retorna-user-trigger" type="button" aria-label="Menu de {{ user.get_full_name }}" aria-controls="retorna-user-dropdown" aria-expanded="false" data-user-menu-trigger>
       <span class="tb-avatar" aria-hidden="true">{{ user.get_full_name|first|upper }}</span><span class="retorna-user-name">{{ user.get_full_name }}</span><span aria-hidden="true">⌄</span>

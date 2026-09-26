@@ -168,3 +168,32 @@ Logout continua POST para autenticados. Footer inclui Para empresas e crédito
 Storyset na superfície ilustrada. Layouts usam tokens dos dois temas, cards fluidos,
 ações com alvo mínimo de 44px e quebra para telas estreitas. Revisar manualmente
 390/600/768/1024/1440px, incluindo escala de texto 120%.
+
+## Configuração e busca de navegação (#73)
+
+A configuração corporativa ativa `data-form-sections`: os títulos são botões
+nativos com `aria-controls` e `aria-current="step"`, navegáveis com Tab e
+Enter/Espaço. O foco segue para a legenda da seção aberta. Anterior/Próximo são
+auxiliares e não bloqueiam a navegação por campos inválidos. Há um único submit
+disponível em todas as seções, com validação de todos os campos. Erros do servidor abrem a
+primeira seção inválida e são indicados também por texto nos títulos.
+
+Somente essa tela deixa de oferecer Exibir tudo e ignora a preferência global de
+modo inicial. Sem JS, a barra fica oculta e todos os campos e o submit continuam
+acessíveis. Demais formulários mantêm seu comportamento anterior.
+
+A topbar de Gestão oferece busca de destinos renderizados por `gestao.navegacao`,
+a mesma coleção da sidebar. Não há catálogo duplicado no JS nem consulta a dados
+de negócio. O filtro aceita partes do nome, maiúsculas/minúsculas e nomes sem
+acentos. Alt+K abre/foca; setas percorrem os links; Enter navega; Escape fecha e
+retorna ao acionador. Clique fora ou saída de foco fecham o painel. O atalho não
+intercepta composição de texto, AltGr, campos editáveis externos ou diálogo aberto.
+
+Em telas estreitas o acionador mostra só a lupa e o painel ocupa a largura útil,
+sem remover breadcrumb ou identidade. Sem JS, a busca não é exposta e a sidebar
+permanece o caminho de navegação. Autorização continua nas views existentes.
+
+`validate-interface.mjs` inclui `validate-navigation.mjs`, que exercita os handlers
+com um DOM mínimo simulado: seções diretas, valores preservados, navegação auxiliar,
+erros, busca e teclado. Isso complementa os testes Django de HTML/permissões e não
+substitui revisão manual em navegador com teclado e leitor de tela.

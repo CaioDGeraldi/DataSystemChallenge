@@ -201,3 +201,7 @@ td p { margin: var(--space-2) 0 0; color: var(--text-muted); }
 .retorna-public-nav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .retorna-public-nav a { display: inline-flex; align-items: center; min-height: 44px; }
 .retorna-landing .form-actions > a { display: inline-flex; align-items: center; min-height: 44px; }
+
+.retorna-section-trigger { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 8px; text-align: start; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--control-border); border-radius: var(--radius); }
+.retorna-section-trigger[aria-current='step'] { font-weight: 700; border-bottom: 4px solid var(--primary); background: var(--surface-secondary); }
+.retorna-section-trigger[aria-current='step'] .retorna-stepper-number { background: var(--primary); color: var(--primary-text); }
