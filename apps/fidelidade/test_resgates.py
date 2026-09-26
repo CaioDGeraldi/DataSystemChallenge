@@ -235,7 +235,7 @@ class ResgateDominioTests(DadosResgates, TestCase):
         self.instante += timedelta(days=800)
         with ExitStack() as stack:
             for alvo in ('resolver_configuracao', 'calcular_desconto', '_selecionar_lotes_fefo',
-                         '_calcular_saldo_sob_lock', '_criar_alocacoes'):
+                         '_calcular_saldo', '_criar_alocacoes'):
                 stack.enter_context(patch(f'apps.fidelidade.resgates.{alvo}', side_effect=AssertionError(alvo)))
             stack.enter_context(patch.object(Resgate, 'save', side_effect=AssertionError('Retry não salva')))
             retry, criado = self.resgatar(credencial=outra, identificador_externo=' RESGATE-001 ',

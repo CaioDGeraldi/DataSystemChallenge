@@ -21,3 +21,7 @@ class RegistrarResgateSchema(OpenApiSerializerExtension):
         schema = auto_schema._map_serializer(self.target, direction, bypass_extensions=True)
         schema['additionalProperties'] = False
         return schema
+
+
+class SimularResgateSchema(RegistrarResgateSchema):
+    target_class = 'apps.api.serializers.SimularResgateSerializer'

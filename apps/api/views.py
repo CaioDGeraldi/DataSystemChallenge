@@ -11,7 +11,7 @@ from apps.empresas.services import lojas_autorizadas
 from apps.fidelidade.consultas import consultar_fidelidade_cliente
 from apps.fidelidade.services import registrar_compra
 from apps.fidelidade.simulacoes import simular_compra
-from apps.fidelidade.resgates import registrar_resgate
+from apps.fidelidade.resgates import registrar_resgate, simular_resgate
 
 from .exceptions import envelope_erro
 from .serializers import ContextoSerializer, EnvelopeErroSerializer, HealthSerializer
@@ -19,6 +19,7 @@ from .serializers import ConsultaFidelidadeQuerySerializer, FidelidadeClienteSer
 from .serializers import CompraSerializer, RegistrarCompraSerializer
 from .serializers import SimularCompraSerializer, SimulacaoCompraSerializer
 from .serializers import RegistrarResgateSerializer, ResgateSerializer
+from .serializers import SimularResgateSerializer, SimulacaoResgateSerializer
 
 
 class HealthView(APIView):
@@ -178,6 +179,30 @@ class CompraView(APIView):
         entrada.is_valid(raise_exception=True)
         compra, criada = registrar_compra(credencial=request.auth, **entrada.validated_data)
         return Response(CompraSerializer(compra).data, status=201 if criada else 200)
+
+
+@method_decorator(never_cache, name='dispatch')
+class SimulacaoResgateView(APIView):
+    http_method_names = ['post', 'options']
+
+    @extend_schema(
+        request=SimularResgateSerializer,
+        responses={
+            200: OpenApiResponse(SimulacaoResgateSerializer, description='Simulação sem persistência ou reserva de saldo.'),
+            400: OpenApiResponse(EnvelopeErroSerializer, description='requisicao_invalida, pontos_abaixo_do_minimo, incremento_resgate_invalido ou saldo_insuficiente'),
+            401: OpenApiResponse(EnvelopeErroSerializer, description='credencial_invalida'),
+            403: OpenApiResponse(EnvelopeErroSerializer, description='loja_fora_do_escopo'),
+            404: OpenApiResponse(EnvelopeErroSerializer, description='cliente_nao_encontrado'),
+            405: OpenApiResponse(EnvelopeErroSerializer, description='metodo_nao_permitido'),
+        },
+        description=('Simula Resgate com configuração e saldo atuais, sem locks, snapshot ou reserva. '
+                     'O Resgate real recalcula e revalida todas as regras.'),
+    )
+    def post(self, request):
+        entrada = SimularResgateSerializer(data=request.data)
+        entrada.is_valid(raise_exception=True)
+        dados = simular_resgate(credencial=request.auth, **entrada.validated_data)
+        return Response(SimulacaoResgateSerializer(dados).data)
 
 
 @method_decorator(never_cache, name='dispatch')

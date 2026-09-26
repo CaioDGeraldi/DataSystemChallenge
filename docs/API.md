@@ -6,7 +6,7 @@ A API REST é uma interface de primeira classe do DataSystemChallenge. Ela exist
 
 A API utiliza Django REST Framework sobre a mesma camada de domínio utilizada pela interface web.
 
-A F2.06 entrega credenciais de integração, health, contexto e OpenAPI. A F3.01 acrescenta registro de Compra e idempotência; a F3.02 acrescenta cálculo base de pontos e LotePontos histórico. A F3.03 acrescenta campanhas temporárias com multiplicador de pontos. A F3.04 acrescenta Resgate idempotente com consumo de Lotes e desconto histórico. A F3.06B acrescenta consulta autenticada do estado atual de fidelidade do Cliente para integrações. A F3.06C acrescenta simulação de Compra sem persistência para o PDV consultar os efeitos atuais de fidelidade antes de finalizar a venda.
+A F2.06 entrega credenciais de integração, health, contexto e OpenAPI. A F3.01 acrescenta registro de Compra e idempotência; a F3.02 acrescenta cálculo base de pontos e LotePontos histórico. A F3.03 acrescenta campanhas temporárias com multiplicador de pontos. A F3.04 acrescenta Resgate idempotente com consumo de Lotes e desconto histórico. A F3.06B acrescenta consulta autenticada do estado atual de fidelidade do Cliente para integrações. A F3.06C acrescenta simulação de Compra sem persistência para o PDV consultar os efeitos atuais de fidelidade antes de finalizar a venda. A F3.06D acrescenta simulação de Resgate sem persistência ou reserva de saldo.
 
 ```text
 Django Templates ─┐
@@ -45,6 +45,7 @@ GET  /api/v1/contexto/
 GET  /api/v1/clientes/fidelidade/
 POST /api/v1/compras/simular/
 POST /api/v1/compras/
+POST /api/v1/resgates/simular/
 POST /api/v1/resgates/
 ```
 
@@ -529,6 +530,62 @@ Rotas web, com CSRF nos POSTs:
 
 Como no restante do domínio, `QuerySet.update`, bulk e SQL bruto podem contornar validações; não são caminhos normais de escrita. Nenhum trigger foi criado.
 
+## Simulação de Resgate — F3.06D
+
+```http
+POST /api/v1/resgates/simular/
+X-API-Key: <identificador>.<segredo>
+Content-Type: application/json
+```
+
+Entrada estrita, com exatamente os três campos obrigatórios:
+
+```json
+{
+  "loja_id": 1,
+  "cliente_cpf": "52998224725",
+  "pontos": 100
+}
+```
+
+`loja_id` deve ser inteiro positivo, seguindo a validação existente da API. O CPF segue a validação existente, inclusive normalização da máscara. `pontos` usa o mesmo contrato físico do Resgate real: inteiro JSON entre 1 e 99999999999999999999, sem float, string ou booleano. Campos extras são rejeitados, inclusive `identificador_externo`, `resgatado_em`, `ocorrida_em`, `valor_desconto`, `valor_monetario_por_ponto`, `saldo` e qualquer backdating ou valor calculado pelo consumidor.
+
+Sucesso: HTTP 200, com `Cache-Control: no-store`.
+
+```json
+{
+  "cliente": {
+    "cpf": "52998224725",
+    "nome": "Ana Silva"
+  },
+  "simulada_em": "2026-09-26T15:00:00-03:00",
+  "pontos_resgatados": 100,
+  "valor_desconto": "5.00",
+  "saldo": {
+    "atual": "250.0000",
+    "projetado": "150.0000"
+  }
+}
+```
+
+O servidor fixa um único instante para a simulação e resolve a configuração efetiva Empresa/Loja. Exige `pontos >= resgate_minimo_pontos` e exatamente `(pontos - resgate_minimo_pontos) % incremento_resgate_pontos == 0`. O desconto é calculado autoritativamente pelo backend com o mesmo cálculo do Resgate real: pontos multiplicados pela taxa efetiva, limites financeiros existentes e arredondamento HALF_UP em centavos.
+
+`saldo.atual` soma as concessões dos Lotes do Cliente com `expira_em > simulada_em`, descontando as alocações já persistidas nesses Lotes. Lotes expirados no próprio instante não contam; Lotes persistidos com aquisição futura continuam contando se ainda válidos, conforme a semântica do Resgate real. `saldo.projetado` é o saldo atual menos os pontos solicitados. Ambos são strings com quatro casas decimais; pontos resgatados são inteiro JSON. Histórico com consumo acima da concessão é uma inconsistência de histórico, distinta de saldo insuficiente.
+
+A operação apenas lê o estado momentâneo: não cria Resgate, AlocacaoResgate ou snapshot, não consome Lotes, não usa idempotência, não toma locks de Resgate e não reserva saldo. Alterações concorrentes podem tornar a projeção obsoleta. O Resgate real obrigatoriamente recalcula e revalida saldo, configuração e desconto, mantendo sua atomicidade e seus locks.
+
+A autorização segue o Resgate real: escopo EMPRESA ou LOJAS. Loja inexistente ou fora do escopo retorna a mesma resposta 403, sem revelar existência. Cliente inexistente ou vinculado apenas a outro tenant retorna 404. A resposta não expõe Lotes, alocações nem outros detalhes internos.
+
+| HTTP | Código |
+| --- | --- |
+| 400 | `requisicao_invalida`, `pontos_abaixo_do_minimo`, `incremento_resgate_invalido` ou `saldo_insuficiente` |
+| 401 | `credencial_invalida` |
+| 403 | `loja_fora_do_escopo` |
+| 404 | `cliente_nao_encontrado` |
+| 405 | `metodo_nao_permitido` |
+
+Somente POST e OPTIONS são aceitos; GET, PUT, PATCH e DELETE retornam 405. O OpenAPI documenta o POST, autenticação e todas essas respostas.
+
 ## Resgate e consumo de Lotes — F3.04
 
 ```http
@@ -753,9 +810,9 @@ As três rotas são públicas no MVP:
 /api/redoc/       -> ReDoc
 ```
 
-O schema pode ser obtido como JSON com `Accept: application/vnd.oai.openapi+json`; YAML também está disponível. Ele descreve health, contexto, `POST /api/v1/compras/` e `POST /api/v1/resgates/`, sem endpoints futuros. Compra possui serializers reais de request/response, incluindo `fidelidade` nullable com pontos em strings de quatro casas e expiração. Resgate descreve pontos inteiros, desconto como string decimal, rejeição de campos extras e ausência de backdating. Ambos documentam respostas `201`, `200`, `400`, `401`, `403`, `404`, `409` e `405`.
+O schema pode ser obtido como JSON com `Accept: application/vnd.oai.openapi+json`; YAML também está disponível. Ele descreve health, contexto, consulta de fidelidade, simulações de Compra e Resgate, `POST /api/v1/compras/` e `POST /api/v1/resgates/`, sem endpoints futuros. A simulação de Resgate documenta entrada estrita e respostas `200`, `400`, `401`, `403`, `404` e `405`. Compra possui serializers reais de request/response, incluindo `fidelidade` nullable com pontos em strings de quatro casas e expiração. Resgate descreve pontos inteiros, desconto como string decimal, rejeição de campos extras e ausência de backdating. Ambos documentam respostas `201`, `200`, `400`, `401`, `403`, `404`, `409` e `405`.
 
-O security scheme se chama `X-API-Key`, com `type: apiKey`, `in: header` e `name: X-API-Key`. Health não exige autenticação; contexto, Compra e Resgate exigem esse scheme. No Swagger, use **Authorize** e informe a chave completa `<identificador>.<segredo>` para testar os endpoints protegidos. A autorização não é persistida pelo Swagger entre carregamentos. Documentação pública não concede acesso aos dados.
+O security scheme se chama `X-API-Key`, com `type: apiKey`, `in: header` e `name: X-API-Key`. Health não exige autenticação; contexto, consulta de fidelidade, simulações, Compra e Resgate exigem esse scheme. No Swagger, use **Authorize** e informe a chave completa `<identificador>.<segredo>` para testar os endpoints protegidos. A autorização não é persistida pelo Swagger entre carregamentos. Documentação pública não concede acesso aos dados.
 
 ## Documentação conceitual
 
