@@ -312,3 +312,33 @@ class SimulacaoCompraSerializer(serializers.Serializer):
     promocao_retorno = PromocaoRetornoConsultaSerializer()
     valores = ValoresSimulacaoSerializer()
     pontos = PontosSimulacaoSerializer()
+
+
+class SimularResgateSerializer(serializers.Serializer):
+    loja_id = serializers.IntegerField(min_value=1)
+    cliente_cpf = serializers.CharField()
+    pontos = PontosResgateField(min_value=1, max_value=MAX_PONTOS_RESGATE)
+
+    validate_cliente_cpf = RegistrarCompraSerializer.validate_cliente_cpf
+
+    def to_internal_value(self, data):
+        if isinstance(data, dict):
+            extras = set(data) - set(self.fields)
+            if extras:
+                raise serializers.ValidationError({
+                    campo: 'Campo não permitido na simulação de Resgate.' for campo in extras
+                })
+        return super().to_internal_value(data)
+
+
+class SaldoSimulacaoResgateSerializer(serializers.Serializer):
+    atual = serializers.CharField()
+    projetado = serializers.CharField()
+
+
+class SimulacaoResgateSerializer(serializers.Serializer):
+    cliente = ClienteFidelidadeSerializer()
+    simulada_em = serializers.DateTimeField()
+    pontos_resgatados = PontosResgateField(min_value=1, max_value=MAX_PONTOS_RESGATE)
+    valor_desconto = serializers.DecimalField(max_digits=32, decimal_places=2, coerce_to_string=True)
+    saldo = SaldoSimulacaoResgateSerializer()

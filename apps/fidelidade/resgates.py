@@ -1,4 +1,4 @@
-"""Resgate atômico: advisory da chave → Cliente → Lotes FEFO (PostgreSQL)."""
+"""Resgate atômico com locks FEFO e simulação somente leitura das mesmas regras."""
 from decimal import Context, Decimal, localcontext
 from hashlib import sha256
 
@@ -41,15 +41,18 @@ def _comparar_retry(existente, *, loja_id, cliente_id, identificador, pontos):
     return existente, False
 
 
-def _selecionar_lotes_fefo(cliente, instante):
+def _selecionar_lotes_fefo(cliente, instante, *, travar=True):
     # Sem joins no lock: somente os Lotes são travados, na ordem de consumo.
-    return list(LotePontos.objects.select_for_update().filter(
+    lotes = LotePontos.objects.filter(
         cliente_id=cliente.pk, expira_em__gt=instante,
-    ).order_by('expira_em', 'adquiridos_em', 'pk'))
+    ).order_by('expira_em', 'adquiridos_em', 'pk')
+    if travar:
+        lotes = lotes.select_for_update()
+    return list(lotes)
 
 
-def _calcular_saldo_sob_lock(lotes):
-    """Somente após lock do Cliente e de todos os Lotes recebidos."""
+def _calcular_saldo(lotes):
+    """Deriva saldo e restantes; o chamador define a garantia de concorrência."""
     consumos = dict(AlocacaoResgate.objects.filter(lote_id__in=[lote.pk for lote in lotes])
                     .values('lote_id').annotate(total=Sum('pontos_consumidos')).values_list('lote_id', 'total'))
     restantes = []
@@ -82,15 +85,34 @@ def _criar_alocacoes(resgate, restantes):
             raise ValidationError('As alocações não completam os pontos do Resgate.')
 
 
+def _avaliar_resgate(lotes, politica, pontos, quantidade):
+    # O request já foi validado como int; módulo inteiro não depende do
+    # contexto Decimal do chamador. Quantidade Decimal é usada na persistência.
+    if pontos < politica.resgate_minimo_pontos:
+        raise PontosAbaixoDoMinimo
+    if (pontos - politica.resgate_minimo_pontos) % politica.incremento_resgate_pontos:
+        raise IncrementoResgateInvalido
+    saldo, restantes = _calcular_saldo(lotes)
+    if saldo < quantidade:
+        raise SaldoInsuficiente
+    desconto = calcular_desconto(quantidade, politica.valor_monetario_por_ponto)
+    return saldo, restantes, desconto
+
+
+def _autorizar_loja(credencial, loja_id):
+    loja = Loja.objects.select_related("empresa").filter(pk=loja_id).first()
+    if loja is None:
+        raise LojaForaDoEscopo
+    try:
+        loja = exigir_loja_autorizada(credencial, loja)
+    except PermissionDenied:
+        raise LojaForaDoEscopo from None
+    return loja
+
+
 def registrar_resgate(*, credencial, loja_id, cliente_cpf, identificador_externo, pontos):
     with transaction.atomic():
-        loja = Loja.objects.filter(pk=loja_id).first()
-        if loja is None:
-            raise LojaForaDoEscopo
-        try:
-            loja = exigir_loja_autorizada(credencial, loja)
-        except PermissionDenied:
-            raise LojaForaDoEscopo from None
+        loja = _autorizar_loja(credencial, loja_id)
         identificador = normalizar_identificador_resgate(identificador_externo)
         quantidade = validar_pontos_solicitados(pontos)
         cpf = normalizar_cpf(cliente_cpf)
@@ -111,16 +133,7 @@ def registrar_resgate(*, credencial, loja_id, cliente_cpf, identificador_externo
         instante = timezone.now()  # Único instante da operação nova, após espera pelo Cliente.
         lotes = _selecionar_lotes_fefo(cliente, instante)
         politica = resolver_configuracao(loja.empresa, loja)
-        # O request já foi validado como int; módulo inteiro não depende do
-        # contexto Decimal do chamador. Quantidade Decimal é usada na persistência.
-        if pontos < politica.resgate_minimo_pontos:
-            raise PontosAbaixoDoMinimo
-        if (pontos - politica.resgate_minimo_pontos) % politica.incremento_resgate_pontos:
-            raise IncrementoResgateInvalido
-        saldo, restantes = _calcular_saldo_sob_lock(lotes)
-        if saldo < quantidade:
-            raise SaldoInsuficiente
-        desconto = calcular_desconto(quantidade, politica.valor_monetario_por_ponto)
+        saldo, restantes, desconto = _avaliar_resgate(lotes, politica, pontos, quantidade)
         resgate = Resgate(
             loja=loja, cliente=cliente, credencial_origem_id=credencial.pk,
             identificador_externo=identificador, pontos_resgatados=quantidade,
@@ -145,3 +158,28 @@ def registrar_resgate(*, credencial, loja_id, cliente_cpf, identificador_externo
         if total != quantidade:
             raise ValidationError('A soma das alocações deve corresponder aos pontos do Resgate.')
         return resgate, True
+
+def simular_resgate(*, credencial, loja_id, cliente_cpf, pontos):
+    """Leitura momentânea, sem locks, persistência, idempotência ou reserva."""
+    instante = timezone.now()
+    loja = _autorizar_loja(credencial, loja_id)
+    quantidade = validar_pontos_solicitados(pontos)
+    cpf = normalizar_cpf(cliente_cpf)
+    validar_cpf(cpf)
+    cliente = Cliente.objects.select_related('usuario').filter(
+        empresa_id=loja.empresa_id, usuario__cpf=cpf,
+    ).first()
+    if cliente is None:
+        raise ClienteNaoEncontrado
+    lotes = _selecionar_lotes_fefo(cliente, instante, travar=False)
+    politica = resolver_configuracao(loja.empresa, loja)
+    saldo, _, desconto = _avaliar_resgate(lotes, politica, pontos, quantidade)
+    with localcontext(Context(prec=40 + len(str(len(lotes))))):
+        projetado = saldo - quantidade
+    return {
+        'cliente': {'cpf': cliente.usuario.cpf, 'nome': cliente.usuario.get_full_name().strip()},
+        'simulada_em': instante,
+        'pontos_resgatados': pontos,
+        'valor_desconto': desconto,
+        'saldo': {'atual': format(saldo, '.4f'), 'projetado': format(projetado, '.4f')},
+    }
