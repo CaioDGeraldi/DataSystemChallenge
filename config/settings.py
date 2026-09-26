@@ -68,6 +68,7 @@ DATABASES = {
 
 AUTH_USER_MODEL = "usuarios.Usuario"
 LOGIN_URL = "usuarios:login"
+CSRF_FAILURE_VIEW = "config.views.csrf_failure"
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},

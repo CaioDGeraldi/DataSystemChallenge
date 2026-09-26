@@ -1,0 +1,39 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-BR" data-retorna-theme="light" data-retorna-font-scale="100">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>{% block titulo %}Erro — Retorna{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="{% static 'retorna/brand/retorna-icon.svg' %}">
+  <link rel="stylesheet" href="{% static 'retorna.css' %}">
+</head>
+<body class="retorna-public-page">
+  <a class="skip-link" href="#conteudo">Ir para o conteúdo</a>
+
+  <main id="conteudo" class="retorna-public-main" tabindex="-1">
+    <div class="page-wrapper">
+      <div class="retorna-main-content">
+        <section class="panel" aria-labelledby="titulo-erro">
+          <p class="eyebrow">Erro {% block codigo %}{% endblock %}</p>
+
+          <h1 id="titulo-erro">
+            {% block titulo_erro %}Não foi possível concluir a solicitação{% endblock %}
+          </h1>
+
+          <p>
+            {% block mensagem %}
+              Ocorreu um problema ao processar esta página.
+            {% endblock %}
+          </p>
+
+          <div class="form-actions">
+            <a class="button" href="/">Voltar ao início</a>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
