@@ -179,7 +179,7 @@ A implementação concreta será definida em Issue própria antes do código.
 
 ## Níveis de fidelidade — F3.05
 
-`NivelFidelidade` pertence a uma Empresa por FK obrigatória com `PROTECT`. Seus campos de configuração são `nome` e `pontos_minimos`. O nome é textual, não vazio após trim e tem limite de 255 caracteres, seguindo Empresa, Loja e Evento. Os pontos mínimos usam `Decimal(24,4)`, são não negativos e únicos por Empresa. Empresas diferentes podem usar os mesmos thresholds.
+`NivelFidelidade` pertence a uma Empresa por FK obrigatória com `PROTECT`. Seus campos de configuração são `nome`, `pontos_minimos` e, desde F3.06A, `bonus_pontos_percentual` e `desconto_percentual`. O nome é textual, não vazio após trim e tem limite de 255 caracteres, seguindo Empresa, Loja e Evento. Os pontos mínimos usam `Decimal(24,4)`, são não negativos e únicos por Empresa. Empresas diferentes podem usar os mesmos thresholds.
 
 Bronze, Prata e Ouro são exemplos de nomes configuráveis, não enums nem registros criados automaticamente. Uma Empresa poderia configurar Bronze em `0.0000`, Prata em `1000.0000` e Ouro em `5000.0000`; outra poderia escolher Standard e VIP. Não há seed FATECalçados nesta fase.
 
@@ -213,7 +213,34 @@ Escritas seguem o padrão de Eventos e parâmetros corporativos: `transaction.at
 
 O model restringe escrita aos services; os managers públicos bloqueiam update, bulk e delete direto. Como nas fases anteriores, SQL bruto e APIs internas do ORM ficam fora do contrato de escrita; não há trigger para a invariante agregada de existência do zero.
 
-Benefícios não estão implementados: nível não concede desconto automático, bônus, multiplicador ou conversão especial de Resgate. Também ficam fora desta fase API pública de níveis, área do Cliente, dashboard, janela temporal de qualificação, rebaixamento por inatividade e histórico de mudanças de nível.
+A F3.06A acrescenta os benefícios descritos abaixo. Permanecem fora desta entrega API pública de níveis, dashboard, janela temporal de qualificação, rebaixamento por inatividade e histórico de mudanças de nível.
+
+## Benefícios, atividade e retorno — F3.06A
+
+`avaliar_fidelidade_compra` é a função pura central de cálculo e retorna um dataclass imutável. Usa Decimal e contexto próprio. Nível e retorno possuem bônus de pontos e desconto independentes, com percentuais `Decimal(7,4)` de 0 a 100, protegidos por validators e constraints. Zero significa benefício não configurado; nomes dos níveis não participam das regras.
+
+A atividade considera a última Compra anterior à operação, com instante menor ou igual ao da Compra atual, excluindo a própria Compra. O limite de `periodo_cliente_ativo_dias` é inclusivo; acima dele há retorno. Sem Compra anterior não há promoção de retorno. Inatividade e Resgate não diminuem o progresso histórico. Compras retroativas não reescrevem operações posteriores: o progresso usa as concessões já persistidas no momento da operação.
+
+A suspensão de benefícios de nível é opcional. A primeira Compra mantém os benefícios do nível histórico inicial mesmo com suspensão ativa: `ativo_antes=False` e `retorno=False`, sem promoção de retorno; na primeira Compra após inatividade, `SEM_BENEFICIOS_NIVEL` ou `COM_BENEFICIOS_NIVEL` determina a aplicação. A promoção de retorno, quando ligada, aplica seus próprios percentuais independentemente dos benefícios de nível.
+
+A ordem de cálculo é:
+
+1. Consultar progresso histórico e nível anterior à Compra.
+2. Aplicar o desconto desse nível, quando elegível, e o desconto de retorno. `ADITIVO` soma percentuais com teto técnico de 100%; `SEQUENCIAL` aplica cada um sobre o restante.
+3. Aplicar o valor monetário do Resgate antes ou depois dos percentuais, conforme política, sem resultado negativo. O valor final é arredondado uma vez para centavos com HALF_UP, sem arredondar cada desconto intermediário.
+4. Escolher valor original (`BRUTO`) ou final (`LIQUIDO`) como base monetária dos pontos e multiplicar por pontos por real.
+5. Aplicar a campanha sobre pontos base. Para bônus de nível, usar o nível anterior (`ANTES_DA_COMPRA`) ou classificar provisoriamente progresso histórico + pontos base × campanha (`ATINGIDO_NA_COMPRA`). Essa classificação não inclui bônus do nível nem de retorno.
+6. Somar campanha, bônus de nível e bônus de retorno, estes dois calculados sobre os mesmos pontos base. Arredondar o total segundo precisão/modo corporativos.
+
+O desconto monetário sempre usa o nível anterior, inclusive no modo ATINGIDO_NA_COMPRA. O desconto do nível recém-atingido só pode valer na próxima Compra. Não há iteração nem dependência circular com LIQUIDO. Exemplo: base 100, campanha 2x, nível +20% e retorno +30% concedem 250 pontos.
+
+O parâmetro de Resgate existe somente no avaliador reutilizável. O fluxo atual de Compra passa desconto de Resgate zero; nenhuma relação Compra ↔ Resgate, liquidação financeira ou nova API é introduzida nesta fase.
+
+`LotePontos.beneficios_aplicados` guarda snapshot JSON versionado, com políticas, progresso anterior, última Compra, níveis considerados, percentuais aplicados e resultados monetários/pontos. A criação revalida sua consistência e o histórico segue imutável. Lotes antigos mantêm snapshot nulo e validação legada, sem backfill ou recálculo. A proveniência da campanha continua em `AplicacaoEfeitoEventoLote`.
+
+A escrita real de Compra mantém transação única e idempotência; antes da avaliação trava Empresa → Cliente e reconsulta a chave idempotente. Isso serializa a configuração corporativa e as compras da mesma Empresa, evitando duas promoções para o mesmo retorno. É uma escolha conservadora de concorrência: Empresas diferentes não compartilham esse lock. Retry devolve o fato original sem recalcular benefícios.
+
+Defaults compatíveis com dados anteriores: benefícios zero, promoção e suspensão desativadas, primeira Compra de retorno sem benefícios de nível quando a suspensão for ativada, combinação ADITIVO, Resgate depois dos percentuais, base BRUTO e nível anterior para bônus. A configuração corporativa mantém as seções existentes; benefícios individuais são editáveis no fluxo de Níveis. Override de Loja continua limitado a pontos por real.
 
 ## Eventos e campanhas
 
