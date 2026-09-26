@@ -12,7 +12,7 @@ _objetos_em_escrita = ContextVar('objetos_resgates_em_escrita', default=frozense
 @contextmanager
 def _permitir_escrita_resgates(*objetos):
     if not connection.in_atomic_block:
-        raise RuntimeError('A emissão de Resgate exige transação.')
+        raise RuntimeError('A escrita de histórico de Resgates exige transação.')
     token = _objetos_em_escrita.set(frozenset(id(objeto) for objeto in objetos))
     try:
         yield
@@ -22,4 +22,4 @@ def _permitir_escrita_resgates(*objetos):
 
 def _exigir_escrita_resgates(objeto):
     if not connection.in_atomic_block or id(objeto) not in _objetos_em_escrita.get():
-        raise ValidationError('Use registrar_resgate para criar Resgate e suas alocações completas.')
+        raise ValidationError('Use registrar_resgate ou estornar_resgate para criar o histórico pela operação correspondente.')

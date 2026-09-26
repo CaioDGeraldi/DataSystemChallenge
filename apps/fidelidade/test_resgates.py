@@ -19,6 +19,7 @@ from .exceptions import (
     ClienteNaoEncontrado, IdempotenciaConflitante, IncrementoResgateInvalido,
     LojaForaDoEscopo, PontosAbaixoDoMinimo, SaldoInsuficiente,
 )
+from .consumo import alocacoes_com_consumo_efetivo
 from .models import AlocacaoResgate, AplicacaoEfeitoEventoLote, Compra, LotePontos, Resgate
 from .resgates import registrar_resgate
 from .services import registrar_compra
@@ -59,7 +60,7 @@ class DadosResgates(DadosCompras):
             self.assertEqual(resgate.alocacoes.aggregate(total=Sum('pontos_consumidos'))['total'],
                              resgate.pontos_resgatados)
         for lote in LotePontos.objects.all():
-            total = lote.alocacoes_resgate.aggregate(total=Sum('pontos_consumidos'))['total'] or Decimal('0')
+            total = alocacoes_com_consumo_efetivo(lote.alocacoes_resgate.all()).aggregate(total=Sum('pontos_consumidos'))['total'] or Decimal('0')
             self.assertLessEqual(total, lote.pontos_concedidos)
 
 

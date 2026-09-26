@@ -20,3 +20,11 @@ class IncrementoResgateInvalido(Exception):
 
 class SaldoInsuficiente(Exception):
     pass
+
+
+class ResgateNaoEncontrado(Exception):
+    pass
+
+
+class ResgateJaEstornado(Exception):
+    pass

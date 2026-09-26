@@ -209,7 +209,7 @@ class GestaoNivelTests(DadosNiveis, TestCase):
                 '/api/v1/clientes/fidelidade/',
                 '/api/v1/compras/simular/',
                 '/api/v1/compras/',
-                '/api/v1/resgates/simular/', '/api/v1/resgates/',
+                '/api/v1/resgates/estornar/', '/api/v1/resgates/simular/', '/api/v1/resgates/',
             },
         )
         self.assertNotIn('NivelFidelidade', schema['components']['schemas'])

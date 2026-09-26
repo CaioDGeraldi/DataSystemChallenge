@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError as DomainValidationError
 from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.views import exception_handler as drf_exception_handler
 
+from apps.fidelidade.exceptions import ResgateNaoEncontrado, ResgateJaEstornado
 from apps.fidelidade.exceptions import ClienteNaoEncontrado, IdempotenciaConflitante, LojaForaDoEscopo
 from apps.fidelidade.exceptions import IncrementoResgateInvalido, PontosAbaixoDoMinimo, SaldoInsuficiente
 
@@ -25,6 +26,8 @@ def envelope_erro(status):
 
 def exception_handler(exc, context):
     erros_fidelidade = {
+        ResgateNaoEncontrado: (404, "resgate_nao_encontrado", "Resgate não encontrado."),
+        ResgateJaEstornado: (409, "resgate_ja_estornado", "Resgate já estornado."),
         PontosAbaixoDoMinimo: (400, 'pontos_abaixo_do_minimo', 'Pontos abaixo do mínimo para Resgate.'),
         IncrementoResgateInvalido: (400, 'incremento_resgate_invalido', 'Pontos incompatíveis com o incremento de Resgate.'),
         SaldoInsuficiente: (400, 'saldo_insuficiente', 'Saldo insuficiente para Resgate.'),

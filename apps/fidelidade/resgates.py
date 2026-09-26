@@ -18,6 +18,7 @@ from .exceptions import (
     ClienteNaoEncontrado, IdempotenciaConflitante, IncrementoResgateInvalido,
     LojaForaDoEscopo, PontosAbaixoDoMinimo, SaldoInsuficiente,
 )
+from .consumo import alocacoes_com_consumo_efetivo
 from .models import AlocacaoResgate, LotePontos, Resgate
 
 
@@ -53,7 +54,7 @@ def _selecionar_lotes_fefo(cliente, instante, *, travar=True):
 
 def _calcular_saldo(lotes):
     """Deriva saldo e restantes; o chamador define a garantia de concorrência."""
-    consumos = dict(AlocacaoResgate.objects.filter(lote_id__in=[lote.pk for lote in lotes])
+    consumos = dict(alocacoes_com_consumo_efetivo(AlocacaoResgate.objects.all()).filter(lote_id__in=[lote.pk for lote in lotes])
                     .values('lote_id').annotate(total=Sum('pontos_consumidos')).values_list('lote_id', 'total'))
     restantes = []
     # Cada Lote tem até 24 dígitos. A soma cresce com o número de Lotes.

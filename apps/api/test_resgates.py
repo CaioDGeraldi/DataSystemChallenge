@@ -140,7 +140,7 @@ class ResgateOpenAPITests(SimpleTestCase):
         self.assertEqual(set(schema['paths']), {'/api/v1/health/', '/api/v1/contexto/',
                                                '/api/v1/clientes/fidelidade/',
                                                '/api/v1/compras/simular/',
-                                               '/api/v1/compras/', '/api/v1/resgates/simular/', '/api/v1/resgates/'})
+                                               '/api/v1/compras/', '/api/v1/resgates/estornar/', '/api/v1/resgates/simular/', '/api/v1/resgates/'})
         rota = schema['paths']['/api/v1/resgates/']
         self.assertEqual(set(rota), {'post'})
         post = rota['post']

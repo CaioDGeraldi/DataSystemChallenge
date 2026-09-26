@@ -625,14 +625,14 @@ def _proteger_historico_eventos(sender, instance, **kwargs):
 
 class _HistoricoResgateQuerySet(models.QuerySet):
     def update(self, **kwargs):
-        raise ValidationError('Resgates e alocações são imutáveis.')
+        raise ValidationError('Resgates, alocações e estornos são imutáveis.')
 
     def bulk_update(self, objs, fields, batch_size=None):
-        raise ValidationError('Resgates e alocações são imutáveis.')
+        raise ValidationError('Resgates, alocações e estornos são imutáveis.')
 
     def bulk_create(self, objs, **kwargs):
         raise ValidationError(
-            'Use registrar_resgate para criar o histórico completo.',
+            'Use registrar_resgate ou estornar_resgate para criar o histórico completo.',
         )
 
 
@@ -860,11 +860,14 @@ class AlocacaoResgate(_RegistroResgate):
             )
         if lote.expira_em <= resgate.resgatado_em:
             raise ValidationError({'lote': 'Lote expirado no instante do Resgate.'})
+        from .consumo import alocacoes_com_consumo_efetivo
+
         # Os locks já pertencem ao service; não adquirir novos locks em ordem inversa.
         with localcontext(Context(prec=40)):
-            consumido = type(self).objects.filter(lote_id=lote.pk).aggregate(
+            consumido = alocacoes_com_consumo_efetivo(type(self).objects.filter(lote_id=lote.pk)).aggregate(
                 total=Sum('pontos_consumidos'),
             )['total'] or Decimal('0')
+            # Completude do fato original, não saldo: mantém todas as alocações.
             alocado = type(self).objects.filter(resgate_id=resgate.pk).aggregate(
                 total=Sum('pontos_consumidos'),
             )['total'] or Decimal('0')
@@ -882,13 +885,62 @@ class AlocacaoResgate(_RegistroResgate):
                 )
 
 
+class EstornoResgate(_RegistroResgate):
+    resgate = models.OneToOneField(Resgate, on_delete=models.PROTECT, related_name='estorno')
+    loja = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name='estornos_resgates')
+    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name='estornos_resgates')
+    credencial_origem = models.ForeignKey(
+        CredencialIntegracao, on_delete=models.PROTECT, related_name='estornos_resgates',
+    )
+    identificador_externo = models.CharField(max_length=255)
+    devolve_pontos_aplicado = models.BooleanField()
+    estornado_em = models.DateTimeField(editable=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['loja', 'identificador_externo'], name='estorno_resgate_loja_identificador_unico',
+            ),
+        ]
+
+    def clean_fields(self, exclude=None):
+        from .calculos_resgate import normalizar_identificador_resgate
+
+        if 'identificador_externo' not in (exclude or ()):
+            self.identificador_externo = normalizar_identificador_resgate(self.identificador_externo)
+        if 'devolve_pontos_aplicado' not in (exclude or ()) and type(self.devolve_pontos_aplicado) is not bool:
+            raise ValidationError({'devolve_pontos_aplicado': 'Informe um booleano.'})
+        if 'estornado_em' not in (exclude or ()):
+            if not isinstance(self.estornado_em, datetime) or timezone.is_naive(self.estornado_em):
+                raise ValidationError({'estornado_em': 'Informe uma data/hora com timezone.'})
+        super().clean_fields(exclude=exclude)
+
+    def clean(self):
+        super().clean()
+        self.clean_fields()
+        original = self._original()
+        if original is not None:
+            self._validar_historico(original)
+            return
+        from apps.empresas.services import exigir_loja_autorizada
+
+        resgate = Resgate.objects.get(pk=self.resgate_id)
+        if (self.loja_id, self.cliente_id) != (resgate.loja_id, resgate.cliente_id):
+            raise ValidationError('Loja e Cliente devem corresponder ao Resgate original.')
+        try:
+            exigir_loja_autorizada(self.credencial_origem, self.loja)
+        except PermissionDenied:
+            raise ValidationError({'credencial_origem': 'Credencial não autorizada para a Loja.'}) from None
+
+
+@receiver(pre_delete, sender=EstornoResgate)
 @receiver(pre_delete, sender=Resgate)
 @receiver(pre_delete, sender=AlocacaoResgate)
 def _proteger_historico_resgates(sender, instance, **kwargs):
     from django.db.models.deletion import ProtectedError
 
     raise ProtectedError(
-        'Resgates e alocações históricas não podem ser excluídos.',
+        'Resgates, alocações e estornos históricos não podem ser excluídos.',
         [instance],
     )
 

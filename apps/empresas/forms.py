@@ -146,6 +146,7 @@ class ConfiguracaoFidelidadeEmpresaForm(FormularioCompostoMixin, forms.ModelForm
         (
             'Resgate',
             (
+                'devolver_pontos_ao_estornar_resgate',
                 'resgate_minimo_pontos',
                 'incremento_resgate_pontos',
                 'valor_monetario_por_ponto',
@@ -157,6 +158,7 @@ class ConfiguracaoFidelidadeEmpresaForm(FormularioCompostoMixin, forms.ModelForm
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         rotulos = {
+            'devolver_pontos_ao_estornar_resgate': 'Devolver pontos válidos ao estornar resgate',
             'modo_aplicacao_nivel': 'Nível usado para bônus de pontos',
             'base_calculo_pontos': 'Valor usado para gerar pontos',
             'inatividade_suspende_beneficios_nivel': 'Suspender benefícios de nível durante inatividade',
@@ -187,6 +189,7 @@ class ConfiguracaoFidelidadeEmpresaForm(FormularioCompostoMixin, forms.ModelForm
             "precisao_pontos",
             "modo_arredondamento_pontos",
             "validade_pontos_meses",
+            "devolver_pontos_ao_estornar_resgate",
             "resgate_minimo_pontos",
             "incremento_resgate_pontos",
             "valor_monetario_por_ponto",

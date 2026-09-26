@@ -12,6 +12,7 @@ from apps.usuarios.validators import normalizar_cpf, validar_cpf
 
 from .beneficios import NivelBeneficios, avaliar_fidelidade_compra
 from .exceptions import ClienteNaoEncontrado, LojaForaDoEscopo
+from .consumo import alocacoes_com_consumo_efetivo
 from .models import AlocacaoResgate, Compra, LotePontos, NivelFidelidade
 
 
@@ -35,7 +36,7 @@ def _saldo_atual(cliente_id, instante):
         or ZERO
     )
     consumidos = (
-        AlocacaoResgate.objects.filter(
+        alocacoes_com_consumo_efetivo(AlocacaoResgate.objects.all()).filter(
             lote__cliente_id=cliente_id,
             lote__expira_em__gt=instante,
         ).aggregate(total=Sum("pontos_consumidos"))["total"]
