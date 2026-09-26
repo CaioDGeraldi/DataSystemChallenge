@@ -6,7 +6,7 @@ A API REST é uma interface de primeira classe do DataSystemChallenge. Ela exist
 
 A API utiliza Django REST Framework sobre a mesma camada de domínio utilizada pela interface web.
 
-A F2.06 entrega credenciais de integração, health, contexto e OpenAPI. A F3.01 acrescenta registro de Compra e idempotência; a F3.02 acrescenta cálculo base de pontos e LotePontos histórico. A F3.03 acrescenta campanhas temporárias com multiplicador de pontos. A F3.04 acrescenta Resgate idempotente com consumo de Lotes e desconto histórico. Cliente por API, consulta pública de saldo, bônus/descontos percentuais e níveis permanecem futuros.
+A F2.06 entrega credenciais de integração, health, contexto e OpenAPI. A F3.01 acrescenta registro de Compra e idempotência; a F3.02 acrescenta cálculo base de pontos e LotePontos histórico. A F3.03 acrescenta campanhas temporárias com multiplicador de pontos. A F3.04 acrescenta Resgate idempotente com consumo de Lotes e desconto histórico. A F3.06B acrescenta consulta autenticada do estado atual de fidelidade do Cliente para integrações.
 
 ```text
 Django Templates ─┐
@@ -42,6 +42,7 @@ Endpoints implementados:
 ```text
 GET  /api/v1/health/
 GET  /api/v1/contexto/
+GET  /api/v1/clientes/fidelidade/
 POST /api/v1/compras/
 POST /api/v1/resgates/
 ```
@@ -188,6 +189,83 @@ A plataforma:
 7. retorna o resultado.
 
 Não deve existir um contrato em que o PDV determine arbitrariamente `pontos_concedidos` como fonte de verdade.
+
+## Consulta de fidelidade do Cliente — F3.06B
+
+```http
+GET /api/v1/clientes/fidelidade/?loja_id=1&cliente_cpf=52998224725
+X-API-Key: <identificador>.<segredo>
+```
+
+A consulta entrega ao PDV o estado atual de fidelidade sem transferir regras de negócio para o consumidor. `loja_id` e `cliente_cpf` são obrigatórios. A Loja deve estar no escopo da credencial e o Cliente deve pertencer à mesma Empresa.
+
+A resposta contém:
+
+- identificação mínima do Cliente;
+- situação ativo/inativo e última Compra;
+- pontos históricos usados para classificação;
+- nível atual e benefícios configurados;
+- indicação de aplicabilidade atual dos benefícios do nível;
+- saldo de pontos utilizável;
+- promoção de retorno, somente quando aplicável;
+- parâmetros de Resgate relevantes ao caixa.
+
+Exemplo:
+
+```json
+{
+  "cliente": {
+    "cpf": "52998224725",
+    "nome": "Ana Silva"
+  },
+  "atividade": {
+    "ativo": true,
+    "ultima_compra_em": "2026-09-23T10:30:00-03:00",
+    "periodo_cliente_ativo_dias": 180
+  },
+  "nivel": {
+    "pontos_historicos": "1240.0000",
+    "atual": {
+      "nome": "Prata",
+      "pontos_minimos": "1000.0000",
+      "beneficios": {
+        "bonus_pontos_percentual": "10.0000",
+        "desconto_percentual": "5.0000",
+        "aplicaveis": true
+      }
+    }
+  },
+  "saldo": {
+    "pontos": "740.0000"
+  },
+  "promocao_retorno": {
+    "aplicavel": false,
+    "bonus_pontos_percentual": "0.0000",
+    "desconto_percentual": "0.0000"
+  },
+  "resgate": {
+    "minimo_pontos": 100,
+    "incremento_pontos": 50,
+    "valor_monetario_por_ponto": "0.05"
+  }
+}
+```
+
+`nivel.pontos_historicos` soma todas as concessões históricas do Cliente, inclusive Lotes expirados ou já consumidos. Portanto, expiração e Resgate não reduzem a classificação de nível.
+
+`saldo.pontos` representa o valor utilizável no instante da consulta: considera somente Lotes ainda não expirados e desconta pontos já alocados em Resgates.
+
+Quando não existir nível compatível, `nivel.atual` é `null`, mas `nivel.pontos_historicos` continua presente.
+
+Atividade, retorno e aplicabilidade dos benefícios reutilizam a avaliação canônica do domínio. Cliente sem Compra anterior não é considerado retorno. Em caso de inatividade, a política de primeira Compra após inatividade determina se os benefícios de nível seriam aplicáveis naquele instante.
+
+A promoção de retorno só é marcada como aplicável quando o Cliente está efetivamente em retorno e a promoção corporativa está ativa. Caso contrário, seus percentuais retornam zero.
+
+A consulta é somente leitura, usa o instante do servidor, não cria snapshots e não garante o mesmo estado para uma operação posterior. Compra ou Resgate efetivos devem recalcular e revalidar todas as regras.
+
+Loja inexistente ou não autorizada retorna `403 loja_fora_do_escopo`. Cliente inexistente ou pertencente somente a outro tenant retorna `404 cliente_nao_encontrado`, sem revelar informação externa.
+
+A resposta utiliza `Cache-Control: no-store`.
 
 ## Compra, idempotência e fidelidade — F3.01/F3.02/F3.03
 

@@ -168,3 +168,63 @@ class ResgateSerializer(serializers.Serializer):
     pontos_resgatados = PontosResgateField(min_value=1, max_value=MAX_PONTOS_RESGATE)
     valor_desconto = serializers.DecimalField(max_digits=32, decimal_places=2, coerce_to_string=True)
     resgatado_em = serializers.DateTimeField()
+
+
+class ConsultaFidelidadeQuerySerializer(serializers.Serializer):
+    loja_id = serializers.IntegerField(min_value=1)
+    cliente_cpf = serializers.CharField()
+
+    validate_cliente_cpf = RegistrarCompraSerializer.validate_cliente_cpf
+
+
+class ClienteFidelidadeSerializer(serializers.Serializer):
+    cpf = serializers.CharField()
+    nome = serializers.CharField(allow_blank=True)
+
+
+class AtividadeFidelidadeSerializer(serializers.Serializer):
+    ativo = serializers.BooleanField()
+    ultima_compra_em = serializers.DateTimeField(allow_null=True)
+    periodo_cliente_ativo_dias = serializers.IntegerField(min_value=1)
+
+
+class BeneficiosNivelConsultaSerializer(serializers.Serializer):
+    bonus_pontos_percentual = serializers.CharField()
+    desconto_percentual = serializers.CharField()
+    aplicaveis = serializers.BooleanField()
+
+
+class NivelAtualConsultaSerializer(serializers.Serializer):
+    nome = serializers.CharField()
+    pontos_minimos = serializers.CharField()
+    beneficios = BeneficiosNivelConsultaSerializer()
+
+
+class NivelConsultaSerializer(serializers.Serializer):
+    pontos_historicos = serializers.CharField()
+    atual = NivelAtualConsultaSerializer(allow_null=True)
+
+
+class SaldoFidelidadeSerializer(serializers.Serializer):
+    pontos = serializers.CharField()
+
+
+class PromocaoRetornoConsultaSerializer(serializers.Serializer):
+    aplicavel = serializers.BooleanField()
+    bonus_pontos_percentual = serializers.CharField()
+    desconto_percentual = serializers.CharField()
+
+
+class ParametrosResgateConsultaSerializer(serializers.Serializer):
+    minimo_pontos = serializers.IntegerField(min_value=1)
+    incremento_pontos = serializers.IntegerField(min_value=1)
+    valor_monetario_por_ponto = serializers.CharField()
+
+
+class FidelidadeClienteSerializer(serializers.Serializer):
+    cliente = ClienteFidelidadeSerializer()
+    atividade = AtividadeFidelidadeSerializer()
+    nivel = NivelConsultaSerializer()
+    saldo = SaldoFidelidadeSerializer()
+    promocao_retorno = PromocaoRetornoConsultaSerializer()
+    resgate = ParametrosResgateConsultaSerializer()

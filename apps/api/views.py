@@ -2,17 +2,19 @@ from django.http import JsonResponse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.empresas.services import lojas_autorizadas
+from apps.fidelidade.consultas import consultar_fidelidade_cliente
 from apps.fidelidade.services import registrar_compra
 from apps.fidelidade.resgates import registrar_resgate
 
 from .exceptions import envelope_erro
 from .serializers import ContextoSerializer, EnvelopeErroSerializer, HealthSerializer
+from .serializers import ConsultaFidelidadeQuerySerializer, FidelidadeClienteSerializer
 from .serializers import CompraSerializer, RegistrarCompraSerializer
 from .serializers import RegistrarResgateSerializer, ResgateSerializer
 
@@ -41,6 +43,65 @@ class ContextoView(APIView):
             "lojas": lojas_autorizadas(credencial),
         }
         return Response(ContextoSerializer(dados).data)
+
+
+@method_decorator(never_cache, name="dispatch")
+class ConsultaFidelidadeView(APIView):
+    http_method_names = ["get", "head", "options"]
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="loja_id",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="Loja em que o PDV está operando.",
+            ),
+            OpenApiParameter(
+                name="cliente_cpf",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="CPF do Cliente da Empresa da Loja.",
+            ),
+        ],
+        responses={
+            200: FidelidadeClienteSerializer,
+            400: OpenApiResponse(
+                EnvelopeErroSerializer,
+                description="requisicao_invalida",
+            ),
+            401: OpenApiResponse(
+                EnvelopeErroSerializer,
+                description="credencial_invalida",
+            ),
+            403: OpenApiResponse(
+                EnvelopeErroSerializer,
+                description="loja_fora_do_escopo",
+            ),
+            404: OpenApiResponse(
+                EnvelopeErroSerializer,
+                description="cliente_nao_encontrado",
+            ),
+            405: OpenApiResponse(
+                EnvelopeErroSerializer,
+                description="metodo_nao_permitido",
+            ),
+        },
+        description=(
+            "Consulta o estado atual de fidelidade do Cliente para o PDV. "
+            "Não persiste snapshots; operações posteriores recalculam o estado."
+        ),
+    )
+    def get(self, request):
+        entrada = ConsultaFidelidadeQuerySerializer(data=request.query_params)
+        entrada.is_valid(raise_exception=True)
+        dados = consultar_fidelidade_cliente(
+            credencial=request.auth,
+            **entrada.validated_data,
+        )
+        return Response(FidelidadeClienteSerializer(dados).data)
 
 
 @method_decorator(never_cache, name="dispatch")
