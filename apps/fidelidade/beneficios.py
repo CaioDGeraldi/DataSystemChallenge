@@ -223,7 +223,11 @@ def snapshot_beneficios(avaliacao, politica, progresso, ultima_compra):
         for n in (avaliacao.nivel_anterior, avaliacao.nivel_bonus)
         if n
     }
-    campos = ParametrosFidelidade.__dataclass_fields__
+    # Estorno não participa da Compra. Preserva também o formato dos snapshots v1.
+    campos = (
+        nome for nome in ParametrosFidelidade.__dataclass_fields__
+        if nome != 'devolver_pontos_ao_estornar_resgate'
+    )
     return _json(
         {
             'versao': 1,
@@ -241,6 +245,8 @@ def reavaliar_snapshot(snapshot, valor, instante, multiplicador):
         if snapshot['versao'] != 1:
             raise ValueError
         dados = dict(snapshot['politica'])
+        # Campo novo sem efeito no cálculo de Compra e ausente no histórico v1.
+        dados['devolver_pontos_ao_estornar_resgate'] = True
         for campo in (
             'pontos_por_real',
             'valor_monetario_por_ponto',

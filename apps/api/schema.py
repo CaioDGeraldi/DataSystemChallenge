@@ -25,3 +25,7 @@ class RegistrarResgateSchema(OpenApiSerializerExtension):
 
 class SimularResgateSchema(RegistrarResgateSchema):
     target_class = 'apps.api.serializers.SimularResgateSerializer'
+
+
+class EstornarResgateSchema(RegistrarResgateSchema):
+    target_class = 'apps.api.serializers.EstornarResgateSerializer'

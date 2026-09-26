@@ -77,6 +77,7 @@ Valores monetários, taxas, multiplicadores e pontuação não usam `float` como
 | `AplicacaoEfeitoEventoLote` | proveniência do efeito aplicado a um Lote | Empresa | histórico |
 | `Resgate` | fato histórico de consumo de pontos | Empresa via Loja | histórico |
 | `AlocacaoResgate` | parcela de um Lote consumida por Resgate | Empresa | histórico |
+| `EstornoResgate` | estorno integral com snapshot de devolução | Empresa via Loja | histórico |
 | `NivelFidelidade` | faixa configurável de classificação | Empresa | configuração |
 
 ## 4. Diagrama entidade-relacionamento
@@ -305,6 +306,7 @@ Parâmetros vigentes:
 - `modo_arredondamento_pontos`;
 - `pontos_por_real`;
 - `validade_pontos_meses`;
+- `devolver_pontos_ao_estornar_resgate` (booleano, default `true`, somente Empresa);
 - `resgate_minimo_pontos`;
 - `incremento_resgate_pontos`;
 - `valor_monetario_por_ponto`;
@@ -559,6 +561,18 @@ expira_em ASC
 
 A alocação não reduz fisicamente `LotePontos.pontos_concedidos`; o consumo é representado pelo histórico de alocações.
 
+### 13.3 `EstornoResgate`
+
+Fato histórico próprio de estorno sempre integral. Referencia `resgate` por `OneToOneField(PROTECT)` e preserva `loja`, `cliente`, `credencial_origem` (todos `PROTECT`), `identificador_externo`, `devolve_pontos_aplicado` e `estornado_em` do servidor. Loja e Cliente devem corresponder ao Resgate original. A relação única garante no máximo um estorno por Resgate; `UNIQUE(loja, identificador_externo)` garante a chave idempotente própria.
+
+Não duplica pontos, desconto ou snapshots disponíveis no Resgate imutável. O service `estornar_resgate` é o caminho autorizado de criação; alterações, `update`, `bulk_update`, `bulk_create`, exclusão de instância e `QuerySet.delete` são bloqueados pelos mesmos mecanismos do histórico de Resgates.
+
+`devolve_pontos_aplicado` copia a configuração corporativa `devolver_pontos_ao_estornar_resgate`, default true e configurável pela Empresa, sem override por Loja. Mudanças posteriores não alteram esse snapshot. False mantém o consumo original; true deixa de considerar as alocações como consumo efetivo, disponibilizando somente pontos de Lotes ainda válidos. Pontos expirados nunca voltam: nenhuma validade é renovada, nenhum `expira_em` muda e nenhum Lote substituto ou compensatório é criado. Resgate e AlocacaoResgate originais permanecem intactos. Não há saldo ou crédito restaurado persistido.
+
+A API retorna 201 para criação e 200 para retry equivalente, sem consultar configuração atual. Outra chave para o mesmo Resgate resulta em `resgate_ja_estornado`; mesma chave para outro Resgate resulta em `idempotencia_conflitante` (ambos 409). Ausência na Loja autorizada resulta em 404 `resgate_nao_encontrado`, sem revelar outra Loja/tenant.
+
+O fluxo atômico usa advisory lock próprio `estorno-resgate:<loja_id>:<identificador>` e serializa pelo Cliente com `select_for_update(no_key=True)`, preservando a ordem de locks do Resgate e seu FEFO.
+
 ## 14. Níveis
 
 ### 14.1 `NivelFidelidade`
@@ -605,10 +619,10 @@ saldo(T)
 =
 SUM(pontos_concedidos dos Lotes com expira_em > T)
 -
-SUM(pontos_consumidos das Alocacoes desses Lotes)
+SUM(pontos_consumidos das Alocacoes com consumo efetivo desses Lotes)
 ```
 
-Um Lote com `expira_em == T` já está expirado para o Resgate.
+Um Lote com `expira_em == T` já está expirado para o Resgate. Consumo efetivo inclui alocações sem estorno ou com snapshot `devolve_pontos_aplicado=false`; estorno com snapshot true libera capacidade somente enquanto o Lote permanece válido. A mesma regra é usada na consulta, simulação, Resgate real e `AlocacaoResgate.clean()`.
 
 ### 15.2 Pontos para nível
 
@@ -773,7 +787,7 @@ Essas regras fazem parte do comportamento do domínio, mesmo quando não aparece
 
 O modelo diferencia entidades estruturais/configuráveis de fatos históricos.
 
-Fatos históricos como Compra, Lote, aplicações de Evento, Resgate e alocações não devem ser tratados como CRUD comum.
+Fatos históricos como Compra, Lote, aplicações de Evento, Resgate, alocações e EstornoResgate não devem ser tratados como CRUD comum.
 
 A combinação de:
 
@@ -813,7 +827,7 @@ A modelagem atual deliberadamente ainda não inclui, entre outras evoluções:
 - benefício automático por nível;
 - bônus de pontos por nível;
 - desconto automático por nível;
-- cancelamento/estorno de Resgate;
+- estorno parcial ou reversão de estorno de Resgate;
 - ledger genérico de pontos;
 - API pública de saldo ou níveis;
 - histórico materializado de progressão/rebaixamento de nível;

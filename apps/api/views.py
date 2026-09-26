@@ -11,6 +11,7 @@ from apps.empresas.services import lojas_autorizadas
 from apps.fidelidade.consultas import consultar_fidelidade_cliente
 from apps.fidelidade.services import registrar_compra
 from apps.fidelidade.simulacoes import simular_compra
+from apps.fidelidade.estornos import estornar_resgate
 from apps.fidelidade.resgates import registrar_resgate, simular_resgate
 
 from .exceptions import envelope_erro
@@ -19,6 +20,7 @@ from .serializers import ConsultaFidelidadeQuerySerializer, FidelidadeClienteSer
 from .serializers import CompraSerializer, RegistrarCompraSerializer
 from .serializers import SimularCompraSerializer, SimulacaoCompraSerializer
 from .serializers import RegistrarResgateSerializer, ResgateSerializer
+from .serializers import EstornarResgateSerializer, EstornoResgateSerializer
 from .serializers import SimularResgateSerializer, SimulacaoResgateSerializer
 
 
@@ -237,3 +239,32 @@ class ResgateView(APIView):
 def nao_encontrado(request, caminho):
     # Também cobre falhas do resolvedor de URLs dentro de /api/, fora do DRF.
     return JsonResponse(envelope_erro(404), status=404)
+
+
+@method_decorator(never_cache, name='dispatch')
+class EstornoResgateView(APIView):
+    http_method_names = ['post', 'options']
+
+    @extend_schema(
+        request=EstornarResgateSerializer,
+        responses={
+            201: OpenApiResponse(EstornoResgateSerializer, description='Estorno integral criado.'),
+            200: OpenApiResponse(EstornoResgateSerializer, description='Retry equivalente retorna o snapshot histórico.'),
+            400: OpenApiResponse(EnvelopeErroSerializer, description='requisicao_invalida'),
+            401: OpenApiResponse(EnvelopeErroSerializer, description='credencial_invalida'),
+            403: OpenApiResponse(EnvelopeErroSerializer, description='loja_fora_do_escopo'),
+            404: OpenApiResponse(EnvelopeErroSerializer, description='resgate_nao_encontrado'),
+            409: OpenApiResponse(EnvelopeErroSerializer, description='idempotencia_conflitante ou resgate_ja_estornado'),
+            405: OpenApiResponse(EnvelopeErroSerializer, description='metodo_nao_permitido'),
+        },
+        description=('Estorno sempre integral, idempotente por Loja + identificador externo. '
+                     'Snapshot corporativo devolve_pontos_aplicado: false não devolve pontos; '
+                     'true libera somente pontos de Lotes ainda válidos. Expirados nunca voltam, '
+                     'nenhuma validade é renovada e nenhum Lote substituto é criado. '
+                     'Resgate e alocações originais permanecem intactos.'),
+    )
+    def post(self, request):
+        entrada = EstornarResgateSerializer(data=request.data)
+        entrada.is_valid(raise_exception=True)
+        estorno, criado = estornar_resgate(credencial=request.auth, **entrada.validated_data)
+        return Response(EstornoResgateSerializer(estorno).data, status=201 if criado else 200)

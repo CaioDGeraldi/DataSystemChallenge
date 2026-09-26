@@ -342,3 +342,29 @@ class SimulacaoResgateSerializer(serializers.Serializer):
     pontos_resgatados = PontosResgateField(min_value=1, max_value=MAX_PONTOS_RESGATE)
     valor_desconto = serializers.DecimalField(max_digits=32, decimal_places=2, coerce_to_string=True)
     saldo = SaldoSimulacaoResgateSerializer()
+
+
+class EstornarResgateSerializer(serializers.Serializer):
+    loja_id = serializers.IntegerField(min_value=1)
+    resgate_identificador_externo = IdentificadorResgateField(max_length=255, trim_whitespace=True)
+    identificador_externo = IdentificadorResgateField(max_length=255, trim_whitespace=True)
+
+    def to_internal_value(self, data):
+        if isinstance(data, dict):
+            extras = set(data) - set(self.fields)
+            if extras:
+                raise serializers.ValidationError({campo: 'Campo não permitido no estorno.' for campo in extras})
+        return super().to_internal_value(data)
+
+
+class EstornoResgateSerializer(serializers.Serializer):
+    identificador_externo = serializers.CharField(max_length=255)
+    resgate_identificador_externo = serializers.CharField(source='resgate.identificador_externo')
+    loja = LojaCompraSerializer()
+    cliente = ClienteCompraSerializer()
+    pontos_estornados = PontosResgateField(source='resgate.pontos_resgatados', min_value=1, max_value=MAX_PONTOS_RESGATE)
+    valor_desconto_original = serializers.DecimalField(
+        source='resgate.valor_desconto', max_digits=32, decimal_places=2, coerce_to_string=True,
+    )
+    devolve_pontos_aplicado = serializers.BooleanField()
+    estornado_em = serializers.DateTimeField()

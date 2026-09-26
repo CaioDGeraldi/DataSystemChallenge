@@ -6,12 +6,14 @@ from .views import (
     ContextoView,
     HealthView,
     ResgateView,
+    EstornoResgateView,
     SimulacaoResgateView,
     SimulacaoCompraView,
 )
 
 
 urlpatterns = [
+    path("resgates/estornar/", EstornoResgateView.as_view(), name="estornar-resgate"),
     path("clientes/fidelidade/", ConsultaFidelidadeView.as_view(), name="cliente-fidelidade"),
     path('resgates/simular/', SimulacaoResgateView.as_view(), name='simular-resgate'),
     path('resgates/', ResgateView.as_view(), name='resgates'),

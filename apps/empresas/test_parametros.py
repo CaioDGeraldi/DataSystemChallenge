@@ -94,6 +94,7 @@ class ParametrosDominioTests(DadosParametros, TestCase):
                 "incremento_resgate_pontos": 100,
                 "valor_monetario_por_ponto": Decimal("0.05"),
                 "periodo_cliente_ativo_dias": 180,
+                "devolver_pontos_ao_estornar_resgate": True,
                 "inatividade_suspende_beneficios_nivel": False,
                 "promocao_retorno_ativa": False,
                 "beneficio_primeira_compra_apos_inatividade": "SEM_BENEFICIOS_NIVEL",
@@ -596,3 +597,35 @@ class PoliticaPontosTests(DadosParametros, TestCase):
         for mudanca in ({'precisao_pontos': 3}, {'modo_arredondamento_pontos': 'HALF_EVEN'}):
             resposta = self.client.post(url, self.valores(**mudanca))
             self.assertTrue(resposta.context['form'].errors)
+
+
+class ParametroEstornoTests(DadosParametros, TestCase):
+    def test_default_true_e_resolucao_sem_override(self):
+        from .forms import ConfiguracaoFidelidadeEmpresaForm, OverrideFidelidadeLojaForm
+        campo = 'devolver_pontos_ao_estornar_resgate'
+        self.assertIs(getattr(resolver_configuracao(self.empresa, self.loja), campo), True)
+        config = ConfiguracaoFidelidadeEmpresa.objects.create(empresa=self.empresa)
+        self.assertIs(getattr(config, campo), True)
+        self.assertIn(campo, ConfiguracaoFidelidadeEmpresaForm().fields)
+        self.assertNotIn(campo, OverrideFidelidadeLojaForm().fields)
+        self.assertNotIn(campo, {f.name for f in OverrideFidelidadeLoja._meta.fields})
+        self.salvar(**{campo: False})
+        salvar_override_loja(self.request(), self.loja.pk, pontos_por_real=Decimal('2.00'))
+        for loja in (None, self.loja, self.segunda):
+            self.assertIs(getattr(resolver_configuracao(self.empresa, loja), campo), False)
+        self.assertIs(getattr(resolver_configuracao(self.outra), campo), True)
+
+    def test_empresa_altera_pelo_formulario_normal(self):
+        self.autenticar()
+        url = reverse('empresas:configuracao_empresa')
+        campo = 'devolver_pontos_ao_estornar_resgate'
+        resposta = self.client.get(url)
+        self.assertContains(resposta, f'name="{campo}"')
+        self.assertIs(resposta.context['form'].initial[campo], True)
+        dados = self.valores()
+        dados.pop(campo)  # Checkbox desmarcado.
+        self.assertEqual(self.client.post(url, dados).status_code, 302)
+        self.assertIs(getattr(ConfiguracaoFidelidadeEmpresa.objects.get(empresa=self.empresa), campo), False)
+        self.assertIs(getattr(resolver_configuracao(self.empresa, self.loja), campo), False)
+        self.assertEqual(self.client.post(url, self.valores()).status_code, 302)
+        self.assertIs(getattr(resolver_configuracao(self.empresa), campo), True)

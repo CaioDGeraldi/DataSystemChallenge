@@ -6,7 +6,7 @@ A API REST é uma interface de primeira classe do DataSystemChallenge. Ela exist
 
 A API utiliza Django REST Framework sobre a mesma camada de domínio utilizada pela interface web.
 
-A F2.06 entrega credenciais de integração, health, contexto e OpenAPI. A F3.01 acrescenta registro de Compra e idempotência; a F3.02 acrescenta cálculo base de pontos e LotePontos histórico. A F3.03 acrescenta campanhas temporárias com multiplicador de pontos. A F3.04 acrescenta Resgate idempotente com consumo de Lotes e desconto histórico. A F3.06B acrescenta consulta autenticada do estado atual de fidelidade do Cliente para integrações. A F3.06C acrescenta simulação de Compra sem persistência para o PDV consultar os efeitos atuais de fidelidade antes de finalizar a venda. A F3.06D acrescenta simulação de Resgate sem persistência ou reserva de saldo.
+A F2.06 entrega credenciais de integração, health, contexto e OpenAPI. A F3.01 acrescenta registro de Compra e idempotência; a F3.02 acrescenta cálculo base de pontos e LotePontos histórico. A F3.03 acrescenta campanhas temporárias com multiplicador de pontos. A F3.04 acrescenta Resgate idempotente com consumo de Lotes e desconto histórico. A F3.06B acrescenta consulta autenticada do estado atual de fidelidade do Cliente para integrações. A F3.06C acrescenta simulação de Compra sem persistência para o PDV consultar os efeitos atuais de fidelidade antes de finalizar a venda. A F3.06D acrescenta simulação de Resgate sem persistência ou reserva de saldo. A F3.06E acrescenta estorno integral, histórico e idempotente de Resgate.
 
 ```text
 Django Templates ─┐
@@ -46,6 +46,7 @@ GET  /api/v1/clientes/fidelidade/
 POST /api/v1/compras/simular/
 POST /api/v1/compras/
 POST /api/v1/resgates/simular/
+POST /api/v1/resgates/estornar/
 POST /api/v1/resgates/
 ```
 
@@ -255,7 +256,7 @@ Exemplo:
 
 `nivel.pontos_historicos` soma todas as concessões históricas do Cliente, inclusive Lotes expirados ou já consumidos. Portanto, expiração e Resgate não reduzem a classificação de nível.
 
-`saldo.pontos` representa o valor utilizável no instante da consulta: considera somente Lotes ainda não expirados e desconta pontos já alocados em Resgates.
+`saldo.pontos` representa o valor utilizável no instante da consulta: considera somente Lotes ainda não expirados e desconta somente consumo efetivo: alocações sem estorno ou com `devolve_pontos_aplicado=false`.
 
 Quando não existir nível compatível, `nivel.atual` é `null`, mas `nivel.pontos_historicos` continua presente.
 
@@ -624,12 +625,12 @@ Não existe saldo materializado. No instante T do Resgate:
 
 ```text
 saldo = soma de pontos_concedidos nos Lotes com expira_em > T
-        - soma das AlocacaoResgate desses Lotes
+        - soma do consumo efetivo das AlocacaoResgate desses Lotes
 ```
 
 Em `expira_em == T`, o Lote já está expirado. A elegibilidade usa a expiração persistida, inclusive para Lotes cuja Compra possui data futura; não acrescenta um filtro por aquisição. O consumo usa `pontos_concedidos`, que já incorpora a campanha aplicada, sem recalcular campanha nem usar `pontos_base`.
 
-FEFO é determinístico: `expira_em ASC → adquiridos_em ASC → pk ASC`. Lotes permanecem imutáveis; somente alocações registram consumo. Um Resgate de 100 pode consumir `99.7500` do Lote A e `0.2500` do Lote B. O consumo acumulado nunca pode exceder a concessão de cada Lote, e a soma das alocações deve ser exatamente o Resgate.
+FEFO é determinístico: `expira_em ASC → adquiridos_em ASC → pk ASC`. Lotes permanecem imutáveis; somente alocações registram consumo. Um Resgate de 100 pode consumir `99.7500` do Lote A e `0.2500` do Lote B. O consumo efetivo acumulado nunca pode exceder a concessão de cada Lote, e a soma das alocações deve ser exatamente o Resgate.
 
 ### Desconto e snapshots
 
@@ -669,7 +670,66 @@ Resposta ilustrativa, igual para criação `201` e retry `200`:
 }
 ```
 
-Pontos retornam como inteiro JSON e desconto como string de duas casas. Não são expostos alocações, locks ou credenciais. Não há GET público de saldo, cancelamento, estorno, edição, exclusão ou vínculo obrigatório com Compra nesta fase. Métodos não implementados recebem `405`.
+Pontos retornam como inteiro JSON e desconto como string de duas casas. Não são expostos alocações, locks ou credenciais. A consulta de fidelidade informa o saldo atual; o estorno integral está documentado abaixo. Não há edição, exclusão ou vínculo obrigatório com Compra nesta fase. Métodos não implementados recebem `405`.
+
+## Estorno de Resgate — F3.06E
+
+```text
+POST /api/v1/resgates/estornar/
+X-API-Key: <identificador>.<segredo>
+```
+
+O estorno é sempre integral. Entrada estrita, somente:
+
+```json
+{
+  "loja_id": 1,
+  "resgate_identificador_externo": "RESGATE-001",
+  "identificador_externo": "ESTORNO-001"
+}
+```
+
+Os identificadores são strings não vazias após `strip` externo, até 255 caracteres; case e conteúdo interno são preservados. Campos extras são rejeitados, inclusive CPF, pontos, desconto, saldo, snapshots e datas. Não existe backdating; `estornado_em` é capturado uma única vez pelo servidor após o lock do Cliente. Somente POST e OPTIONS são permitidos.
+
+Resposta de criação **201** ou retry equivalente **200**, com `Cache-Control: no-store`:
+
+```json
+{
+  "identificador_externo": "ESTORNO-001",
+  "resgate_identificador_externo": "RESGATE-001",
+  "loja": {"id": 1, "nome": "Centro"},
+  "cliente": {"cpf": "52998224725"},
+  "pontos_estornados": 200,
+  "valor_desconto_original": "10.00",
+  "devolve_pontos_aplicado": true,
+  "estornado_em": "2026-09-26T16:00:00-03:00"
+}
+```
+
+`pontos_estornados` é inteiro JSON e representa a quantidade integral do Resgate original, não necessariamente a quantidade que voltou ao saldo. `valor_desconto_original` é string decimal com duas casas. Ambos são derivados do Resgate imutável. Não são expostos IDs internos de Estorno, Resgate, Lote ou Alocação.
+
+A Empresa configura `devolver_pontos_ao_estornar_resgate` no formulário de configuração de fidelidade, grupo Resgate. O default é **true**, inclusive para configurações existentes na migration. Não existe override por Loja. O valor efetivo no instante da operação é preservado em `EstornoResgate.devolve_pontos_aplicado`:
+
+- **false**: registra o estorno, mas as alocações continuam consumindo pontos; nada é devolvido.
+- **true**: as alocações deixam de consumir capacidade dos Lotes originais; somente pontos de Lotes ainda válidos (`expira_em > instante`) ficam disponíveis.
+
+Pontos expirados nunca voltam. Nenhuma validade é renovada, `expira_em` nunca é alterado, nenhum Lote expirado é reativado e nenhum Lote compensatório/substituto é criado. Resgate e AlocacaoResgate originais não mudam. Não se persiste crédito ou “pontos restaurados”. Um consumo de 80 pontos ainda válidos + 20 expirados libera apenas 80 com snapshot true e zero com false. Consulta, simulação, novo Resgate e validação de capacidade aplicam a mesma regra canônica de consumo efetivo. Retry do Resgate original continua retornando o histórico, sem consumir novamente.
+
+| Situação | HTTP / código público |
+| --- | --- |
+| Novo estorno integral | `201` |
+| Mesma Loja, chave de estorno e Resgate original | `200`, mesmo fato e snapshot |
+| Payload inválido ou campos extras | `400 requisicao_invalida` |
+| Credencial ausente, inválida ou desativada | `401 credencial_invalida` |
+| Loja inexistente ou fora do escopo EMPRESA/LOJAS | `403 loja_fora_do_escopo` |
+| Resgate ausente na Loja autorizada, inclusive chave de outra Loja/tenant | `404 resgate_nao_encontrado` |
+| Chave de estorno usada para outro Resgate | `409 idempotencia_conflitante` |
+| Resgate já estornado com outra chave | `409 resgate_ja_estornado` |
+| GET, PUT, PATCH, DELETE ou outro método não permitido | `405 metodo_nao_permitido` |
+
+Retry equivalente retorna antes de resolver configuração atual; mudanças posteriores no parâmetro nunca alteram estornos anteriores. A credencial registrada é a da primeira operação, mesmo quando o retry usa outra credencial autorizada.
+
+A transação arbitra a chave pelo advisory lock no namespace próprio `estorno-resgate:<loja_id>:<identificador>` (SHA-256, primeiros oito bytes signed de 64 bits), antes de localizar o Resgate na Loja autorizada. O lock `select_for_update(no_key=True)` no mesmo Cliente usado pelo Resgate serializa novas operações. Após esse lock, verifica novamente a ausência de estorno, resolve a configuração e cria o fato. A unicidade SQL garante um estorno por Resgate e uma chave por Loja. Não existe estorno parcial nem reversão do estorno.
 
 ## Contrato externo e serializers
 
@@ -721,6 +781,8 @@ Mapeamento implementado:
 | 415 | `formato_nao_suportado` | Formato de conteúdo não suportado. |
 | 403 | `loja_fora_do_escopo` | Loja não autorizada para esta integração. |
 | 404 | `cliente_nao_encontrado` | Cliente não encontrado. |
+| 404 | `resgate_nao_encontrado` | Resgate não encontrado. |
+| 409 | `resgate_ja_estornado` | Resgate já estornado. |
 | 409 | `idempotencia_conflitante` | Identificador externo já utilizado com dados diferentes. |
 
 O 404 também cobre URLs inexistentes dentro de `/api/`. Erros de validação podem acrescentar detalhes por campo:

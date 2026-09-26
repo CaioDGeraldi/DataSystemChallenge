@@ -34,6 +34,7 @@ from apps.empresas.validators import validar_cnpj
 
 from . import resgates
 from .calculos import calcular_expiracao
+from .consumo import alocacoes_com_consumo_efetivo
 from .eventos import criar_evento
 from .models import AlocacaoResgate, AplicacaoEfeitoEventoLote, Compra, LotePontos, Resgate
 from .niveis import classificar_cliente, criar_nivel
@@ -308,10 +309,14 @@ def _resumo_e_validacao(empresa, clientes, plano):
                 or (lote.pk in aplicados) != venda.campanha
                 or lote.pontos_concedidos != compra.valor * (2 if venda.campanha else 1)):
             raise CommandError('Concessão real divergente do cenário.')
+    efetivas = set(alocacoes_com_consumo_efetivo(AlocacaoResgate.objects.filter(
+        pk__in=[a.pk for a in alocacoes],
+    )).values_list("pk", flat=True))
     consumido = Counter()
     por_resgate = Counter()
     for alocacao in alocacoes:
-        consumido[alocacao.lote_id] += alocacao.pontos_consumidos
+        if alocacao.pk in efetivas:
+            consumido[alocacao.lote_id] += alocacao.pontos_consumidos
         por_resgate[alocacao.resgate_id] += alocacao.pontos_consumidos
     for resgate in resgates_db:
         if (por_resgate[resgate.pk] != resgate.pontos_resgatados

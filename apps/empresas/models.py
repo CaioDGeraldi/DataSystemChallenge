@@ -317,6 +317,10 @@ def _validar_tipos_parametros(instancia, exclude):
 
 
 class ConfiguracaoFidelidadeEmpresa(models.Model):
+    devolver_pontos_ao_estornar_resgate = models.BooleanField(
+        default=PADROES_FIDELIDADE.devolver_pontos_ao_estornar_resgate,
+        help_text="Devolve somente pontos ainda válidos; pontos expirados nunca retornam.",
+    )
     precisao_pontos = models.PositiveIntegerField(
         choices=[(v, str(v)) for v in PRECISOES_PONTOS],
         default=PADROES_FIDELIDADE.precisao_pontos,
