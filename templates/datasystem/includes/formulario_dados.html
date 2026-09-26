@@ -1,6 +1,6 @@
 {% with etapas=form.etapas_formulario %}
 <div class="retorna-form-layout{% if ilustracao_onboarding %} retorna-form-layout--illustrated{% endif %}">
-<form method="post" class="form-stack retorna-data-form{% if etapas %} retorna-composed-form{% endif %}"{% if etapas %} data-composed-form{% endif %}>
+<form method="post" class="form-stack retorna-data-form{% if etapas %} retorna-composed-form{% endif %}"{% if etapas %} data-composed-form{% if navegacao_secoes %} data-form-sections{% endif %}{% endif %}>
   {% csrf_token %}
   {% if form.errors %}
   <div class="form-errors retorna-form-error-summary" role="alert" tabindex="-1" data-form-error-summary>
@@ -13,16 +13,18 @@
   {% if etapas %}
   <div class="retorna-stepper-toolbar">
     <p data-form-step-status aria-live="polite" hidden></p>
-    <button class="button button--secondary" type="button" data-form-mode-toggle hidden>Exibir tudo</button>
+    {% if not navegacao_secoes %}<button class="button button--secondary" type="button" data-form-mode-toggle hidden>Exibir tudo</button>{% endif %}
   </div>
-  <ol class="retorna-stepper-list" data-form-step-list hidden>
+  <ol class="retorna-stepper-list" data-form-step-list aria-label="{% if navegacao_secoes %}Seções{% else %}Etapas{% endif %} do formulário" hidden>
     {% for etapa in etapas %}<li class="retorna-stepper-item" data-form-step-indicator>
+      {% if navegacao_secoes %}<button type="button" class="retorna-section-trigger" data-form-section-trigger aria-controls="form-section-{{ forloop.counter }}">{% endif %}
       <span class="retorna-stepper-number">{{ forloop.counter }}</span><span>{{ etapa.rotulo }}{% if etapa.tem_erros %} — Revise os campos{% endif %}</span>
+      {% if navegacao_secoes %}</button>{% endif %}
     </li>{% endfor %}
   </ol>
   {% for etapa in etapas %}
-  <fieldset data-form-step data-step-label="{{ etapa.rotulo }}"{% if etapa.tem_erros %} data-step-has-errors{% endif %}>
-    <legend tabindex="-1">Etapa {{ forloop.counter }} — {{ etapa.rotulo }}</legend>
+  <fieldset {% if navegacao_secoes %}id="form-section-{{ forloop.counter }}"{% endif %} data-form-step data-step-label="{{ etapa.rotulo }}"{% if etapa.tem_erros %} data-step-has-errors{% endif %}>
+    <legend tabindex="-1">{% if navegacao_secoes %}Seção{% else %}Etapa{% endif %} {{ forloop.counter }} — {{ etapa.rotulo }}</legend>
     {% for field in etapa.campos %}{% include 'datasystem/includes/campo_formulario.html' %}{% endfor %}
   </fieldset>
   {% endfor %}

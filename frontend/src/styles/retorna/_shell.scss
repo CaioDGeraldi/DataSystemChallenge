@@ -414,3 +414,14 @@ html:not([data-retorna-user-menu-enhanced]) .retorna-user-dropdown[hidden] { dis
 
 .sidebar .nav-link, .breadcrumb { font-size: .8125rem; }
 .sidebar .nav-link { white-space: normal; overflow-wrap: anywhere; }
+
+.retorna-navigation-search { position: relative; flex: 0 0 auto; }
+.retorna-navigation-search > button { gap: 8px; }
+.retorna-navigation-search svg { flex-shrink: 0; }
+.retorna-search-panel { position: absolute; right: 0; top: calc(100% + 8px); width: min(24rem, calc(100vw - 24px)); max-height: calc(100dvh - 80px); overflow-y: auto; padding: 16px; background: var(--surface); color: var(--text); border: 1px solid var(--control-border); border-radius: var(--radius); box-shadow: var(--shadow-floating); }
+.retorna-search-panel input { width: 100%; min-height: 44px; margin-block: 8px; padding: 8px; border: 1px solid var(--control-border); border-radius: var(--radius); color: var(--text); background: var(--surface); }
+.retorna-search-panel ul { margin: 0; padding: 0; list-style: none; }
+.retorna-search-panel a { display: flex; align-items: center; min-height: 44px; padding: 8px; overflow-wrap: anywhere; }
+.retorna-search-panel a:hover, .retorna-search-panel a:focus-visible { background: var(--surface-secondary); }
+@media (max-width: 1100px) { .retorna-search-label, .retorna-navigation-search kbd { display: none; } }
+@media (max-width: 768px) { .retorna-search-panel { position: fixed; top: 64px; right: 12px; left: 12px; width: auto; } }

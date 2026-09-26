@@ -30,6 +30,7 @@ export function composedFormPresentation(
   activeStep,
   stepLabels,
   visitedSteps = [],
+  sectionNavigation = false,
 ) {
   const stepMode = mode === "steps";
   const stepCount = stepLabels.length;
@@ -50,12 +51,12 @@ export function composedFormPresentation(
       return visited.has(index) ? "visited" : "future";
     }),
     statusText: stepMode
-      ? `Etapa ${activeStep + 1} de ${stepCount} — ${stepLabels[activeStep]}`
+      ? `${sectionNavigation ? "Seção" : "Etapa"} ${activeStep + 1} de ${stepCount} — ${stepLabels[activeStep]}`
       : "Todos os campos",
     previousHidden: !stepMode || activeStep === 0,
     nextHidden: !stepMode || activeStep === stepCount - 1,
-    submitHidden: stepMode && activeStep !== stepCount - 1,
-    submitDisabled: stepMode && activeStep !== stepCount - 1,
+    submitHidden: stepMode && !sectionNavigation && activeStep !== stepCount - 1,
+    submitDisabled: stepMode && !sectionNavigation && activeStep !== stepCount - 1,
   };
 }
 
@@ -73,6 +74,8 @@ export function bindComposedForms() {
     );
     const indicatorList = form.querySelector("[data-form-step-list]");
     const status = form.querySelector("[data-form-step-status]");
+    const sections = form.hasAttribute("data-form-sections");
+    const sectionTriggers = Array.from(form.querySelectorAll("[data-form-section-trigger]"));
     const modeToggle = form.querySelector("[data-form-mode-toggle]");
     const previous = form.querySelector("[data-form-step-previous]");
     const next = form.querySelector("[data-form-step-next]");
@@ -83,7 +86,8 @@ export function bindComposedForms() {
       indicators.length !== steps.length ||
       !indicatorList ||
       !status ||
-      !modeToggle ||
+      (!sections && !modeToggle) ||
+      (sections && sectionTriggers.length !== steps.length) ||
       !previous ||
       !next ||
       !submit
@@ -92,7 +96,7 @@ export function bindComposedForms() {
     }
 
     let mode =
-      initialFormMode(form.dataset.composedFormInitialMode, document.documentElement.dataset.retornaFormMode);
+      sections ? "steps" : initialFormMode(form.dataset.composedFormInitialMode, document.documentElement.dataset.retornaFormMode);
     let activeStep = Math.max(
       0,
       steps.findIndex((step) => step.hasAttribute("data-step-has-errors")),
@@ -107,6 +111,7 @@ export function bindComposedForms() {
         activeStep,
         steps.map((step) => step.dataset.stepLabel || "Etapa"),
         visitedSteps,
+        sections,
       );
 
       steps.forEach((step, index) => {
@@ -119,17 +124,20 @@ export function bindComposedForms() {
         } else {
           indicator.removeAttribute("aria-current");
         }
+        if (sections) {
+          const trigger = sectionTriggers[index];
+          if (index === activeStep) trigger.setAttribute("aria-current", "step");
+          else trigger.removeAttribute("aria-current");
+          indicator.removeAttribute("aria-current");
+        }
         indicator.dataset.stepState = presentation.indicatorStates[index];
       });
 
       status.textContent = presentation.statusText;
-      modeToggle.textContent =
-        mode === "steps" ? "Exibir tudo" : "Exibir em etapas";
-      modeToggle.setAttribute(
-        "aria-pressed",
-        String(mode === "all"),
-      );
-
+      if (modeToggle) {
+        modeToggle.textContent = mode === "steps" ? "Exibir tudo" : "Exibir em etapas";
+        modeToggle.setAttribute("aria-pressed", String(mode === "all"));
+      }
       previous.hidden = presentation.previousHidden;
       next.hidden = presentation.nextHidden;
       submit.hidden = presentation.submitHidden;
@@ -148,7 +156,10 @@ export function bindComposedForms() {
       }
     };
 
-    modeToggle.hidden = false;
+    if (modeToggle) modeToggle.hidden = false;
+    sectionTriggers.forEach((trigger, index) => {
+      trigger.addEventListener("click", () => activateStep(index, { focusHeading: true }));
+    });
     indicatorList.hidden = false;
     status.hidden = false;
     form.dataset.composedFormBound = "true";
@@ -159,7 +170,7 @@ export function bindComposedForms() {
     });
 
     next.addEventListener("click", () => {
-      const invalidControl = firstInvalidControl(steps[activeStep]);
+      const invalidControl = sections ? null : firstInvalidControl(steps[activeStep]);
       if (invalidControl) {
         invalidControl.reportValidity();
         invalidControl.focus();
@@ -189,7 +200,7 @@ export function bindComposedForms() {
       invalidControl.focus();
     });
 
-    modeToggle.addEventListener("click", () => {
+    modeToggle?.addEventListener("click", () => {
       mode = mode === "steps" ? "all" : "steps";
       updatePresentation();
       modeToggle.focus();

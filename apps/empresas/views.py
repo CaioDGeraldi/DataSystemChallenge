@@ -176,6 +176,7 @@ def configuracao_empresa(request):
             return redirect("empresas:configuracao_empresa")
     return render(request, "datasystem/formulario.html", {
         **contexto_gestao(membro, 'configuracao'),
+        "navegacao_secoes": True,
         "form": form, "titulo": f"Configuração de fidelidade — {membro.empresa}", "botao": "Salvar configuração",
     })
 

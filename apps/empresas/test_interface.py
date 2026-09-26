@@ -197,6 +197,41 @@ class InterfaceTests(TestCase):
             self.assertNotContains(resposta, 'retorna-illustration-frame')
             self.assertNotContains(resposta, 'retorna-form-layout--illustrated')
 
+    def test_configuracao_secoes_diretas_e_fallback(self):
+        self.entrar()
+        resposta, html = self.pagina('empresas:configuracao_empresa')
+        self.assertNotContains(resposta, 'Exibir tudo</button>')
+        self.assertFalse(any('data-form-mode-toggle' in a for _, a in html.tags))
+        formularios = [f for f in html.formularios if 'data-form-sections' in f['attrs']]
+        self.assertEqual(len(formularios), 1)
+        triggers = [a for t, a in html.tags if 'data-form-section-trigger' in a]
+        etapas = [a for t, a in html.tags if 'data-form-step' in a]
+        self.assertEqual(len(triggers), len(etapas))
+        self.assertEqual(len(etapas), 3)
+        self.assertEqual({a['aria-controls'] for a in triggers}, {a['id'] for a in etapas})
+        self.assertTrue(all(a['type'] == 'button' for a in triggers))
+        self.assertTrue(all('hidden' not in a and 'disabled' not in a for a in etapas))
+        self.assertEqual(sum('data-form-final-submit' in a for _, a in html.tags), 1)
+        resposta = self.client.post(reverse('empresas:configuracao_empresa'), {})
+        erros = Elementos(resposta.content.decode())
+        self.assertTrue(any('data-step-has-errors' in a for _, a in erros.tags))
+        self.assertContains(resposta, 'Revise os campos')
+
+    def test_busca_deriva_da_mesma_navegacao_autorizada(self):
+        for usuario, membro in [(self.admin, self.membro), (self.gestor, self.membro_gestor)]:
+            with self.subTest(usuario=usuario.pk):
+                self.entrar(usuario=usuario, vinculo=membro)
+                resposta, html = self.pagina('empresas:area')
+                links_busca = []
+                # Parser da região isolada mantém o contrato sem depender de estilos.
+                fragmento = resposta.content.decode().split('id="navigation-search-results"', 1)[1].split('</ul>', 1)[0]
+                links_busca = [a['href'] for t, a in Elementos(fragmento).tags if t == 'a']
+                self.assertEqual(links_busca, [a['href'] for a in html.navegacao])
+                self.assertTrue(any(a.get('aria-keyshortcuts') == 'Alt+K' for _, a in html.tags))
+                self.assertTrue(any(t == 'input' and a.get('type') == 'search' for t, a in html.tags))
+                if usuario == self.gestor:
+                    self.assertEqual(links_busca, [reverse('empresas:area')])
+
     def test_preferencias_locais_landmarks_e_logout(self):
         self.entrar()
         resposta, html = self.pagina('empresas:area')
@@ -398,10 +433,20 @@ class InterfaceTests(TestCase):
                 self.assertTrue(any(i.get('name') == 'csrfmiddlewaretoken' for i in forms[0]['inputs']))
                 etapas = [a for t, a in html.tags if t == 'fieldset' and 'data-form-step' in a]
                 self.assertEqual([e['data-step-label'] for e in etapas], rotulos)
+                secoes = rota == 'empresas:configuracao_empresa'
+                self.assertTrue(any(t == 'ol' and a.get('aria-label') ==
+                                    ('Seções do formulário' if secoes else 'Etapas do formulário')
+                                    for t, a in html.tags))
+                for numero, rotulo in enumerate(rotulos, 1):
+                    termo = 'Seção' if secoes else 'Etapa'
+                    self.assertContains(resposta, f'<legend tabindex="-1">{termo} {numero} — {rotulo}</legend>', html=True)
                 self.assertTrue(all('hidden' not in e and 'disabled' not in e for e in etapas))
                 self.assertEqual(sum(t == 'legend' and a.get('tabindex') == '-1' for t, a in html.tags), len(rotulos))
                 self.assertTrue(any(t == 'ol' and 'data-form-step-list' in a for t, a in html.tags))
-                for hook in ('data-form-mode-toggle', 'data-form-step-previous', 'data-form-step-next'):
+                hooks = ['data-form-step-previous', 'data-form-step-next']
+                if rota != 'empresas:configuracao_empresa':
+                    hooks.append('data-form-mode-toggle')
+                for hook in hooks:
                     self.assertTrue(any(t == 'button' and hook in a and 'hidden' in a and a.get('type') == 'button' for t, a in html.tags))
                 self.assertTrue(any('data-form-step-status' in a and a.get('aria-live') == 'polite' for _, a in html.tags))
                 self.assertTrue(any('data-form-final-submit' in a and 'hidden' not in a and 'disabled' not in a for _, a in html.tags))
