@@ -10,12 +10,14 @@ from rest_framework.views import APIView
 from apps.empresas.services import lojas_autorizadas
 from apps.fidelidade.consultas import consultar_fidelidade_cliente
 from apps.fidelidade.services import registrar_compra
+from apps.fidelidade.simulacoes import simular_compra
 from apps.fidelidade.resgates import registrar_resgate
 
 from .exceptions import envelope_erro
 from .serializers import ContextoSerializer, EnvelopeErroSerializer, HealthSerializer
 from .serializers import ConsultaFidelidadeQuerySerializer, FidelidadeClienteSerializer
 from .serializers import CompraSerializer, RegistrarCompraSerializer
+from .serializers import SimularCompraSerializer, SimulacaoCompraSerializer
 from .serializers import RegistrarResgateSerializer, ResgateSerializer
 
 
@@ -102,6 +104,52 @@ class ConsultaFidelidadeView(APIView):
             **entrada.validated_data,
         )
         return Response(FidelidadeClienteSerializer(dados).data)
+
+
+@method_decorator(never_cache, name="dispatch")
+class SimulacaoCompraView(APIView):
+    http_method_names = ["post", "options"]
+
+    @extend_schema(
+        request=SimularCompraSerializer,
+        responses={
+            200: SimulacaoCompraSerializer,
+            400: OpenApiResponse(
+                EnvelopeErroSerializer,
+                description="requisicao_invalida",
+            ),
+            401: OpenApiResponse(
+                EnvelopeErroSerializer,
+                description="credencial_invalida",
+            ),
+            403: OpenApiResponse(
+                EnvelopeErroSerializer,
+                description="loja_fora_do_escopo",
+            ),
+            404: OpenApiResponse(
+                EnvelopeErroSerializer,
+                description="cliente_nao_encontrado",
+            ),
+            405: OpenApiResponse(
+                EnvelopeErroSerializer,
+                description="metodo_nao_permitido",
+            ),
+        },
+        description=(
+            "Simula os efeitos atuais de fidelidade de uma Compra sem "
+            "persistir operação, snapshot ou reserva de estado."
+        ),
+    )
+    def post(self, request):
+        entrada = SimularCompraSerializer(data=request.data)
+        entrada.is_valid(raise_exception=True)
+
+        dados = simular_compra(
+            credencial=request.auth,
+            **entrada.validated_data,
+        )
+
+        return Response(SimulacaoCompraSerializer(dados).data)
 
 
 @method_decorator(never_cache, name="dispatch")

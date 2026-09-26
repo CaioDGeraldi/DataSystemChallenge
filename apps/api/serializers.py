@@ -228,3 +228,87 @@ class FidelidadeClienteSerializer(serializers.Serializer):
     saldo = SaldoFidelidadeSerializer()
     promocao_retorno = PromocaoRetornoConsultaSerializer()
     resgate = ParametrosResgateConsultaSerializer()
+
+
+class SimularCompraSerializer(serializers.Serializer):
+    loja_id = serializers.IntegerField(min_value=1)
+    cliente_cpf = serializers.CharField(
+        help_text="CPF válido de Cliente já vinculado à Empresa da Loja.",
+    )
+    valor = ValorCompraField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+        max_value=Decimal("9999999999.99"),
+        help_text=(
+            "String decimal positiva, até duas casas, entre 0.01 e "
+            "9999999999.99. Não enviar float."
+        ),
+    )
+
+    validate_cliente_cpf = RegistrarCompraSerializer.validate_cliente_cpf
+
+    def to_internal_value(self, data):
+        if isinstance(data, dict):
+            extras = set(data) - set(self.fields)
+            if extras:
+                raise serializers.ValidationError(
+                    {
+                        campo: (
+                            "Campo não permitido na simulação de Compra."
+                        )
+                        for campo in extras
+                    },
+                )
+        return super().to_internal_value(data)
+
+
+class NivelReferenciaSimulacaoSerializer(serializers.Serializer):
+    nome = serializers.CharField()
+    pontos_minimos = serializers.CharField()
+
+
+class AtividadeSimulacaoSerializer(serializers.Serializer):
+    ativo = serializers.BooleanField()
+    retorno = serializers.BooleanField()
+    ultima_compra_em = serializers.DateTimeField(allow_null=True)
+
+
+class NivelSimulacaoSerializer(serializers.Serializer):
+    atual = NivelReferenciaSimulacaoSerializer(allow_null=True)
+    bonus_pontos = NivelReferenciaSimulacaoSerializer(allow_null=True)
+    beneficios_aplicaveis = serializers.BooleanField()
+    bonus_pontos_percentual = serializers.CharField()
+    desconto_percentual = serializers.CharField()
+
+
+class CampanhaSimulacaoSerializer(serializers.Serializer):
+    aplicavel = serializers.BooleanField()
+    nome = serializers.CharField(allow_null=True)
+    multiplicador_pontos = serializers.CharField()
+
+
+class ValoresSimulacaoSerializer(serializers.Serializer):
+    bruto = serializers.CharField()
+    desconto_total = serializers.CharField()
+    final = serializers.CharField()
+    elegivel_pontos = serializers.CharField()
+
+
+class PontosSimulacaoSerializer(serializers.Serializer):
+    base = serializers.CharField()
+    apos_campanha = serializers.CharField()
+    bonus_nivel = serializers.CharField()
+    bonus_retorno = serializers.CharField()
+    total_estimado = serializers.CharField()
+
+
+class SimulacaoCompraSerializer(serializers.Serializer):
+    cliente = ClienteFidelidadeSerializer()
+    simulada_em = serializers.DateTimeField()
+    atividade = AtividadeSimulacaoSerializer()
+    nivel = NivelSimulacaoSerializer()
+    campanha = CampanhaSimulacaoSerializer()
+    promocao_retorno = PromocaoRetornoConsultaSerializer()
+    valores = ValoresSimulacaoSerializer()
+    pontos = PontosSimulacaoSerializer()

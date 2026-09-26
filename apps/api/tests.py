@@ -222,7 +222,7 @@ class APIContratoPublicoTests(SimpleTestCase):
         resposta = self.client.get("/api/schema/", HTTP_ACCEPT="application/vnd.oai.openapi+json")
         self.assertEqual(resposta.status_code, 200)
         schema = json.loads(resposta.content)
-        self.assertEqual(set(schema["paths"]), {"/api/v1/health/", "/api/v1/contexto/", "/api/v1/clientes/fidelidade/", "/api/v1/compras/", "/api/v1/resgates/"})
+        self.assertEqual(set(schema["paths"]), {"/api/v1/health/", "/api/v1/contexto/", "/api/v1/clientes/fidelidade/", "/api/v1/compras/simular/", "/api/v1/compras/", "/api/v1/resgates/"})
         self.assertEqual(set(schema["components"]["securitySchemes"]), {"X-API-Key"})
         scheme = schema["components"]["securitySchemes"]["X-API-Key"]
         self.assertEqual((scheme["type"], scheme["in"], scheme["name"]), ("apiKey", "header", "X-API-Key"))
