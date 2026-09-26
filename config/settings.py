@@ -102,7 +102,7 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     "TITLE": "DataSystemChallenge — API de integração",
     "VERSION": "1.0.0",
-    "DESCRIPTION": "API de integração: health, contexto, Compra e Resgate idempotentes com fidelidade histórica.",
+    "DESCRIPTION": "API de integração: health, contexto, consulta de fidelidade, Compra e Resgate.",
     "SERVE_INCLUDE_SCHEMA": False,
     "SERVE_AUTHENTICATION": [],
     "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],

@@ -167,7 +167,7 @@ class CompraOpenAPITests(SimpleTestCase):
         resposta = self.client.get("/api/schema/", HTTP_ACCEPT="application/vnd.oai.openapi+json")
         self.assertEqual(resposta.status_code, 200)
         schema = json.loads(resposta.content)
-        self.assertEqual(set(schema["paths"]), {"/api/v1/health/", "/api/v1/contexto/", "/api/v1/compras/", "/api/v1/resgates/"})
+        self.assertEqual(set(schema["paths"]), {"/api/v1/health/", "/api/v1/contexto/", "/api/v1/clientes/fidelidade/", "/api/v1/compras/", "/api/v1/resgates/"})
         operacoes = schema["paths"]["/api/v1/compras/"]
         self.assertEqual(set(operacoes), {"post"})
         post = operacoes["post"]
