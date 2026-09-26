@@ -56,7 +56,7 @@ class ContextoTests(TestCase):
 
     def test_zero_contextos_e_negacao_de_autorizacao(self):
         resposta = self.entrar()
-        self.assertContains(resposta, "nenhum contexto", status_code=403)
+        self.assertContains(resposta, "Acesso não autorizado", status_code=403)
         self.assertNotIn(CONTEXTO_SESSAO, self.client.session)
 
     def test_resolve_vinculos_distintos_de_ambas_empresas(self):

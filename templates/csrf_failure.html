@@ -1,0 +1,9 @@
+{% extends "errors/base.html" %}
+
+{% block titulo %}Não foi possível validar o formulário — Retorna{% endblock %}
+{% block codigo %}403{% endblock %}
+{% block titulo_erro %}Não foi possível validar o formulário{% endblock %}
+
+{% block mensagem %}
+A validação de segurança deste formulário expirou ou não pôde ser confirmada. Recarregue a página e tente novamente.
+{% endblock %}
