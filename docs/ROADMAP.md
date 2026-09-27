@@ -488,7 +488,7 @@ Entregue:
 - migrations incrementais de configuração e relação Compra–Resgate, além de OpenAPI e documentação atualizados;
 - validação final com 103 testes focados e 556 testes na suíte completa aprovados, além de `manage.py check`, `makemigrations --check`, validator da conversão de Resgate e `git diff --check`.
 
-Com a F3.06A–F3.06F integrada, o domínio e a API da rodada estão reconciliados. A Issue guarda-chuva #62 permanece aberta até a conclusão do Seed FATECalçados V2 (#72) e a revalidação do cenário de demonstração.
+Com a F3.06A–F3.06F integrada e o Seed FATECalçados V2 concluído, o domínio, a API e o cenário de demonstração da rodada estão reconciliados. A Issue guarda-chuva #62 permanece aberta durante a conclusão da vertical de Dashboard e sua revalidação final.
 
 ## Fase 4 — Dados e visualização
 
@@ -516,23 +516,27 @@ Entregue:
 
 A modelagem de dados vigente também está consolidada em `docs/MODELAGEM_DE_DADOS.md`, separando entidades persistidas de informações derivadas como saldo, pontos para nível, nível atual e atividade.
 
-### F4.01B — Seed FATECalçados V2 🟡 P0
+### F4.01B — Seed FATECalçados V2 ✅ P0
 
-Issue: #72.
+Issue: #72. PR: #89.
 
-Próxima etapa da rodada F3.06/F4.01.
+Entregue:
 
-Objetivo:
+- evolução do cenário one-shot para refletir integralmente os contratos da F3.06 sem introduzir regra FATECalçados no domínio geral;
+- 12 Lojas, 36 Clientes, 303 Compras, 303 Lotes, 25 aplicações históricas da campanha, 8 Resgates, 22 alocações e 1 Estorno;
+- níveis Bronze/Prata/Ouro como dados do tenant, agora com bônus de pontos e descontos configurados em `0%/0%`, `10%/5%` e `20%/10%`;
+- suspensão por inatividade, política da primeira Compra de retorno, promoção de retorno e combinação campanha + nível + retorno exercitadas pelo domínio real;
+- exatamente um override de Loja: Jardim Aurora — Araras com `pontos_por_real = 2.00`; Centro — Araras e as outras dez Lojas herdam `1.00` da Empresa;
+- contas demo estáveis de Administrador, Gestor e Helena, todas autenticando e resolvendo seus contextos reais; Gestor restrito exatamente a Centro — Araras e Jardim Aurora — Araras;
+- Helena preservada inativa e antes da Compra de retorno no estado final, permitindo consulta, simulação e Compra real durante a demonstração;
+- credencial de integração criada pelo fluxo real e, quando configurado `RETORNA_SEED_CREDENCIAL_ARQUIVO`, entrega única da chave bruta em arquivo operacional `0600`, exclusivo e fora do repositório, com compensação em falhas conhecidas;
+- documentação `docs/SEED_FATECALCADOS.md` reconciliada com o cenário V2, incluindo limites de atomicidade entre filesystem e PostgreSQL;
+- nenhuma migration nova e nenhum Dashboard introduzido nesta subfase;
+- validação final com 41 testes focados e 580 testes na suíte completa, além de `manage.py check`, `makemigrations --check`, OpenAPI com `spectacular --validate`, `uv lock --check` e `git diff --check`.
 
-- evoluir o cenário one-shot já existente para demonstrar os contratos integrados da F3.06;
-- manter 12 Lojas e criar Clientes ativos/inativos, níveis com benefícios, retorno, campanha, Resgate/FEFO, expiração, estorno e dados coerentes para o Dashboard;
-- criar contas demo estáveis de Administrador, Gestor com exatamente duas Lojas e Cliente narrativo;
-- disponibilizar a credencial de integração do ambiente de demonstração por mecanismo operacional seguro, sem hardcode ou exposição pública do segredo;
-- preservar services reais, determinismo, rollback integral e `RETORNA_SEED_SENHA` como única fonte da senha demo.
+### F4.02 — Dashboard da Gestão 🟡 P0
 
-### F4.02 — Dashboard do Gestor ⏳ P0
-
-O Dashboard continua sendo a entrega central da F4.02. Antes dele, o Seed FATECalçados V2 (#72) deve reconciliar o banco de demonstração com o domínio/API já integrados e fornecer dados coerentes para os indicadores.
+Com o Seed FATECalçados V2 integrado, a próxima entrega P0 é a F4.02B. O Dashboard deve nascer sobre os dados reais já reconciliados, mantendo autorização e cálculo no backend e usando a FATECalçados somente como dataset de validação.
 
 #### F4.02A — Base visual mínima + SCSS ✅ P0
 
@@ -555,26 +559,34 @@ Entregue:
 
 `Criar empresa` permanece como ação de onboarding/contexto, fora da navegação operacional geral. O Cliente continua sem shell administrativo. A F4.02A não introduziu Dashboard nem alterou regras de domínio, models, migrations ou contratos da API.
 
-#### F4.02B — Dashboard funcional ⏳ P0
+#### F4.02B — Dashboard funcional 🟡 P0
 
-Objetivo: entregar os indicadores essenciais calculados sobre a vertical real.
+Issue: #65.
 
-Indicadores essenciais:
+Objetivo: entregar métricas corretas, autorizadas e server-side sobre a vertical real.
 
-- clientes ativos;
-- ticket médio;
-- total/custo de descontos;
-- ranking de pontos acumulados;
-- evolução temporal;
-- total de clientes;
-- distribuição por níveis;
-- pontos acumulados x resgatados;
-- taxa de recompra, se disponível de forma coerente.
+Indicadores P0 fechados:
+
+- clientes ativos: Clientes distintos com Compra recente dentro do escopo efetivo, usando `periodo_cliente_ativo_dias` e uma única referência temporal por request;
+- ticket médio: `SUM(Compra.valor) / COUNT(Compra)` sobre o valor bruto histórico no escopo efetivo;
+- custo efetivo de Resgates: soma de `valor_desconto` dos Resgates sem Estorno efetivo;
+- Top 10 de Clientes por `SUM(LotePontos.pontos_concedidos)` histórico originado de Compras das Lojas visíveis, sem descontar Resgates ou expiração;
+- evolução temporal contínua dos últimos 12 meses de calendário, incluindo o atual, com quantidade de Compras e volume bruto e meses sem movimento preenchidos com zero.
 
 Escopo:
 
-- Administrador: Empresa inteira ou Loja selecionada;
-- Gestor: somente Lojas autorizadas.
+- Administrador: visão agregada da Empresa ativa e, se houver filtro mínimo de Loja, somente uma Loja pertencente ao tenant;
+- Gestor: mesmas métricas, restritas exclusivamente às suas `AcessoLoja` autorizadas;
+- Cliente: sem acesso ao Dashboard de Gestão;
+- qualquer `loja_id` recebido do cliente deve ser revalidado contra o conjunto autorizado antes de executar as métricas.
+
+Direção de implementação:
+
+- serviço de leitura dedicado e queries agregadas PostgreSQL;
+- Django Templates SSR e JavaScript apenas de apresentação;
+- nenhuma nova tabela de métricas e nenhuma regra de negócio duplicada no frontend;
+- indicadores complementares não bloqueiam a entrega P0;
+- gráficos e filtros avançados permanecem para a F4.02C.
 
 #### F4.02C — Gráficos, filtros e refinamentos do Dashboard ⏳ P0
 
