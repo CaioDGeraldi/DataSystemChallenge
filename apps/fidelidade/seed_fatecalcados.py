@@ -54,6 +54,7 @@ LOJAS = (
 POLITICA = dict(pontos_por_real=Decimal('1.00'), validade_pontos_meses=12,
     resgate_minimo_pontos=100, incremento_resgate_pontos=100,
     valor_monetario_por_ponto=Decimal('0.05'), precisao_pontos=2,
+    limite_resgate_percentual=Decimal('50.0000'),
     modo_arredondamento_pontos='HALF_UP', periodo_cliente_ativo_dias=180)
 RESGATES = (('A01', 2000), ('A02', 500), ('A03', 500), ('A04', 500),
             ('A05', 500), ('A06', 500), ('M01', 200), ('M02', 200))

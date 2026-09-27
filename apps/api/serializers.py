@@ -66,7 +66,18 @@ class InstanteCompraField(serializers.DateTimeField):
         return super().to_internal_value(data)
 
 
+class IdentificadorResgateField(serializers.CharField):
+    def to_internal_value(self, data):
+        if not isinstance(data, str):
+            raise serializers.ValidationError('Informe um identificador textual.')
+        return super().to_internal_value(data)
+
+
 class RegistrarCompraSerializer(serializers.Serializer):
+    resgate_identificador_externo = IdentificadorResgateField(
+        max_length=255, trim_whitespace=True, required=False,
+        help_text='Resgate histórico da mesma Loja e Cliente, não estornado nem vinculado. O desconto vem do histórico.',
+    )
     loja_id = serializers.IntegerField(min_value=1)
     identificador_externo = serializers.CharField(
         max_length=255, trim_whitespace=True,
@@ -78,6 +89,13 @@ class RegistrarCompraSerializer(serializers.Serializer):
         help_text="String decimal positiva, até duas casas, entre 0.01 e 9999999999.99. Não enviar float.",
     )
     ocorrida_em = InstanteCompraField(input_formats=["iso-8601"], help_text="ISO 8601 com timezone explícito.")
+
+    def to_internal_value(self, data):
+        if isinstance(data, dict):
+            extras = set(data) - set(self.fields)
+            if extras:
+                raise serializers.ValidationError({campo: 'Campo não permitido.' for campo in extras})
+        return super().to_internal_value(data)
 
     def validate_cliente_cpf(self, value):
         try:
@@ -100,7 +118,7 @@ class ClienteCompraSerializer(serializers.Serializer):
 class FidelidadeCompraSerializer(serializers.Serializer):
     pontos_base = serializers.DecimalField(
         max_digits=24, decimal_places=4, coerce_to_string=True,
-        help_text="Produto exato da Compra pela taxa aplicada, string com quatro casas decimais.",
+        help_text="Produto do valor elegível pela taxa aplicada, string com quatro casas decimais.",
     )
     pontos_concedidos = serializers.DecimalField(
         max_digits=24, decimal_places=4, coerce_to_string=True,
@@ -109,7 +127,56 @@ class FidelidadeCompraSerializer(serializers.Serializer):
     expira_em = serializers.DateTimeField()
 
 
+class ResgateCompraSerializer(serializers.Serializer):
+    identificador_externo = serializers.CharField()
+    pontos_resgatados = serializers.IntegerField()
+    valor_desconto = serializers.DecimalField(max_digits=32, decimal_places=2, coerce_to_string=True)
+
+
+class ValoresCompraSerializer(serializers.Serializer):
+    bruto = serializers.CharField()
+    desconto_total = serializers.CharField()
+    final = serializers.CharField()
+    elegivel_pontos = serializers.CharField()
+
+
+class PontosCompraSerializer(serializers.Serializer):
+    base = serializers.CharField()
+    apos_campanha = serializers.CharField()
+    bonus_nivel = serializers.CharField()
+    bonus_retorno = serializers.CharField()
+    total = serializers.CharField()
+
+
+class BeneficiosCompraSerializer(serializers.Serializer):
+    nivel_desconto = serializers.CharField(allow_null=True)
+    nivel_bonus = serializers.CharField(allow_null=True)
+    beneficios_nivel_aplicaveis = serializers.BooleanField()
+    retorno = serializers.BooleanField()
+    bonus_nivel_percentual = serializers.CharField()
+    desconto_nivel_percentual = serializers.CharField()
+    bonus_retorno_percentual = serializers.CharField()
+    desconto_retorno_percentual = serializers.CharField()
+    multiplicador_campanha = serializers.CharField()
+    ordem_aplicacao_resgate = serializers.CharField()
+    base_calculo_pontos = serializers.CharField()
+
+
+class ExplicacaoCompraSerializer(serializers.Serializer):
+    valores = ValoresCompraSerializer()
+    pontos = PontosCompraSerializer()
+    beneficios = BeneficiosCompraSerializer()
+
+
 class CompraSerializer(serializers.Serializer):
+    resgate = ResgateCompraSerializer(allow_null=True)
+    resumo = serializers.SerializerMethodField(help_text='Resultado histórico explicável; null para legado sem snapshot de benefícios.')
+
+    @extend_schema_field(ExplicacaoCompraSerializer(allow_null=True))
+    def get_resumo(self, compra):
+        from apps.fidelidade.apresentacao_compras import explicar_compra
+        return explicar_compra(compra)
+
     id = serializers.IntegerField()
     identificador_externo = serializers.CharField(max_length=255)
     loja = LojaCompraSerializer()
@@ -128,13 +195,6 @@ class PontosResgateField(serializers.IntegerField):
     def to_internal_value(self, data):
         if type(data) is not int:
             raise serializers.ValidationError('Envie pontos como inteiro JSON, sem float ou string.')
-        return super().to_internal_value(data)
-
-
-class IdentificadorResgateField(serializers.CharField):
-    def to_internal_value(self, data):
-        if not isinstance(data, str):
-            raise serializers.ValidationError('Informe um identificador textual.')
         return super().to_internal_value(data)
 
 
@@ -215,7 +275,14 @@ class PromocaoRetornoConsultaSerializer(serializers.Serializer):
     desconto_percentual = serializers.CharField()
 
 
-class ParametrosResgateConsultaSerializer(serializers.Serializer):
+class DisponibilidadeResgateSerializer(serializers.Serializer):
+    possivel = serializers.BooleanField(help_text='Há quantidade utilizável nas condições consultadas; não reserva saldo.')
+    maximo_pontos = serializers.IntegerField(min_value=0)
+    maximo_desconto = serializers.CharField(help_text='Equivalente monetário do máximo de pontos utilizável, com duas casas.')
+    limite_resgate_percentual = serializers.CharField(help_text='Percentual corporativo sobre o valor bruto, com quatro casas.')
+
+
+class ParametrosResgateConsultaSerializer(DisponibilidadeResgateSerializer):
     minimo_pontos = serializers.IntegerField(min_value=1)
     incremento_pontos = serializers.IntegerField(min_value=1)
     valor_monetario_por_ponto = serializers.CharField()
@@ -304,6 +371,8 @@ class PontosSimulacaoSerializer(serializers.Serializer):
 
 
 class SimulacaoCompraSerializer(serializers.Serializer):
+    saldo = SaldoFidelidadeSerializer()
+    resgate = DisponibilidadeResgateSerializer()
     cliente = ClienteFidelidadeSerializer()
     simulada_em = serializers.DateTimeField()
     atividade = AtividadeSimulacaoSerializer()

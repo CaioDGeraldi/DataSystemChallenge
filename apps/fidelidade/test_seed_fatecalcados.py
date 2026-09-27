@@ -150,6 +150,7 @@ class CenarioSeedTests(TestCase):
         self.assertEqual(empresa.credenciais_integracao.get().escopo, 'EMPRESA')
         self.assertEqual(empresa.eventos_fidelidade.count(), 1)
         cfg = ConfiguracaoFidelidadeEmpresa.objects.get(empresa=empresa)
+        self.assertEqual(cfg.limite_resgate_percentual, Decimal("50.0000"))
         self.assertEqual({k: getattr(cfg, k) for k in seed.POLITICA}, seed.POLITICA)
         self.assertFalse(OverrideFidelidadeLoja.objects.exists())
         self.assertEqual(list(empresa.niveis_fidelidade.values_list('nome', 'pontos_minimos')),

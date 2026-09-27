@@ -160,7 +160,7 @@ def avaliar_fidelidade_compra(
         if politica.ordem_aplicacao_resgate == 'DEPOIS_DOS_DESCONTOS_PERCENTUAIS':
             restante = max(ZERO, restante - desconto_resgate)
         final = restante.quantize(Decimal('.01'), rounding=ROUND_HALF_UP)
-        elegivel = valor if politica.base_calculo_pontos == 'BRUTO' else final
+        elegivel = max(ZERO, valor - desconto_resgate) if politica.base_calculo_pontos == 'BRUTO' else final
         base, _ = calcular_pontos(
             elegivel,
             politica.pontos_por_real,
@@ -216,21 +216,23 @@ def _json(valor):
     return valor
 
 
-def snapshot_beneficios(avaliacao, politica, progresso, ultima_compra):
+def snapshot_beneficios(avaliacao, politica, progresso, ultima_compra, *, desconto_resgate=Decimal("0.00"), versao=2):
     # Só os dois níveis efetivamente considerados; não guarda catálogo/configuração futura.
     niveis = {
         n.id: asdict(n)
         for n in (avaliacao.nivel_anterior, avaliacao.nivel_bonus)
         if n
     }
-    # Estorno não participa da Compra. Preserva também o formato dos snapshots v1.
+    # Estorno não participa da Compra; v1 preserva o formato anterior ao limite.
     campos = (
         nome for nome in ParametrosFidelidade.__dataclass_fields__
         if nome != 'devolver_pontos_ao_estornar_resgate'
+        and (versao >= 2 or nome != 'limite_resgate_percentual')
     )
     return _json(
         {
-            'versao': 1,
+            'versao': versao,
+            **({'desconto_resgate': desconto_resgate} if versao >= 2 else {}),
             'politica': {k: getattr(politica, k) for k in campos},
             'progresso_anterior': progresso,
             'ultima_compra': ultima_compra,
@@ -242,11 +244,12 @@ def snapshot_beneficios(avaliacao, politica, progresso, ultima_compra):
 
 def reavaliar_snapshot(snapshot, valor, instante, multiplicador):
     try:
-        if snapshot['versao'] != 1:
+        if snapshot['versao'] not in (1, 2):
             raise ValueError
         dados = dict(snapshot['politica'])
         # Campo novo sem efeito no cálculo de Compra e ausente no histórico v1.
         dados['devolver_pontos_ao_estornar_resgate'] = True
+        dados['limite_resgate_percentual'] = Decimal(dados.get('limite_resgate_percentual', '100.0000'))
         for campo in (
             'pontos_por_real',
             'valor_monetario_por_ponto',
@@ -284,8 +287,13 @@ def reavaliar_snapshot(snapshot, valor, instante, multiplicador):
             progresso=progresso,
             niveis=niveis,
             multiplicador=multiplicador,
+            desconto_resgate=Decimal(snapshot.get('desconto_resgate', '0.00')),
         )
-        if snapshot != snapshot_beneficios(avaliacao, politica, progresso, ultima):
+        if snapshot != snapshot_beneficios(
+            avaliacao, politica, progresso, ultima,
+            desconto_resgate=Decimal(snapshot.get('desconto_resgate', '0.00')),
+            versao=snapshot['versao'],
+        ):
             raise ValueError
         return avaliacao
     except (KeyError, TypeError, ValueError, ArithmeticError) as exc:

@@ -10,6 +10,7 @@ from apps.empresas.models import Loja
 from apps.empresas.services import exigir_loja_autorizada, resolver_configuracao
 from apps.usuarios.validators import normalizar_cpf, validar_cpf
 
+from .calculos_resgate import disponibilidade_resgate
 from .beneficios import NivelBeneficios, avaliar_fidelidade_compra
 from .exceptions import ClienteNaoEncontrado, LojaForaDoEscopo
 from .consumo import alocacoes_com_consumo_efetivo
@@ -146,6 +147,7 @@ def consultar_fidelidade_cliente(*, credencial, loja_id, cliente_cpf):
         avaliacao.retorno and politica.promocao_retorno_ativa
     )
 
+    saldo = _saldo_atual(cliente.pk, instante)
     return {
         "cliente": {
             "cpf": cliente.usuario.cpf,
@@ -162,7 +164,7 @@ def consultar_fidelidade_cliente(*, credencial, loja_id, cliente_cpf):
         },
         "saldo": {
             "pontos": _quatro_casas(
-                _saldo_atual(cliente.pk, instante),
+                saldo,
             ),
         },
         "promocao_retorno": {
@@ -179,6 +181,7 @@ def consultar_fidelidade_cliente(*, credencial, loja_id, cliente_cpf):
             ),
         },
         "resgate": {
+            **disponibilidade_resgate(saldo, politica),
             "minimo_pontos": politica.resgate_minimo_pontos,
             "incremento_pontos": politica.incremento_resgate_pontos,
             "valor_monetario_por_ponto": _duas_casas(

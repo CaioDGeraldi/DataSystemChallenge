@@ -2,7 +2,7 @@
 
 ## 1. Objetivo
 
-Este documento descreve a modelagem de dados vigente da Retorna após a conclusão da F3.05 e da F4.01.
+Este documento descreve a modelagem de dados vigente da Retorna incluindo a integração Compra–Resgate da F3.06F.
 
 O objetivo é explicar **o que cada entidade representa, como as entidades se relacionam e quais invariantes o domínio preserva**. Este arquivo não substitui `models.py`, migrations ou services: o código e o histórico de migrations continuam sendo a fonte de verdade operacional.
 
@@ -114,6 +114,7 @@ erDiagram
     LOJA ||--o{ COMPRA : registra
     CREDENCIAL_INTEGRACAO ||--o{ COMPRA : origina
 
+    COMPRA |o--o| RESGATE : utiliza
     COMPRA ||--o| LOTE_PONTOS : gera
     CLIENTE ||--o{ LOTE_PONTOS : recebe
 
@@ -307,6 +308,7 @@ Parâmetros vigentes:
 - `pontos_por_real`;
 - `validade_pontos_meses`;
 - `devolver_pontos_ao_estornar_resgate` (booleano, default `true`, somente Empresa);
+- `limite_resgate_percentual` (Decimal 7,4, de 0 a 100; padrão 100; somente Empresa);
 - `resgate_minimo_pontos`;
 - `incremento_resgate_pontos`;
 - `valor_monetario_por_ponto`;
@@ -389,7 +391,22 @@ Também existe constraint para valor estritamente positivo.
 
 Loja, Cliente e credencial precisam pertencer ao mesmo tenant e a credencial precisa estar autorizada para a Loja no momento da nova operação.
 
-Os fatos materiais da Compra ficam imutáveis depois da criação.
+Os fatos materiais da Compra ficam imutáveis depois da criação, inclusive `resgate`.
+`Compra.resgate` é `OneToOneField(null=True, blank=True, PROTECT)` para Resgate:
+Compra possui 0..1 Resgate e Resgate é usado em no máximo uma Compra, com unicidade SQL.
+O vínculo exige mesma Loja, Cliente e tenant, ausência de estorno e de outra Compra.
+Não se comparam os instantes do Resgate e da Compra. `valor` permanece bruto.
+O desconto vem do Resgate histórico e passa pelo avaliador canônico de benefícios.
+O teto usa o bruto e `limite_resgate_percentual`, independentemente da ordem dos descontos;
+o máximo aplicável é o menor entre esse teto e a capacidade efetiva (bruto em ANTES,
+restante após percentuais em DEPOIS). Resgate histórico acima desse máximo é
+rejeitado, nunca reduzido ou reescrito. BRUTO ignora descontos percentuais, mas
+exclui sempre o desconto do Resgate; LIQUIDO usa o valor final após todos os descontos.
+
+A criação toma locks Empresa → Cliente; o lock do Cliente já usado por Resgate/estorno
+serializa o vínculo e impede vínculo simultâneo com estorno. Mantêm-se os locks FEFO
+existentes. Retry compara também a identidade do Resgate antes de validar regras atuais.
+Falha ao gerar Lote desfaz a Compra e o vínculo na mesma transação.
 
 ## 11. Concessão de pontos
 
@@ -416,6 +433,12 @@ Principais dados persistidos:
 - `adquiridos_em`;
 - `expira_em`;
 - `criado_em`.
+
+`beneficios_aplicados` v2 inclui `desconto_resgate` e a política de limite corporativo.
+Snapshots v1 continuam válidos com desconto zero e sem exigir o novo campo. Não há
+backfill de snapshots nem recálculo de fatos antigos. A resposta pública é uma
+projeção dos resultados históricos; legado sem snapshot de benefícios não inventa
+uma explicação com a configuração atual.
 
 Esses campos formam snapshots do cálculo realmente aplicado. Alterar a configuração atual não modifica o Lote existente.
 
@@ -565,7 +588,7 @@ A alocação não reduz fisicamente `LotePontos.pontos_concedidos`; o consumo é
 
 Fato histórico próprio de estorno sempre integral. Referencia `resgate` por `OneToOneField(PROTECT)` e preserva `loja`, `cliente`, `credencial_origem` (todos `PROTECT`), `identificador_externo`, `devolve_pontos_aplicado` e `estornado_em` do servidor. Loja e Cliente devem corresponder ao Resgate original. A relação única garante no máximo um estorno por Resgate; `UNIQUE(loja, identificador_externo)` garante a chave idempotente própria.
 
-Não duplica pontos, desconto ou snapshots disponíveis no Resgate imutável. O service `estornar_resgate` é o caminho autorizado de criação; alterações, `update`, `bulk_update`, `bulk_create`, exclusão de instância e `QuerySet.delete` são bloqueados pelos mesmos mecanismos do histórico de Resgates.
+Não duplica pontos, desconto ou snapshots disponíveis no Resgate imutável. Resgate vinculado a Compra não pode ser estornado isoladamente (`409 resgate_vinculado_compra`). O service `estornar_resgate` é o caminho autorizado de criação; alterações, `update`, `bulk_update`, `bulk_create`, exclusão de instância e `QuerySet.delete` são bloqueados pelos mesmos mecanismos do histórico de Resgates.
 
 `devolve_pontos_aplicado` copia a configuração corporativa `devolver_pontos_ao_estornar_resgate`, default true e configurável pela Empresa, sem override por Loja. Mudanças posteriores não alteram esse snapshot. False mantém o consumo original; true deixa de considerar as alocações como consumo efetivo, disponibilizando somente pontos de Lotes ainda válidos. Pontos expirados nunca voltam: nenhuma validade é renovada, nenhum `expira_em` muda e nenhum Lote substituto ou compensatório é criado. Resgate e AlocacaoResgate originais permanecem intactos. Não há saldo ou crédito restaurado persistido.
 
@@ -848,3 +871,16 @@ Em caso de divergência entre este documento e a implementação, prevalecem:
 4. testes que formalizam as invariantes.
 
 Este documento deve ser atualizado quando a modelagem mudar de forma relevante.
+
+## 24. Conversão e disponibilidade de Resgate — F3.06F
+
+Não há tabela persistida de conversões. O cálculo reutilizável `maximo_resgate`
+seleciona o maior `mínimo + N × incremento` coberto pelo saldo e, quando informado
+valor de Compra, pelo máximo aplicável (menor entre teto bruto percentual e
+capacidade efetiva na ordem configurada) convertido em pontos. Valores abaixo
+do mínimo resultam em zero. Teto financeiro é truncado em centavos; pontos nunca
+são arredondados para cima. Consulta e simulação usam essa mesma função.
+
+A Gestão oferece prévia e modal de dez linhas por página com valores ainda não
+salvos, usando inteiros no JavaScript apenas para apresentar a conversão linear.
+Elegibilidade, limites operacionais e persistência continuam no domínio Python.

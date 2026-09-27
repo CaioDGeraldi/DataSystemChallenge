@@ -11,7 +11,9 @@ from apps.usuarios.validators import normalizar_cpf, validar_cpf
 
 from .exceptions import ClienteNaoEncontrado, IdempotenciaConflitante, LojaForaDoEscopo
 from .calculos import calcular_expiracao
-from .models import Compra, LotePontos, NivelFidelidade
+from .models import Compra, LotePontos, NivelFidelidade, Resgate, EstornoResgate
+from .calculos_resgate import normalizar_identificador_resgate, maximo_desconto_compra
+from .exceptions import ResgateNaoEncontrado, ResgateJaEstornado, ResgateVinculadoCompra, LimiteResgateExcedido
 from .beneficios import NivelBeneficios, avaliar_fidelidade_compra, snapshot_beneficios
 from .eventos import resolver_efeito_evento, registrar_aplicacao_evento
 from .escrita_eventos import _permitir_escrita_eventos
@@ -54,7 +56,12 @@ def _criar_lote_da_nova_compra(compra):
         progresso=progresso,
         niveis=niveis,
         multiplicador=multiplicador,
+        desconto_resgate=compra.resgate.valor_desconto if compra.resgate_id else Decimal('0.00'),
     )
+    if compra.resgate_id and compra.resgate.valor_desconto > maximo_desconto_compra(
+        compra.valor, politica, avaliacao.desconto_nivel, avaliacao.desconto_retorno,
+    ):
+        raise LimiteResgateExcedido
     lote = LotePontos.objects.create(
         compra=compra,
         cliente_id=compra.cliente_id,
@@ -62,6 +69,7 @@ def _criar_lote_da_nova_compra(compra):
         pontos_concedidos=avaliacao.pontos_concedidos,
         beneficios_aplicados=snapshot_beneficios(
             avaliacao, politica, progresso, ultima,
+            desconto_resgate=compra.resgate.valor_desconto if compra.resgate_id else Decimal("0.00"),
         ),
         multiplicador_pontos_aplicado=multiplicador,
         pontos_por_real_aplicado=politica.pontos_por_real,
@@ -79,7 +87,10 @@ def _criar_lote_da_nova_compra(compra):
     return lote
 
 
-def _comparar_fatos(existente, candidata):
+def _comparar_fatos(existente, candidata, identificador_resgate):
+    historico = existente.resgate.identificador_externo if existente.resgate_id else None
+    if historico != identificador_resgate:
+        raise IdempotenciaConflitante
     campos = ("loja_id", "cliente_id", "valor", "ocorrida_em")
     if any(getattr(existente, campo) != getattr(candidata, campo) for campo in campos):
         raise IdempotenciaConflitante
@@ -94,7 +105,10 @@ def registrar_compra(
     identificador_externo,
     valor,
     ocorrida_em,
+    resgate_identificador_externo=None,
 ):
+    if resgate_identificador_externo is not None:
+        resgate_identificador_externo = normalizar_identificador_resgate(resgate_identificador_externo)
     with transaction.atomic():
         loja = Loja.objects.filter(pk=loja_id).first()
         if loja is None:
@@ -126,14 +140,27 @@ def registrar_compra(
         }
         existente = Compra.objects.filter(**chave).first()
         if existente is not None:
-            return _comparar_fatos(existente, candidata)
+            return _comparar_fatos(existente, candidata, resgate_identificador_externo)
         # Empresa → Cliente: configuração/níveis/eventos não mudam durante a avaliação.
         # O Cliente serializa também com Resgate, sem inverter sua ordem de locks.
         Empresa.objects.select_for_update(no_key=True).get(pk=loja.empresa_id)
         Cliente.objects.select_for_update().get(pk=cliente.pk)
         existente = Compra.objects.filter(**chave).first()
         if existente is not None:
-            return _comparar_fatos(existente, candidata)
+            return _comparar_fatos(existente, candidata, resgate_identificador_externo)
+        if resgate_identificador_externo is not None:
+            # Cliente já travado: serializa vínculo, consumo e estorno sem inverter locks.
+            resgate = Resgate.objects.filter(
+                loja_id=loja.pk, cliente_id=cliente.pk,
+                identificador_externo=resgate_identificador_externo,
+            ).first()
+            if resgate is None:
+                raise ResgateNaoEncontrado
+            if EstornoResgate.objects.filter(resgate=resgate).exists():
+                raise ResgateJaEstornado
+            if Compra.objects.filter(resgate=resgate).exists():
+                raise ResgateVinculadoCompra
+            candidata.resgate = resgate
         try:
             # Savepoint: após a disputa de unicidade, a transação externa segue utilizável.
             with transaction.atomic():
@@ -144,6 +171,6 @@ def registrar_compra(
             if getattr(diagnostico, "constraint_name", None) != "compra_loja_identificador_unico":
                 raise
             existente = Compra.objects.get(**chave)
-            return _comparar_fatos(existente, candidata)
+            return _comparar_fatos(existente, candidata, resgate_identificador_externo)
         _criar_lote_da_nova_compra(candidata)
         return candidata, True

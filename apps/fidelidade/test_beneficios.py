@@ -190,7 +190,7 @@ class AvaliacaoBeneficiosTests(SimpleTestCase):
                 self.assertEqual(r.valor_final, D(valor))
                 self.assertEqual(
                     r.pontos_base,
-                    D('200') if base=='BRUTO' else D(valor),
+                    D('170') if base=='BRUTO' else D(valor),
                 )
         for ordem in ('ANTES_DOS_DESCONTOS_PERCENTUAIS', 'DEPOIS_DOS_DESCONTOS_PERCENTUAIS'):
             self.assertEqual(

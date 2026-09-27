@@ -10,6 +10,8 @@ from apps.empresas.models import Loja
 from apps.empresas.services import exigir_loja_autorizada, resolver_configuracao
 from apps.usuarios.validators import normalizar_cpf, validar_cpf
 
+from .consultas import _saldo_atual
+from .calculos_resgate import disponibilidade_resgate
 from .beneficios import NivelBeneficios, avaliar_fidelidade_compra
 from .eventos import consultar_efeito_evento
 from .exceptions import ClienteNaoEncontrado, LojaForaDoEscopo
@@ -141,12 +143,18 @@ def simular_compra(*, credencial, loja_id, cliente_cpf, valor):
             rounding=ROUND_HALF_UP,
         )
 
+    saldo = _saldo_atual(cliente.pk, instante)
     return {
         "cliente": {
             "cpf": cliente.usuario.cpf,
             "nome": cliente.usuario.get_full_name().strip(),
         },
         "simulada_em": instante,
+        "saldo": {"pontos": _quatro_casas(saldo)},
+        "resgate": disponibilidade_resgate(
+            saldo, politica, valor_compra=valor,
+            desconto_nivel=avaliacao.desconto_nivel, desconto_retorno=avaliacao.desconto_retorno,
+        ),
         "atividade": {
             "ativo": avaliacao.ativo_antes,
             "retorno": avaliacao.retorno,

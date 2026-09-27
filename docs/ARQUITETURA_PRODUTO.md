@@ -228,13 +228,15 @@ A ordem de cálculo é:
 1. Consultar progresso histórico e nível anterior à Compra.
 2. Aplicar o desconto desse nível, quando elegível, e o desconto de retorno. `ADITIVO` soma percentuais com teto técnico de 100%; `SEQUENCIAL` aplica cada um sobre o restante.
 3. Aplicar o valor monetário do Resgate antes ou depois dos percentuais, conforme política, sem resultado negativo. O valor final é arredondado uma vez para centavos com HALF_UP, sem arredondar cada desconto intermediário.
-4. Escolher valor original (`BRUTO`) ou final (`LIQUIDO`) como base monetária dos pontos e multiplicar por pontos por real.
+4. Escolher `max(0, valor bruto − desconto do Resgate)` (`BRUTO`) ou valor final após Resgate e percentuais (`LIQUIDO`) como base monetária dos pontos e multiplicar por pontos por real.
 5. Aplicar a campanha sobre pontos base. Para bônus de nível, usar o nível anterior (`ANTES_DA_COMPRA`) ou classificar provisoriamente progresso histórico + pontos base × campanha (`ATINGIDO_NA_COMPRA`). Essa classificação não inclui bônus do nível nem de retorno.
 6. Somar campanha, bônus de nível e bônus de retorno, estes dois calculados sobre os mesmos pontos base. Arredondar o total segundo precisão/modo corporativos.
 
 O desconto monetário sempre usa o nível anterior, inclusive no modo ATINGIDO_NA_COMPRA. O desconto do nível recém-atingido só pode valer na próxima Compra. Não há iteração nem dependência circular com LIQUIDO. Exemplo: base 100, campanha 2x, nível +20% e retorno +30% concedem 250 pontos.
 
-O parâmetro de Resgate existe somente no avaliador reutilizável. O fluxo atual de Compra passa desconto de Resgate zero; nenhuma relação Compra ↔ Resgate, liquidação financeira ou nova API é introduzida nesta fase.
+A Compra pode vincular um Resgate histórico, cujo desconto é passado ao avaliador canônico. BRUTO ignora descontos percentuais, mas nunca inclui a parcela paga por Resgate, independentemente da ordem ANTES/DEPOIS. Para bruto 100, Resgate 50 e desconto percentual 20%, ANTES resulta em final 40 e DEPOIS em final 30; a base BRUTO é 50 nos dois casos e LIQUIDO acompanha o final.
+
+O máximo aplicável de Resgate é o menor entre o teto contratual (`bruto × limite_resgate_percentual / 100`) e a capacidade efetiva: bruto para ANTES, ou restante após os percentuais para DEPOIS. A simulação converte esse máximo em pontos respeitando saldo, mínimo, incremento e taxa; a Compra rejeita desconto histórico acima dele sem truncar ou desperdiçar pontos. Com bruto 100, limite 50%, taxa 0,05 e desconto 70%, ANTES permite 50/1.000 pontos e DEPOIS 30/600 pontos. Snapshots v1 permanecem preservados; v2 inclui o desconto histórico e continua reavaliável.
 
 `LotePontos.beneficios_aplicados` guarda snapshot JSON versionado, com políticas, progresso anterior, última Compra, níveis considerados, percentuais aplicados e resultados monetários/pontos. A criação revalida sua consistência e o histórico segue imutável. Lotes antigos mantêm snapshot nulo e validação legada, sem backfill ou recálculo. A proveniência da campanha continua em `AplicacaoEfeitoEventoLote`.
 

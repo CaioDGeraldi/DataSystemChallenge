@@ -9,6 +9,7 @@ MODOS_ARREDONDAMENTO_PONTOS = ("HALF_UP", "DOWN", "UP")
 
 @dataclass(frozen=True)
 class ParametrosFidelidade:
+    limite_resgate_percentual: Decimal
     devolver_pontos_ao_estornar_resgate: bool
     precisao_pontos: int
     modo_arredondamento_pontos: str
@@ -31,6 +32,7 @@ class ParametrosFidelidade:
 
 
 PADROES_FIDELIDADE = ParametrosFidelidade(
+    limite_resgate_percentual=Decimal("100.0000"),
     devolver_pontos_ao_estornar_resgate=True,
     precisao_pontos=2,
     modo_arredondamento_pontos="HALF_UP",

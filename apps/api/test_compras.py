@@ -34,7 +34,7 @@ class CompraHTTPTests(DadosCompras, TestCase):
         self.assertEqual(primeira.status_code, 201)
         dados = primeira.json()
         compra = Compra.objects.get()
-        self.assertEqual(set(dados), {"id", "identificador_externo", "loja", "cliente", "valor", "ocorrida_em", "criada_em", "fidelidade"})
+        self.assertEqual(set(dados), {"id", "identificador_externo", "loja", "cliente", "valor", "ocorrida_em", "criada_em", "fidelidade", "resgate", "resumo"})
         self.assertEqual(dados["id"], compra.pk)
         self.assertEqual(dados["loja"], {"id": self.loja.pk, "nome": "Centro"})
         self.assertEqual(dados["cliente"], {"cpf": self.usuario.cpf})
@@ -183,4 +183,4 @@ class CompraOpenAPITests(SimpleTestCase):
         for status in ("200", "201"):
             referencia = post["responses"][status]["content"]["application/json"]["schema"]["$ref"].split("/")[-1]
             saida = schema["components"]["schemas"][referencia]
-            self.assertEqual(set(saida["properties"]), {"id", "identificador_externo", "loja", "cliente", "valor", "ocorrida_em", "criada_em", "fidelidade"})
+            self.assertEqual(set(saida["properties"]), {"id", "identificador_externo", "loja", "cliente", "valor", "ocorrida_em", "criada_em", "fidelidade", "resgate", "resumo"})

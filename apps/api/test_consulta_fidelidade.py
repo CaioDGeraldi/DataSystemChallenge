@@ -116,6 +116,10 @@ class ConsultaFidelidadeHTTPTests(DadosResgates, TestCase):
         self.assertEqual(
             dados["resgate"],
             {
+                "possivel": True,
+                "maximo_pontos": 200,
+                "maximo_desconto": "10.00",
+                "limite_resgate_percentual": "100.0000",
                 "minimo_pontos": 100,
                 "incremento_pontos": 50,
                 "valor_monetario_por_ponto": "0.05",

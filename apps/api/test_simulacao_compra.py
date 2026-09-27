@@ -99,6 +99,8 @@ class SimulacaoCompraHTTPTests(DadosResgates, TestCase):
             {
                 "cliente",
                 "simulada_em",
+                "saldo",
+                "resgate",
                 "atividade",
                 "nivel",
                 "campanha",
