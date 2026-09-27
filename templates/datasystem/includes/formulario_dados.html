@@ -26,6 +26,7 @@
   <fieldset {% if navegacao_secoes %}id="form-section-{{ forloop.counter }}"{% endif %} data-form-step data-step-label="{{ etapa.rotulo }}"{% if etapa.tem_erros %} data-step-has-errors{% endif %}>
     <legend tabindex="-1">{% if navegacao_secoes %}Seção{% else %}Etapa{% endif %} {{ forloop.counter }} — {{ etapa.rotulo }}</legend>
     {% for field in etapa.campos %}{% include 'datasystem/includes/campo_formulario.html' %}{% endfor %}
+    {% if etapa.rotulo == 'Resgate' and form.limite_resgate_percentual %}{% include 'datasystem/gestor/partials/conversao_resgate.html' %}{% endif %}
   </fieldset>
   {% endfor %}
   {% else %}

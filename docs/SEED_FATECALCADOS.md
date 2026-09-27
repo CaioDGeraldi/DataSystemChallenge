@@ -61,9 +61,12 @@ Cada cidade possui três unidades. Elas permitem filtros e comparações de valo
 | `resgate_minimo_pontos` | 100 |
 | `incremento_resgate_pontos` | 100 |
 | `valor_monetario_por_ponto` | 0.05 |
+| `limite_resgate_percentual` | 50.0000% |
 | `precisao_pontos` | 2 |
 | `modo_arredondamento_pontos` | HALF_UP |
 | `periodo_cliente_ativo_dias` | 180 |
+
+O limite de Resgate é aplicado sobre o valor bruto de futuras Compras vinculadas. A composição existente mantém seus Resgates independentes; não há vínculo ou reescrita retroativa.
 
 Todos são salvos pelo service corporativo. Não há override de Loja. Cálculos usam `Decimal`; pontos são persistidos com quatro casas conforme o domínio.
 

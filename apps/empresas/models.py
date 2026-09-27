@@ -317,6 +317,11 @@ def _validar_tipos_parametros(instancia, exclude):
 
 
 class ConfiguracaoFidelidadeEmpresa(models.Model):
+    limite_resgate_percentual = models.DecimalField(
+        max_digits=7, decimal_places=4,
+        default=PADROES_FIDELIDADE.limite_resgate_percentual,
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
+    )
     devolver_pontos_ao_estornar_resgate = models.BooleanField(
         default=PADROES_FIDELIDADE.devolver_pontos_ao_estornar_resgate,
         help_text="Devolve somente pontos ainda válidos; pontos expirados nunca retornam.",
@@ -427,6 +432,10 @@ class ConfiguracaoFidelidadeEmpresa(models.Model):
 
     class Meta:
         constraints = [
+            models.CheckConstraint(
+                condition=models.Q(limite_resgate_percentual__gte=0, limite_resgate_percentual__lte=100),
+                name='cfg_limite_resgate_percentual',
+            ),
             models.CheckConstraint(
                 condition=models.Q(
                     bonus_pontos_retorno_percentual__gte=0,

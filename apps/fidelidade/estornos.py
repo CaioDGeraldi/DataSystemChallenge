@@ -10,7 +10,8 @@ from apps.empresas.services import resolver_configuracao
 from .calculos_resgate import normalizar_identificador_resgate
 from .escrita_resgates import _permitir_escrita_resgates
 from .exceptions import IdempotenciaConflitante, ResgateJaEstornado, ResgateNaoEncontrado
-from .models import EstornoResgate, Resgate
+from .models import Compra, EstornoResgate, Resgate
+from .exceptions import ResgateVinculadoCompra
 from .resgates import _autorizar_loja
 
 
@@ -45,6 +46,8 @@ def estornar_resgate(*, credencial, loja_id, resgate_identificador_externo, iden
         Cliente.objects.select_for_update(no_key=True).get(pk=resgate.cliente_id)
         if EstornoResgate.objects.filter(resgate=resgate).exists():
             raise ResgateJaEstornado
+        if Compra.objects.filter(resgate=resgate).exists():
+            raise ResgateVinculadoCompra
         politica = resolver_configuracao(loja.empresa)
         estorno = EstornoResgate(
             resgate=resgate, loja=loja, cliente_id=resgate.cliente_id,

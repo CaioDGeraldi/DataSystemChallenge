@@ -86,6 +86,7 @@ class ParametrosDominioTests(DadosParametros, TestCase):
             {
                 "empresa_id": self.empresa.pk,
                 "loja_id": None,
+                "limite_resgate_percentual": Decimal("100.0000"),
                 "pontos_por_real": Decimal("1.00"),
                 "precisao_pontos": 2,
                 "modo_arredondamento_pontos": "HALF_UP",
@@ -197,7 +198,7 @@ class ParametrosDominioTests(DadosParametros, TestCase):
         for campo in asdict(PADROES_FIDELIDADE):
             if type(getattr(PADROES_FIDELIDADE, campo)) is bool:
                 continue  # BooleanField admite os dois estados; não é regra de positividade.
-            invalido = {"pontos_por_real": -1, "precisao_pontos": 3,
+            invalido = {"limite_resgate_percentual": 101, "pontos_por_real": -1, "precisao_pontos": 3,
                         "modo_arredondamento_pontos": "INVALID",
                         "bonus_pontos_retorno_percentual": -1, "desconto_retorno_percentual": 101}.get(
                 campo,
@@ -629,3 +630,26 @@ class ParametroEstornoTests(DadosParametros, TestCase):
         self.assertIs(getattr(resolver_configuracao(self.empresa, self.loja), campo), False)
         self.assertEqual(self.client.post(url, self.valores()).status_code, 302)
         self.assertIs(getattr(resolver_configuracao(self.empresa), campo), True)
+
+
+class LimiteResgateTests(DadosParametros, TestCase):
+    def test_validacao_model_service_constraint_e_sem_override(self):
+        self.assertEqual(resolver_configuracao(self.empresa).limite_resgate_percentual, Decimal('100.0000'))
+        for invalido in (Decimal('-0.0001'), Decimal('100.0001'), Decimal('NaN'), 0.5):
+            with self.subTest(valor=invalido), self.assertRaises(ValidationError):
+                self.salvar(limite_resgate_percentual=invalido)
+        for limite in ('0', '50.0000', '100'):
+            cfg = self.salvar(limite_resgate_percentual=Decimal(limite))
+            self.assertEqual(resolver_configuracao(self.empresa, self.loja).limite_resgate_percentual, Decimal(limite))
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ConfiguracaoFidelidadeEmpresa.objects.filter(pk=cfg.pk).update(limite_resgate_percentual=101)
+        self.assertNotIn('limite_resgate_percentual', {f.name for f in OverrideFidelidadeLoja._meta.fields})
+
+    def test_formulario_preview_modal_e_persistencia(self):
+        self.autenticar()
+        url = reverse('empresas:configuracao_empresa')
+        resposta = self.client.get(url)
+        for texto in ('name="limite_resgate_percentual"', 'data-resgate-preview', 'Ver tabela de conversão', '<dialog', 'data-resgate-proxima', 'data-resgate-anterior', 'Pontos', 'Desconto'):
+            self.assertContains(resposta, texto)
+        self.assertEqual(self.client.post(url, self.valores(limite_resgate_percentual='50.0000')).status_code, 302)
+        self.assertEqual(resolver_configuracao(self.empresa).limite_resgate_percentual, Decimal('50'))

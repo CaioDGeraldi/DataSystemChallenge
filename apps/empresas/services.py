@@ -363,6 +363,7 @@ def salvar_configuracao_empresa(
     periodo_cliente_ativo_dias,
     precisao_pontos,
     modo_arredondamento_pontos,
+    limite_resgate_percentual=None,
     devolver_pontos_ao_estornar_resgate=None,
     inatividade_suspende_beneficios_nivel=None,
     promocao_retorno_ativa=None,
@@ -386,6 +387,8 @@ def salvar_configuracao_empresa(
             configuracao = ConfiguracaoFidelidadeEmpresa(empresa=empresa)
         if devolver_pontos_ao_estornar_resgate is not None:
             configuracao.devolver_pontos_ao_estornar_resgate = devolver_pontos_ao_estornar_resgate
+        if limite_resgate_percentual is not None:
+            configuracao.limite_resgate_percentual = limite_resgate_percentual
         configuracao.precisao_pontos = precisao_pontos
         configuracao.modo_arredondamento_pontos = modo_arredondamento_pontos
         configuracao.pontos_por_real = pontos_por_real

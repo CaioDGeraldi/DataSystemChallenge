@@ -6,7 +6,7 @@ A API REST é uma interface de primeira classe do DataSystemChallenge. Ela exist
 
 A API utiliza Django REST Framework sobre a mesma camada de domínio utilizada pela interface web.
 
-A F2.06 entrega credenciais de integração, health, contexto e OpenAPI. A F3.01 acrescenta registro de Compra e idempotência; a F3.02 acrescenta cálculo base de pontos e LotePontos histórico. A F3.03 acrescenta campanhas temporárias com multiplicador de pontos. A F3.04 acrescenta Resgate idempotente com consumo de Lotes e desconto histórico. A F3.06B acrescenta consulta autenticada do estado atual de fidelidade do Cliente para integrações. A F3.06C acrescenta simulação de Compra sem persistência para o PDV consultar os efeitos atuais de fidelidade antes de finalizar a venda. A F3.06D acrescenta simulação de Resgate sem persistência ou reserva de saldo. A F3.06E acrescenta estorno integral, histórico e idempotente de Resgate.
+A F2.06 entrega credenciais de integração, health, contexto e OpenAPI. A F3.01 acrescenta registro de Compra e idempotência; a F3.02 acrescenta cálculo base de pontos e LotePontos histórico. A F3.03 acrescenta campanhas temporárias com multiplicador de pontos. A F3.04 acrescenta Resgate idempotente com consumo de Lotes e desconto histórico. A F3.06B acrescenta consulta autenticada do estado atual de fidelidade do Cliente para integrações. A F3.06C acrescenta simulação de Compra sem persistência para o PDV consultar os efeitos atuais de fidelidade antes de finalizar a venda. A F3.06D acrescenta simulação de Resgate sem persistência ou reserva de saldo. A F3.06E acrescenta estorno integral, histórico e idempotente de Resgate. A F3.06F integra Resgate à Compra, expõe máximos utilizáveis e acrescenta limite corporativo sobre o bruto.
 
 ```text
 Django Templates ─┐
@@ -249,7 +249,11 @@ Exemplo:
   "resgate": {
     "minimo_pontos": 100,
     "incremento_pontos": 50,
-    "valor_monetario_por_ponto": "0.05"
+    "valor_monetario_por_ponto": "0.05",
+    "possivel": true,
+    "maximo_pontos": 700,
+    "maximo_desconto": "35.00",
+    "limite_resgate_percentual": "100.0000"
   }
 }
 ```
@@ -391,7 +395,7 @@ Content-Type: application/json
 }
 ```
 
-Todos os campos são obrigatórios:
+Os campos abaixo são obrigatórios, exceto o identificador de Resgate:
 
 | Campo | Contrato |
 | --- | --- |
@@ -399,6 +403,7 @@ Todos os campos são obrigatórios:
 | `identificador_externo` | String de até 255 caracteres após `strip()` nas extremidades; não pode ficar vazia. Preserva case, espaços e conteúdo interno. |
 | `cliente_cpf` | CPF normalizado/validado pela regra existente. Resolve a identidade global e o Cliente da Empresa da Loja. Não cria vínculo nem altera Usuario. Sem Cliente no tenant: `404 cliente_nao_encontrado`. |
 | `valor` | Decimal positivo com até duas casas decimais: `0.01` a `9999999999.99`. Envie string decimal, nunca float. Não há arredondamento de valores com casas excedentes. |
+| `resgate_identificador_externo` | Opcional; string não vazia de até 255 caracteres após strip. Referencia Resgate histórico da mesma Loja, Cliente e tenant, não estornado e ainda não vinculado. |
 | `ocorrida_em` | ISO 8601 com timezone explícito. Data sem timezone é inválida. Sem limites de passado/futuro nesta fase. |
 
 O domínio `apps.fidelidade` persiste `Compra` com Loja, Cliente, credencial de origem, identificador externo, valor, instante da venda e `criada_em` preenchido pelo servidor. Os relacionamentos usam `PROTECT`. Model e service validam coerência de tenant; a autorização reutiliza os helpers da F2.06. Para novas operações, o service cria também um LotePontos histórico, na mesma transação.
@@ -408,8 +413,8 @@ A chave idempotente é **Loja + identificador_externo**, protegida por `UniqueCo
 | Situação | Resultado |
 | --- | --- |
 | Primeira chamada válida | Cria Compra + LotePontos atomicamente e retorna `201 Created`. |
-| Mesma chave com Loja, Cliente, valor e instante equivalentes | Retorna Compra e fidelidade originais, sem recálculo, com `200 OK`. Legado sem Lote retorna `fidelidade: null`. |
-| Mesma chave com Cliente, valor ou instante divergentes | Retorna `409 idempotencia_conflitante`, sem alterar ou duplicar Compra ou Lote. |
+| Mesma chave com Loja, Cliente, valor, instante e Resgate equivalentes | Retorna Compra e fidelidade originais, sem recálculo, com `200 OK`. Legado sem Lote retorna `fidelidade: null`. |
+| Mesma chave com Cliente, valor, instante ou Resgate divergentes | Retorna `409 idempotencia_conflitante`, sem alterar ou duplicar Compra ou Lote. |
 
 A comparação usa Cliente resolvido, valor Decimal e instante timezone-aware. Offsets diferentes que representam o mesmo instante são equivalentes. Outro consumidor autorizado para a mesma Loja pode repetir a operação: `credencial_origem`, `criada_em` e os demais fatos originais são preservados, inclusive quando a credencial de origem foi desativada posteriormente.
 
@@ -434,7 +439,89 @@ Resposta ilustrativa com taxa padrão de 1,00 ponto/R$, precisão 2 e HALF_UP; o
 }
 ```
 
-A resposta expõe somente esses campos, com valor monetário em string de duas casas. O bloco `fidelidade` expõe apenas pontos base, pontos concedidos (strings decimais com exatamente quatro casas) e expiração. Não retorna segredo, hash, senha, credencial completa ou os demais snapshots internos. Nesta fase não há GET/listagem, edição, cancelamento, estorno ou exclusão de Compra pela API.
+Além desses campos, a F3.06F retorna `resgate` e `resumo`, descritos abaixo. Valores monetários são strings com duas casas. O bloco `fidelidade` expõe apenas pontos base, pontos concedidos (strings decimais com exatamente quatro casas) e expiração. Não retorna segredo, hash, senha, credencial completa ou os demais snapshots internos. Nesta fase não há GET/listagem, edição, cancelamento, estorno ou exclusão de Compra pela API.
+
+## Compra com Resgate e limites — F3.06F
+
+`Compra.valor` permanece bruto. Para usar um Resgate, envie `resgate_identificador_externo`
+no registro da Compra. Seu `valor_desconto` é lido exclusivamente do histórico;
+qualquer campo não declarado é rejeitado com `400 requisicao_invalida`, inclusive
+`valor_desconto`, `pontos_concedidos`, `saldo`, `nivel` e percentuais de desconto.
+`resgate_identificador_externo` é o único novo campo opcional. Há no máximo um Resgate
+por Compra e uma Compra por Resgate. Não há comparação entre `resgatado_em` e `ocorrida_em`.
+
+A política corporativa `limite_resgate_percentual` aceita Decimal de `0.0000` a
+`100.0000`, padrão `100.0000`, sem override por Loja. FATECalçados usa `50.0000`.
+O teto é `valor bruto × percentual / 100`, truncado em centavos para nunca exceder
+o limite, independentemente da ordem dos descontos percentuais. Zero desabilita
+utilização. O máximo aplicável é `min(teto contratual, capacidade efetiva)`: a
+capacidade é o bruto em ANTES, ou o restante após descontos percentuais em DEPOIS,
+sem arredondar a capacidade para cima. Com bruto 100, limite 50%, taxa 0,05 e
+desconto 70%, ANTES permite R$ 50/1.000 pontos e DEPOIS R$ 30/600 pontos.
+A conversão continua `pontos × valor_monetario_por_ponto`.
+
+`resgate.maximo_pontos` e `resgate.maximo_desconto` na consulta de fidelidade informam
+o saldo utilizável na sequência `mínimo + N × incremento` e seu equivalente monetário.
+`possivel` indica disponibilidade; `limite_resgate_percentual` informa a restrição
+que será aplicada a uma Compra. Sem valor de Compra, não há teto financeiro para
+calcular na consulta; limite zero retorna máximo zero.
+
+A simulação de Compra acrescenta `saldo.pontos` e `resgate`:
+
+```json
+{
+  "saldo": {"pontos": "1099.9900"},
+  "resgate": {
+    "possivel": true,
+    "limite_resgate_percentual": "50.0000",
+    "maximo_pontos": 1000,
+    "maximo_desconto": "50.00"
+  }
+}
+```
+
+Exemplo para Compra bruta de R$ 101,99, mínimo 100, incremento 50 e taxa R$ 0,05.
+O teto financeiro é R$ 50,99; o máximo efetivamente conversível é R$ 50,00.
+O backend considera saldo, mínimo, incremento, taxa e máximo aplicável; o PDV não precisa
+reproduzir esse cálculo. A simulação continua mostrando benefícios sem Resgate
+aplicado em `valores` e `pontos`; o bloco `resgate` informa a possibilidade de uso,
+sem consumir, reservar ou aplicar automaticamente o máximo.
+
+Um Resgate já emitido não é reduzido: se seu desconto histórico exceder o máximo aplicável à
+Compra, o vínculo é rejeitado. Pontos e taxa do Resgate não são recalculados pela
+configuração atual. O desconto histórico entra no mesmo avaliador canônico da
+simulação, respeitando ANTES/DEPOIS, BRUTO/LIQUIDO, nível, retorno e campanha.
+BRUTO usa `max(0, bruto − desconto_resgate)`: ignora percentuais, mas nunca gera
+pontos sobre a parcela paga por Resgate. LIQUIDO usa o final após todos os descontos.
+Para bruto 100, Resgate 50 e percentual 20%, ANTES produz final/base LIQUIDO 40,
+DEPOIS produz 30, e a base BRUTO é 50 em ambas as ordens.
+
+Erros específicos do registro de Compra:
+
+| Condição | Resultado |
+| --- | --- |
+| Resgate não encontrado para a Loja e Cliente autorizados, inclusive outro tenant | `404 resgate_nao_encontrado` |
+| Resgate estornado | `409 resgate_ja_estornado` |
+| Resgate usado por outra Compra | `409 resgate_vinculado_compra` |
+| Desconto histórico acima do máximo aplicável à Compra | `400 limite_resgate_excedido` |
+| Retry altera, acrescenta ou remove o Resgate original | `409 idempotencia_conflitante` |
+
+Retry equivalente retorna o vínculo e os valores históricos antes de revalidar
+configuração atual. Uma Compra concluída bloqueia o estorno isolado do Resgate
+(`409 resgate_vinculado_compra`). Cancelamento/estorno de Compra está fora do escopo.
+
+A resposta mantém todos os campos anteriores e acrescenta:
+
+- `resgate`: `null` ou `{identificador_externo, pontos_resgatados, valor_desconto}`;
+- `resumo.valores`: `bruto`, `desconto_total`, `final`, `elegivel_pontos`;
+- `resumo.pontos`: `base`, `apos_campanha`, `bonus_nivel`, `bonus_retorno`, `total` (quatro casas);
+- `resumo.beneficios`: nomes de nível para desconto/bônus, aplicabilidade do nível,
+  retorno, percentuais aplicados de nível/retorno, multiplicador de campanha,
+  ordem do Resgate e base de pontos.
+
+`resumo` é `null` para legado sem snapshot de benefícios. Snapshot v1 continua
+legível; novos snapshots v2 incluem o desconto de Resgate e o limite aplicado.
+Não há recálculo com a política atual nem exposição de snapshot, alocações ou locks.
 
 ## Motor de pontos e histórico — F3.02
 
@@ -450,7 +537,7 @@ Dois parâmetros são configuráveis **somente por Empresa**, na tela administra
 A Loja continua podendo sobrescrever apenas `pontos_por_real`. Models e constraints rejeitam políticas fora dos conjuntos permitidos.
 
 ```text
-pontos_base = Compra.valor × pontos_por_real efetivo
+pontos_base = valor_elegivel_pontos × pontos_por_real efetivo
 pontos_concedidos = (pontos_base × multiplicador aplicado) quantizados pela política da Empresa
 ```
 
@@ -496,12 +583,12 @@ A aplicabilidade usa **`Compra.ocorrida_em`**, com intervalo inclusivo `inicio_e
 Escopo `EMPRESA` abrange todas as Lojas atuais e futuras do tenant, sem relações individuais. Escopo `LOJAS` exige uma ou mais Lojas explícitas da própria Empresa. Apenas Administrador ativo pode listar, criar e cancelar; Empresa e criador vêm do contexto autenticado.
 
 ```text
-Compra.valor × pontos_por_real = pontos_base (pré-campanha)
+valor_elegivel_pontos × pontos_por_real = pontos_base (pré-campanha)
 pontos_base × multiplicador = resultado exato intermediário
 política corporativa aplicada uma vez = pontos_concedidos
 ```
 
-Exemplo: `49.90 × 1.25 = 62.3750` base; Evento `2.0000x`; precisão 2 e HALF_UP → `124.7500` concedidos. O bloco público continua contendo somente `pontos_base`, `pontos_concedidos` e `expira_em`; nenhum snapshot de campanha foi acrescentado à resposta.
+Exemplo: `49.90 × 1.25 = 62.3750` base; Evento `2.0000x`; precisão 2 e HALF_UP → `124.7500` concedidos. O bloco público continua contendo somente `pontos_base`, `pontos_concedidos` e `expira_em`; o resumo público da F3.06F também informa o multiplicador histórico, sem expor o snapshot interno.
 
 Multiplicadores usam Decimal com até 12 dígitos e quatro casas, estritamente positivos (`0.0001` a `99999999.9999`). Valores como `1.0025` e `0.5000` são válidos. O cálculo usa contexto local de 40 dígitos, suficiente para os três operandos, sem float e sem arredondamento antes da política final. Resultado final fora da capacidade `DecimalField(24, 4)` gera `400 requisicao_invalida`, sem truncamento e com rollback integral.
 
@@ -718,6 +805,7 @@ Pontos expirados nunca voltam. Nenhuma validade é renovada, `expira_em` nunca �
 | Situação | HTTP / código público |
 | --- | --- |
 | Novo estorno integral | `201` |
+| Resgate vinculado a Compra | `409 resgate_vinculado_compra` |
 | Mesma Loja, chave de estorno e Resgate original | `200`, mesmo fato e snapshot |
 | Payload inválido ou campos extras | `400 requisicao_invalida` |
 | Credencial ausente, inválida ou desativada | `401 credencial_invalida` |
@@ -729,7 +817,7 @@ Pontos expirados nunca voltam. Nenhuma validade é renovada, `expira_em` nunca �
 
 Retry equivalente retorna antes de resolver configuração atual; mudanças posteriores no parâmetro nunca alteram estornos anteriores. A credencial registrada é a da primeira operação, mesmo quando o retry usa outra credencial autorizada.
 
-A transação arbitra a chave pelo advisory lock no namespace próprio `estorno-resgate:<loja_id>:<identificador>` (SHA-256, primeiros oito bytes signed de 64 bits), antes de localizar o Resgate na Loja autorizada. O lock `select_for_update(no_key=True)` no mesmo Cliente usado pelo Resgate serializa novas operações. Após esse lock, verifica novamente a ausência de estorno, resolve a configuração e cria o fato. A unicidade SQL garante um estorno por Resgate e uma chave por Loja. Não existe estorno parcial nem reversão do estorno.
+A transação arbitra a chave pelo advisory lock no namespace próprio `estorno-resgate:<loja_id>:<identificador>` (SHA-256, primeiros oito bytes signed de 64 bits), antes de localizar o Resgate na Loja autorizada. O lock `select_for_update(no_key=True)` no mesmo Cliente usado pelo Resgate serializa novas operações. Após esse lock, verifica novamente a ausência de estorno e de vínculo com Compra, resolve a configuração e cria o fato. A unicidade SQL garante um estorno por Resgate e uma chave por Loja. Não existe estorno parcial nem reversão do estorno.
 
 ## Contrato externo e serializers
 

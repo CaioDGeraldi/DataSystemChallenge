@@ -16,6 +16,9 @@ from .calculos import calcular_expiracao, calcular_pontos
 
 
 class Compra(models.Model):
+    resgate = models.OneToOneField(
+        'Resgate', null=True, blank=True, on_delete=models.PROTECT, related_name='compra',
+    )
     loja = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name="compras")
     cliente = models.ForeignKey(
         Cliente,
@@ -75,6 +78,7 @@ class Compra(models.Model):
                 "valor",
                 "ocorrida_em",
                 "criada_em",
+                "resgate",
             )
             original = type(self)._base_manager.using(self._state.db).filter(pk=self.pk).values(
                 *campos,
@@ -89,6 +93,12 @@ class Compra(models.Model):
                     raise ValidationError(erros)
                 # Histórico inalterado não depende da autorização atual da credencial.
                 return
+        if self.resgate_id:
+            resgate = Resgate.objects.get(pk=self.resgate_id)
+            if (resgate.loja_id, resgate.cliente_id) != (self.loja_id, self.cliente_id):
+                raise ValidationError({'resgate': 'Resgate deve pertencer à mesma Loja e Cliente.'})
+            if EstornoResgate.objects.filter(resgate_id=self.resgate_id).exists():
+                raise ValidationError({'resgate': 'Resgate já estornado.'})
         loja = Loja.objects.filter(pk=self.loja_id).first()
         cliente = Cliente.objects.filter(pk=self.cliente_id).first()
         credencial = CredencialIntegracao.objects.filter(pk=self.credencial_origem_id).first()
@@ -117,7 +127,7 @@ class Compra(models.Model):
     def save(self, *args, **kwargs):
         # A unicidade concorrente é arbitrada pelo INSERT/constraint SQL, não por SELECT prévio.
         # O valor positivo também é validado pelos validators do campo.
-        self.full_clean(validate_constraints=False)
+        self.full_clean(validate_constraints=False, validate_unique=False)
         return super().save(*args, **kwargs)
 
 
@@ -260,6 +270,9 @@ class LotePontos(models.Model):
                 compra.ocorrida_em,
                 self.multiplicador_pontos_aplicado,
             )
+            desconto = compra.resgate.valor_desconto if compra.resgate_id else Decimal('0.00')
+            if Decimal(self.beneficios_aplicados.get('desconto_resgate', '0.00')) != desconto:
+                raise ValidationError('Desconto do snapshot diverge do Resgate histórico.')
             base, concedidos = avaliacao.pontos_base, avaliacao.pontos_concedidos
             politica = self.beneficios_aplicados['politica']
             for campo, snapshot in (
@@ -925,6 +938,8 @@ class EstornoResgate(_RegistroResgate):
         from apps.empresas.services import exigir_loja_autorizada
 
         resgate = Resgate.objects.get(pk=self.resgate_id)
+        if Compra.objects.filter(resgate_id=self.resgate_id).exists():
+            raise ValidationError('Resgate vinculado a Compra não pode ser estornado.')
         if (self.loja_id, self.cliente_id) != (resgate.loja_id, resgate.cliente_id):
             raise ValidationError('Loja e Cliente devem corresponder ao Resgate original.')
         try:

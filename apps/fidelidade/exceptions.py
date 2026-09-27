@@ -28,3 +28,11 @@ class ResgateNaoEncontrado(Exception):
 
 class ResgateJaEstornado(Exception):
     pass
+
+
+class ResgateVinculadoCompra(Exception):
+    pass
+
+
+class LimiteResgateExcedido(Exception):
+    pass

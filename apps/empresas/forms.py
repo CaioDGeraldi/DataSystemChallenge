@@ -150,6 +150,7 @@ class ConfiguracaoFidelidadeEmpresaForm(FormularioCompostoMixin, forms.ModelForm
                 'resgate_minimo_pontos',
                 'incremento_resgate_pontos',
                 'valor_monetario_por_ponto',
+                'limite_resgate_percentual',
                 'modo_combinacao_descontos_percentuais',
                 'ordem_aplicacao_resgate',
             ),
@@ -168,6 +169,7 @@ class ConfiguracaoFidelidadeEmpresaForm(FormularioCompostoMixin, forms.ModelForm
             'desconto_retorno_percentual': 'Desconto no retorno (%)',
             'modo_combinacao_descontos_percentuais': 'Como combinar descontos percentuais',
             'ordem_aplicacao_resgate': 'Quando aplicar o desconto do resgate',
+            'limite_resgate_percentual': 'Limite de resgate sobre a compra bruta (%)',
         }
         for nome, rotulo in rotulos.items():
             self.fields[nome].label = rotulo
@@ -193,6 +195,7 @@ class ConfiguracaoFidelidadeEmpresaForm(FormularioCompostoMixin, forms.ModelForm
             "resgate_minimo_pontos",
             "incremento_resgate_pontos",
             "valor_monetario_por_ponto",
+            "limite_resgate_percentual",
             "periodo_cliente_ativo_dias",
             "modo_aplicacao_nivel",
             "base_calculo_pontos",

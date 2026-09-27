@@ -164,16 +164,17 @@ class CompraView(APIView):
         responses={
             201: OpenApiResponse(CompraSerializer, description="Compra e LotePontos criados atomicamente."),
             200: OpenApiResponse(CompraSerializer, description="Retry preserva Compra e fidelidade originais; legado sem Lote retorna fidelidade null."),
-            400: OpenApiResponse(EnvelopeErroSerializer, description="requisicao_invalida"),
+            400: OpenApiResponse(EnvelopeErroSerializer, description="requisicao_invalida ou limite_resgate_excedido"),
             401: OpenApiResponse(EnvelopeErroSerializer, description="credencial_invalida"),
             403: OpenApiResponse(EnvelopeErroSerializer, description="loja_fora_do_escopo"),
-            404: OpenApiResponse(EnvelopeErroSerializer, description="cliente_nao_encontrado"),
-            409: OpenApiResponse(EnvelopeErroSerializer, description="idempotencia_conflitante"),
+            404: OpenApiResponse(EnvelopeErroSerializer, description="cliente_nao_encontrado ou resgate_nao_encontrado"),
+            409: OpenApiResponse(EnvelopeErroSerializer, description="idempotencia_conflitante, resgate_ja_estornado ou resgate_vinculado_compra"),
             405: OpenApiResponse(EnvelopeErroSerializer, description="metodo_nao_permitido"),
         },
         description=("Registra Compra e fidelidade atomicamente. Idempotência por Loja + identificador externo. "
                      "Aplica a configuração efetiva no processamento e campanha em ocorrida_em antes do arredondamento. "
-                     "Preserva snapshots nos retries. "
+                     "Resgate opcional usa desconto histórico, limitado ao percentual do bruto, sem comparar datas. "
+                     "Retry equivalente preserva o vínculo e os snapshots. "
                      "Expiração ou pontos não representáveis retornam 400 com rollback integral."),
     )
     def post(self, request):
@@ -254,7 +255,7 @@ class EstornoResgateView(APIView):
             401: OpenApiResponse(EnvelopeErroSerializer, description='credencial_invalida'),
             403: OpenApiResponse(EnvelopeErroSerializer, description='loja_fora_do_escopo'),
             404: OpenApiResponse(EnvelopeErroSerializer, description='resgate_nao_encontrado'),
-            409: OpenApiResponse(EnvelopeErroSerializer, description='idempotencia_conflitante ou resgate_ja_estornado'),
+            409: OpenApiResponse(EnvelopeErroSerializer, description='idempotencia_conflitante, resgate_ja_estornado ou resgate_vinculado_compra'),
             405: OpenApiResponse(EnvelopeErroSerializer, description='metodo_nao_permitido'),
         },
         description=('Estorno sempre integral, idempotente por Loja + identificador externo. '

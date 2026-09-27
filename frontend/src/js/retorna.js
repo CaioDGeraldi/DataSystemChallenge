@@ -19,3 +19,6 @@ bindInviteShare();
 bindComposedForms();
 
 bindNavigationSearch();
+
+import { bindConversaoResgate } from './retorna/conversao-resgate.js';
+bindConversaoResgate();

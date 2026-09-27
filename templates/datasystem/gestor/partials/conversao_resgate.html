@@ -1,0 +1,16 @@
+<div data-conversao-resgate>
+  <p data-resgate-preview aria-live="polite"></p>
+  <p data-resgate-limite aria-live="polite"></p>
+  <button type="button" class="button button--secondary" data-resgate-abrir>Ver tabela de conversão</button>
+  <dialog data-resgate-modal aria-labelledby="resgate-conversao-titulo">
+    <h2 id="resgate-conversao-titulo">Tabela de conversão</h2>
+    <p>Prévia com os valores do formulário, ainda não salvos. A utilização depende do saldo e do limite da compra.</p>
+    <table class="table"><thead><tr><th scope="col">Pontos</th><th scope="col">Desconto</th></tr></thead><tbody data-resgate-linhas></tbody></table>
+    <p data-resgate-pagina aria-live="polite"></p>
+    <div class="form-actions">
+      <button type="button" class="button button--secondary" data-resgate-anterior>Anterior</button>
+      <button type="button" class="button button--secondary" data-resgate-proxima>Próxima</button>
+      <button type="button" class="button" data-resgate-fechar>Fechar</button>
+    </div>
+  </dialog>
+</div>
