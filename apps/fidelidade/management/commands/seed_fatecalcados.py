@@ -17,7 +17,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         data_base = interpretar_data(options['data_base'])
         try:
-            resumo = executar_seed(data_base, senha=os.environ.get('RETORNA_SEED_SENHA', ''))
+            resumo = executar_seed(data_base, senha=os.environ.get('RETORNA_SEED_SENHA', ''),
+                credencial_arquivo=os.environ.get('RETORNA_SEED_CREDENCIAL_ARQUIVO'))
         except (ValidationError, IntegrityError) as exc:
             # Não expor SQL, valores de identidades ou segredos em erros de corrida.
             raise CommandError('Carga recusada por validação/integridade; nenhuma carga parcial foi mantida.') from exc

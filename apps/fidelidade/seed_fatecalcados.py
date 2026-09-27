@@ -1,8 +1,9 @@
-"""Cenário de demonstração F4.01. Não contém regras gerais do programa.
+"""Cenário de demonstração F4.01B (V2). Não contém regras gerais do programa.
 
 Identidades e fatos narrativos são estáveis; PKs, segredos e datas técnicas não.
 Nenhum histórico é removido, atualizado ou emitido fora dos services oficiais.
 """
+import os
 import re
 from calendar import monthrange
 from collections import Counter
@@ -15,28 +16,33 @@ from hashlib import sha256
 from threading import RLock, get_ident
 from zoneinfo import ZoneInfo
 
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, get_user_model
 from django.core.management.base import CommandError
 from django.db import connection, transaction
 from django.db.models import Q
 from django.db.models.signals import post_save
 from django.http import HttpRequest
+from django.views.decorators.debug import sensitive_variables
 
 from apps.clientes.services import cadastrar_cliente
-from apps.empresas.models import Empresa, Loja
+from apps.empresas.models import Empresa, Loja, OverrideFidelidadeLoja
 from apps.empresas.services import (
     concluir_onboarding, criar_credencial, criar_loja_no_contexto,
-    salvar_configuracao_empresa,
+    salvar_configuracao_empresa, criar_convite, aceitar_convite, resolver_lojas_visiveis,
+    salvar_override_loja, resolver_configuracao,
 )
-from apps.usuarios.services import resolver_identidade
+from apps.usuarios.services import (
+    ativar_contexto, resolver_identidade, resolver_contextos, validar_contexto_ativo,
+)
 from apps.usuarios.validators import validar_cpf
 from apps.empresas.validators import validar_cnpj
 
-from . import resgates
+from . import resgates, estornos, consultas
 from .calculos import calcular_expiracao
+from .beneficios import reavaliar_snapshot
 from .consumo import alocacoes_com_consumo_efetivo
 from .eventos import criar_evento
-from .models import AlocacaoResgate, AplicacaoEfeitoEventoLote, Compra, LotePontos, Resgate
+from .models import AlocacaoResgate, AplicacaoEfeitoEventoLote, Compra, LotePontos, Resgate, EstornoResgate
 from .niveis import classificar_cliente, criar_nivel
 from .services import registrar_compra
 
@@ -55,7 +61,18 @@ POLITICA = dict(pontos_por_real=Decimal('1.00'), validade_pontos_meses=12,
     resgate_minimo_pontos=100, incremento_resgate_pontos=100,
     valor_monetario_por_ponto=Decimal('0.05'), precisao_pontos=2,
     limite_resgate_percentual=Decimal('50.0000'),
-    modo_arredondamento_pontos='HALF_UP', periodo_cliente_ativo_dias=180)
+    modo_arredondamento_pontos='HALF_UP', periodo_cliente_ativo_dias=180,
+    modo_aplicacao_nivel='ATINGIDO_NA_COMPRA',
+    inatividade_suspende_beneficios_nivel=True,
+    beneficio_primeira_compra_apos_inatividade='COM_BENEFICIOS_NIVEL',
+    promocao_retorno_ativa=True, bonus_pontos_retorno_percentual=Decimal('15'),
+    desconto_retorno_percentual=Decimal('10'),
+    modo_combinacao_descontos_percentuais='ADITIVO',
+    ordem_aplicacao_resgate='DEPOIS_DOS_DESCONTOS_PERCENTUAIS',
+    devolver_pontos_ao_estornar_resgate=True)
+NIVEIS = (('Bronze', Decimal('0'), Decimal('0'), Decimal('0')),
+          ('Prata', Decimal('1000'), Decimal('10'), Decimal('5')),
+          ('Ouro', Decimal('5000'), Decimal('20'), Decimal('10')))
 RESGATES = (('A01', 2000), ('A02', 500), ('A03', 500), ('A04', 500),
             ('A05', 500), ('A06', 500), ('M01', 200), ('M02', 200))
 PERSONAGENS = ('A01', 'B01', 'I01', 'M01', 'U01', 'M02')
@@ -79,6 +96,9 @@ def _cnpj():
 
 CNPJ = _cnpj()
 CPF_ADMIN = _cpf(0)
+CPF_GESTOR = _cpf(90)
+CPF_HELENA = _cpf(31)
+NOME_GESTOR = 'Alex Caminho'
 
 
 @dataclass(frozen=True)
@@ -215,6 +235,14 @@ def montar_plano(data_base):
                 adicionar(codigo, instante_mes(offset))
     if quotas != [0, 0, 0, 0] or len(meses) != 16:
         raise CommandError('Agenda incompleta.')
+    # Fatos adicionais V2: Lia retorna ainda Bronze; Mauro retorna na campanha
+    # com Prata; Rosa retorna com Prata fora da campanha. Helena fica inativa.
+    for codigo, instante, campanha, loja, valor in (
+        ('U01', _mes(t, -14, 15).replace(hour=11), False, 0, Decimal('149.90')),
+        ('I02', (inicio + timedelta(days=3)).replace(hour=11), True, 1, Decimal('300')),
+        ('I03', (t - timedelta(days=4)).replace(hour=11), False, 2, Decimal('300')),
+    ):
+        vendas.append(Venda(f'{PREFIXO}C{len(vendas) + 1:03}', codigo, loja, valor, instante, campanha))
     return Plano(t, inicio, fim, tuple(sorted(vendas, key=lambda v: (v.ocorrida_em, v.identificador))))
 
 
@@ -222,7 +250,7 @@ _lock_relogio = RLock()
 
 
 class _TimezoneDoSeed:
-    """Proxy apenas do binding de resgates, com fallback real em outros contextos."""
+    """Proxy apenas do binding do módulo selecionado, com fallback real em outros contextos."""
     def __init__(self, original):
         self.original = original
         self.instante = ContextVar('instante_seed_fatecalcados', default=None)
@@ -236,29 +264,31 @@ class _TimezoneDoSeed:
 
 
 @contextmanager
-def _relogio_resgate(instante):
+def _relogio_resgate(instante, *, modulo=resgates):
+    # Também atende Estorno e consulta interna na referência T.
     # Não modifica django.utils.timezone.now nem models/defaults. Serializa apenas
     # instalações do proxy neste processo; outros contextos continuam no relógio real.
     with _lock_relogio:
-        original = resgates.timezone
+        original = modulo.timezone
         proxy = _TimezoneDoSeed(original)
         token = proxy.instante.set(instante)
-        resgates.timezone = proxy
+        modulo.timezone = proxy
         try:
             yield
         finally:
             proxy.instante.reset(token)
-            resgates.timezone = original
+            modulo.timezone = original
 
 
 def _prechecar():
-    cpfs = [CPF_ADMIN, *(p.cpf for p in populacao())]
+    cpfs = [CPF_ADMIN, CPF_GESTOR, *(p.cpf for p in populacao())]
     if Empresa.objects.filter(Q(cnpj=CNPJ) | Q(slug=SLUG) | Q(nome__iexact=NOME_EMPRESA)).exists():
         raise CommandError('FATECalçados/CNPJ/slug reservado já existe. Use outro banco de demonstração limpo.')
     if get_user_model().objects.filter(cpf__in=cpfs).exists():
         raise CommandError('CPF reservado do cenário já existe. Nenhuma identidade será reutilizada.')
     if (Compra.objects.filter(identificador_externo__startswith=PREFIXO).exists()
-            or Resgate.objects.filter(identificador_externo__startswith=PREFIXO).exists()):
+            or Resgate.objects.filter(identificador_externo__startswith=PREFIXO).exists()
+            or EstornoResgate.objects.filter(identificador_externo__startswith=PREFIXO).exists()):
         raise CommandError('Identificador de operação reservado já existe.')
 
 
@@ -284,19 +314,124 @@ def _exigir_identidade_nova(cpf, operacao):
         post_save.disconnect(observar, sender=usuario_model)
 
 
-def _resumo_e_validacao(empresa, clientes, plano):
+@contextmanager
+def _arquivo_credencial(caminho):
+    """Compensação local do arquivo exclusivo, inclusive se o commit falhar.
+
+    Não há atomicidade distribuída entre filesystem e PostgreSQL. O diretório
+    operacional deve ser privado do operador; não se substitui arquivo alheio.
+    """
+    criado = None
+
+    @sensitive_variables()
+    def gravar(chave):
+        nonlocal criado
+        if not caminho:
+            return
+        if criado is not None:
+            raise CommandError('A credencial já foi gravada nesta execução.')
+        try:
+            fd = os.open(caminho, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            criado = os.fstat(fd)
+            with os.fdopen(fd, 'w', encoding='utf-8') as arquivo:
+                os.fchmod(arquivo.fileno(), 0o600)
+                arquivo.write(chave)
+                arquivo.flush()
+                os.fsync(arquivo.fileno())
+        except OSError:
+            raise CommandError('Não foi possível criar/gravar o arquivo exclusivo da credencial.') from None
+
+    try:
+        yield gravar
+    except BaseException:
+        if criado is not None:
+            try:
+                atual = os.stat(caminho, follow_symlinks=False)
+                if (atual.st_dev, atual.st_ino) == (criado.st_dev, criado.st_ino):
+                    os.unlink(caminho)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                raise CommandError('Carga abortada; não foi possível remover o arquivo operacional criado.') from None
+        raise
+
+
+@sensitive_variables()
+def _validar_contas_e_politica(empresa, clientes, senha):
+    membros = list(empresa.membros.select_related('usuario'))
+    if Counter(m.papel for m in membros) != {'ADMINISTRADOR': 1, 'GESTOR': 1}:
+        raise CommandError('Papéis demo divergentes.')
+    for membro in membros:
+        admin = membro.papel == 'ADMINISTRADOR'
+        if (not membro.ativo or not membro.usuario.is_active or membro.usuario.is_superuser
+                or authenticate(cpf=membro.usuario.cpf, password=senha) != membro.usuario):
+            raise CommandError('Conta de Gestão demo não pode autenticar; carga revertida.')
+        if (membro.usuario.cpf != (CPF_ADMIN if admin else CPF_GESTOR)
+                or membro.usuario.get_full_name() != (
+                    'Administração FATE Demonstração' if admin else NOME_GESTOR)
+                or membro.acessos_lojas.count() != (0 if admin else 2)):
+            raise CommandError('Identidade/escopo demo divergente.')
+        request = HttpRequest()
+        request.user, request.session = membro.usuario, {}
+        ativar_contexto(request, 'gestao', membro.pk)
+        if set(resolver_lojas_visiveis(request).values_list('nome', 'cidade')) != set(LOJAS if admin else LOJAS[:2]):
+            raise CommandError('Autorização demo divergente.')
+    cpfs = [CPF_ADMIN, CPF_GESTOR, *(p.cpf for p in populacao())]
+    if len(set(cpfs)) != 38 or get_user_model().objects.filter(cpf__in=cpfs).count() != 38:
+        raise CommandError('CPFs reservados divergentes.')
+    for pessoa in populacao():
+        cliente = clientes[pessoa.codigo]
+        if cliente.usuario.cpf != pessoa.cpf or cliente.usuario.get_full_name() != pessoa.nome:
+            raise CommandError('Identidade de Cliente divergente.')
+    if clientes['I01'].usuario.cpf != CPF_HELENA or clientes['I01'].compras.count() != 5:
+        raise CommandError('Helena deve permanecer antes da Compra de retorno.')
+    helena = clientes['I01']
+    usuario = authenticate(cpf=CPF_HELENA, password=senha)
+    if not helena.usuario.is_active or usuario is None or usuario != helena.usuario:
+        raise CommandError('Helena não pode autenticar como Cliente; carga revertida.')
+    contextos = resolver_contextos(usuario)
+    if [(c['tipo_contexto'], c['empresa_id'], c['vinculo_id']) for c in contextos] != [
+            ('cliente', empresa.pk, helena.pk)]:
+        raise CommandError('Vínculo/contexto exclusivo de Cliente de Helena divergente.')
+    request = HttpRequest()
+    request.user, request.session = usuario, {}
+    destino = ativar_contexto(request, 'cliente', helena.pk)
+    if destino != 'clientes:area' or validar_contexto_ativo(request, 'cliente') != helena:
+        raise CommandError('Contexto de Helena não resolve para sua área de Cliente.')
+    cfg = empresa.configuracao_fidelidade
+    if any(getattr(cfg, campo) != valor for campo, valor in POLITICA.items()):
+        raise CommandError('Configuração corporativa divergente.')
+    overrides = list(OverrideFidelidadeLoja.objects.filter(loja__empresa=empresa)
+                     .values_list('loja__nome', 'loja__cidade', 'pontos_por_real'))
+    if overrides != [('Jardim Aurora', 'Araras', Decimal('2.00'))]:
+        raise CommandError('Override exclusivo de Jardim Aurora divergente.')
+    corporativa = resolver_configuracao(empresa)
+    if corporativa.pontos_por_real != Decimal('1.00'):
+        raise CommandError('Política corporativa de pontos divergente.')
+    for loja in empresa.lojas.all():
+        efetiva = resolver_configuracao(empresa, loja)
+        taxa = Decimal('2.00') if (loja.nome, loja.cidade) == LOJAS[1] else Decimal('1.00')
+        for campo in POLITICA:
+            esperado = taxa if campo == 'pontos_por_real' else getattr(corporativa, campo)
+            if getattr(efetiva, campo) != esperado:
+                raise CommandError('Herança Empresa → Loja divergente.')
+
+
+@sensitive_variables()
+def _resumo_e_validacao(empresa, clientes, plano, *, senha):
+    _validar_contas_e_politica(empresa, clientes, senha)
     compras = list(Compra.objects.filter(loja__empresa=empresa).select_related('lote_pontos', 'loja'))
     lotes = list(LotePontos.objects.filter(cliente__empresa=empresa))
     resgates_db = list(Resgate.objects.filter(loja__empresa=empresa))
     alocacoes = list(AlocacaoResgate.objects.filter(resgate__loja__empresa=empresa).select_related('lote'))
     aplicacoes = list(AplicacaoEfeitoEventoLote.objects.filter(lote__cliente__empresa=empresa))
-    if (len(compras), len(lotes), len(resgates_db), len(aplicacoes)) != (300, 300, 8, 24):
+    if (len(compras), len(lotes), len(resgates_db), len(aplicacoes)) != (303, 303, 8, 25):
         raise CommandError('Quantidades finais divergentes; carga revertida.')
     if (empresa.lojas.count(), empresa.clientes.count(), empresa.membros.count(),
-            empresa.credenciais_integracao.count(), empresa.eventos_fidelidade.count()) != (12, 36, 1, 1, 1):
+            empresa.credenciais_integracao.count(), empresa.eventos_fidelidade.count()) != (12, 36, 2, 1, 1):
         raise CommandError('Estrutura final do tenant divergente.')
-    if list(empresa.niveis_fidelidade.values_list('nome', 'pontos_minimos')) != [
-            ('Bronze', Decimal('0')), ('Prata', Decimal('1000')), ('Ouro', Decimal('5000'))]:
+    if tuple(empresa.niveis_fidelidade.values_list(
+            'nome', 'pontos_minimos', 'bonus_pontos_percentual', 'desconto_percentual')) != NIVEIS:
         raise CommandError('Níveis finais divergentes.')
     esperadas = {v.identificador: v for v in plano.vendas}
     aplicados = {a.lote_id for a in aplicacoes}
@@ -308,7 +443,9 @@ def _resumo_e_validacao(empresa, clientes, plano):
                 or compra.valor != venda.valor or compra.ocorrida_em != venda.ocorrida_em
                 or lote.expira_em != calcular_expiracao(compra.ocorrida_em, 12)
                 or (lote.pk in aplicados) != venda.campanha
-                or lote.pontos_concedidos != compra.valor * (2 if venda.campanha else 1)):
+                or lote.pontos_concedidos != reavaliar_snapshot(
+                    lote.beneficios_aplicados, compra.valor, compra.ocorrida_em,
+                    lote.multiplicador_pontos_aplicado).pontos_concedidos):
             raise CommandError('Concessão real divergente do cenário.')
     efetivas = set(alocacoes_com_consumo_efetivo(AlocacaoResgate.objects.filter(
         pk__in=[a.pk for a in alocacoes],
@@ -334,7 +471,7 @@ def _resumo_e_validacao(empresa, clientes, plano):
                      if l.expira_em > plano.referencia), Decimal('0.0000'))
         ultima = max(l.adquiridos_em for l in seus_lotes)
         recente = ultima > plano.referencia - timedelta(days=180)
-        if recente == p.codigo.startswith('I'):
+        if recente == (p.codigo in ('I01', 'I04', 'I05', 'I06')):
             raise CommandError('Disposição temporal de atividade divergente.')
         pessoas.append(dict(codigo=p.codigo, nome=p.nome, cpf=p.cpf, nivel=classificacao.nivel.nome,
             pontos=str(classificacao.pontos_para_nivel), saldo=str(saldo),
@@ -349,12 +486,45 @@ def _resumo_e_validacao(empresa, clientes, plano):
     bento = next(r for r in resgates_db if r.cliente_id == clientes['M02'].pk)
     if sum(a.resgate_id == bento.pk for a in alocacoes) < 2:
         raise CommandError('Resgate de Bento não atravessou Lotes.')
+    estornos_db = list(EstornoResgate.objects.filter(loja__empresa=empresa).select_related('resgate'))
+    if (len(estornos_db) != 1 or not estornos_db[0].devolve_pontos_aplicado
+            or estornos_db[0].resgate.identificador_externo != f'{PREFIXO}R07'
+            or estornos_db[0].estornado_em != plano.referencia - timedelta(seconds=30)):
+        raise CommandError('Histórico de Estorno divergente.')
+    for codigo, campanha, bonus in (('U01', False, '0'), ('I02', True, '10'), ('I03', False, '10')):
+        compra = max((c for c in compras if c.cliente_id == clientes[codigo].pk), key=lambda c: c.ocorrida_em)
+        resultado = compra.lote_pontos.beneficios_aplicados['resultado']
+        if (resultado['ativo_antes'] or not resultado['retorno']
+                or not resultado['beneficios_nivel_aplicaveis']
+                or Decimal(resultado['bonus_nivel']) != Decimal(bonus)
+                or Decimal(resultado['bonus_retorno']) != 15
+                or Decimal(resultado['desconto_retorno']) != 10
+                or (compra.lote_pontos.pk in aplicados) != campanha):
+            raise CommandError('Narrativa de retorno divergente.')
+    with _relogio_resgate(plano.referencia, modulo=consultas):
+        helena = consultas.consultar_fidelidade_cliente(
+            credencial=empresa.credenciais_integracao.get(), loja_id=empresa.lojas.first().pk,
+            cliente_cpf=CPF_HELENA)
+    if (helena['atividade']['ativo'] or helena['nivel']['atual']['nome'] != 'Ouro'
+            or not helena['nivel']['atual']['beneficios']['aplicaveis']
+            or not helena['promocao_retorno']['aplicavel']):
+        raise CommandError('Helena não está pronta para a demonstração de retorno.')
     return dict(data_base=plano.referencia.date().isoformat(), referencia=plano.referencia.isoformat(),
         empresa=NOME_EMPRESA, slug=empresa.slug, cpf_administrador=CPF_ADMIN,
+        cpf_gestor=CPF_GESTOR, cpf_cliente_demo=CPF_HELENA,
+        administradores=1, gestores=1, acessos_gestor=2, estornos=len(estornos_db),
+        clientes_ativos=sum(p['compra_na_janela_180d'] for p in pessoas),
+        pontos_devolvidos=str(sum(e.resgate.pontos_resgatados for e in estornos_db)),
+        overrides_loja=OverrideFidelidadeLoja.objects.filter(loja__empresa=empresa).count(),
         lojas=Loja.objects.filter(empresa=empresa).count(), clientes=len(clientes), compras=len(compras),
         lotes=len(lotes), aplicacoes_campanha=len(aplicacoes), resgates=len(resgates_db),
         alocacoes=len(alocacoes), pontos_resgatados=str(sum(r.pontos_resgatados for r in resgates_db)),
         descontos=str(sum(r.valor_desconto for r in resgates_db)),
+        resgates_efetivos=len(resgates_db) - len(estornos_db),
+        descontos_resgates_efetivos=str(sum(r.valor_desconto for r in resgates_db)
+            - sum(e.resgate.valor_desconto for e in estornos_db)),
+        valor_final_compras=str(sum(Decimal(c.lote_pontos.beneficios_aplicados['resultado']['valor_final'])
+            for c in compras)),
         valor_compras=str(sum(c.valor for c in compras)),
         pontos_concedidos=str(sum(l.pontos_concedidos for l in lotes)),
         pontos_em_lotes_expirados=str(sum((l.pontos_concedidos for l in lotes
@@ -363,17 +533,22 @@ def _resumo_e_validacao(empresa, clientes, plano):
         distribuicao_niveis=dict(Counter(p['nivel'] for p in pessoas)), pessoas=pessoas)
 
 
-def executar_seed(data_base, *, senha):
+@sensitive_variables()
+def executar_seed(data_base, *, senha, credencial_arquivo=None):
     plano = montar_plano(data_base)
     if connection.vendor != 'postgresql':
         raise CommandError('O seed exige PostgreSQL.')
     if not senha:
         raise CommandError('Defina RETORNA_SEED_SENHA para as contas fictícias; não use senha real.')
     validar_cnpj(CNPJ)
-    for cpf in (CPF_ADMIN, *(p.cpf for p in populacao())):
+    for cpf in (CPF_ADMIN, CPF_GESTOR, *(p.cpf for p in populacao())):
         validar_cpf(cpf)
     _prechecar()
-    with transaction.atomic(), localcontext(Context(prec=40)):
+    # O arquivo envolve o commit: erros de escrita, validação e commit removem
+    # somente o inode criado aqui. Com arquivo, exige transação externa própria.
+    with _arquivo_credencial(credencial_arquivo) as gravar, transaction.atomic(
+        durable=bool(credencial_arquivo),
+    ), localcontext(Context(prec=40)):
         # Arbitragem exclusiva do comando, antes de qualquer escrita. A segunda
         # execução espera o commit/rollback e repete todas as pré-checagens.
         chave = int.from_bytes(sha256(b'retorna:seed:fatecalcados:v1').digest()[:8], 'big', signed=True)
@@ -392,14 +567,25 @@ def executar_seed(data_base, *, senha):
         lojas = [Loja.objects.get(empresa=empresa)]
         lojas.extend(criar_loja_no_contexto(request, nome=nome, cidade=cidade) for nome, cidade in LOJAS[1:])
         salvar_configuracao_empresa(request, **POLITICA)
-        for nome, pontos in (('Bronze', '0'), ('Prata', '1000'), ('Ouro', '5000')):
-            criar_nivel(request, nome=nome, pontos_minimos=Decimal(pontos))
+        salvar_override_loja(request, lojas[1].pk, pontos_por_real=Decimal('2.00'))
+        gestor = _exigir_identidade_nova(CPF_GESTOR, lambda: resolver_identidade(
+            cpf=CPF_GESTOR, senha=senha, confirmacao=senha,
+            first_name='Alex', last_name='Caminho'))
+        _, token = criar_convite(request, cpf=CPF_GESTOR, papel='GESTOR', lojas=lojas[:2])
+        request_gestor = HttpRequest()
+        request_gestor.user, request_gestor.session = gestor, {}
+        aceitar_convite(request_gestor, token)
+        for nome, pontos, bonus, desconto in NIVEIS:
+            criar_nivel(request, nome=nome, pontos_minimos=pontos,
+                bonus_pontos_percentual=bonus, desconto_percentual=desconto)
         clientes = {}
         for p in populacao():
             nome, sobrenome = p.nome.split(' ', 1)
             clientes[p.codigo] = _exigir_identidade_nova(p.cpf, lambda: cadastrar_cliente(
                 empresa=empresa, cpf=p.cpf, senha=senha, confirmacao=senha, first_name=nome, last_name=sobrenome))
-        credencial, _ = criar_credencial(request, nome='FATE demonstração V1', escopo='EMPRESA')
+        credencial, chave_bruta = criar_credencial(request, nome='FATE demonstração V2', escopo='EMPRESA')
+        gravar(chave_bruta)
+        del chave_bruta
         criar_evento(request, nome='Semana de passos em dobro', inicio_em=plano.inicio_campanha,
             fim_em=plano.fim_campanha, escopo='EMPRESA',
             efeitos=[{'tipo': 'MULTIPLICADOR_PONTOS', 'valor': Decimal('2.0000')}])
@@ -416,4 +602,12 @@ def executar_seed(data_base, *, senha):
                     identificador_externo=f'{PREFIXO}R{i + 1:02}', pontos=pontos)
             if not criado:
                 raise CommandError('Um Resgate reservado já existia; carga revertida.')
-        return _resumo_e_validacao(empresa, clientes, plano)
+        with _relogio_resgate(plano.referencia - timedelta(seconds=30), modulo=estornos):
+            _, criado = estornos.estornar_resgate(credencial=credencial, loja_id=lojas[6].pk,
+                resgate_identificador_externo=f'{PREFIXO}R07', identificador_externo=f'{PREFIXO}E01')
+        if not criado:
+            raise CommandError('Um Estorno reservado já existia; carga revertida.')
+        resumo = _resumo_e_validacao(empresa, clientes, plano, senha=senha)
+        if credencial_arquivo:
+            resumo['credencial_arquivo'] = os.fspath(credencial_arquivo)
+        return resumo
