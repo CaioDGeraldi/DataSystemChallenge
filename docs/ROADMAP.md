@@ -396,7 +396,7 @@ Entregue:
 - `docs/ARQUITETURA_PRODUTO.md` atualizado para o contrato efetivamente implementado;
 - validação final com 75 testes focais e 475 testes totais aprovados, além de `check`, `makemigrations --check --dry-run`, `git diff --check` e `uv lock --check`.
 
-Os endpoints de consulta e simulação previstos após a F3.06A foram entregues nas F3.06B–F3.06D, e o estorno integral de Resgate foi entregue na F3.06E. Permanece pendente a reconciliação do contrato efetivo da Compra com benefícios e Resgate, tratada na F3.06F.
+Os endpoints de consulta e simulação previstos após a F3.06A foram entregues nas F3.06B–F3.06D, o estorno integral de Resgate foi entregue na F3.06E e o contrato efetivo da Compra com benefícios e Resgate foi reconciliado na F3.06F.
 
 ### F3.06B — Consulta de fidelidade do Cliente ✅ P0
 
@@ -468,20 +468,27 @@ Entregue:
 - OpenAPI, `docs/API.md` e `docs/MODELAGEM_DE_DADOS.md` atualizados;
 - validação com 194 testes focados e 58 testes complementares aprovados, incluindo concorrência em PostgreSQL, além de `check`, OpenAPI, migrations sem mudanças e `git diff --check`.
 
-### F3.06F — Reconciliar contrato efetivo da Compra com benefícios e Resgate 🟡 P0
+### F3.06F — Reconciliar contrato efetivo da Compra com benefícios e Resgate ✅ P0
 
-Issue: #71.
+Issue: #71. PR: #86.
 
-Próxima etapa da F3.06.
+Entregue:
 
-Objetivo:
+- `Compra` permanece como fonte histórica da venda e aceita associação opcional a um `Resgate` já efetivado por `resgate_identificador_externo`;
+- relação histórica opcional 1:1 entre `Compra` e `Resgate`, com validação de tenant, Loja, Cliente, autorização e vínculo único;
+- Resgate vinculado a Compra concluída não pode ser estornado isoladamente e retorna `409 resgate_vinculado_compra`;
+- payload real de Compra rejeita campos extras e decisões derivadas enviadas pelo PDV;
+- novo parâmetro corporativo `limite_resgate_percentual`, sem override por Loja, com FATECalçados configurada em 50%;
+- máximo aplicável de Resgate considera saldo, mínimo, incremento, conversão, teto percentual sobre o bruto e capacidade efetiva conforme a ordem de aplicação;
+- a parcela paga por Resgate nunca gera novos pontos: em `BRUTO`, a base elegível exclui o desconto de Resgate; em `LIQUIDO`, usa o valor final após Resgate e descontos percentuais;
+- snapshot de benefícios evoluído para v2, preservando compatibilidade de reavaliação com snapshots v1;
+- consulta e simulação expõem disponibilidade e máximo de Resgate sem persistir ou reservar saldo;
+- resposta da Compra acrescenta Resgate e resumo histórico explicável sem expor snapshots internos;
+- Gestão recebeu prévia e tabela de conversão de Resgate com 10 linhas por página, baseada nos valores ainda não salvos e sem `float` binário;
+- migrations incrementais de configuração e relação Compra–Resgate, além de OpenAPI e documentação atualizados;
+- validação final com 103 testes focados e 556 testes na suíte completa aprovados, além de `manage.py check`, `makemigrations --check`, validator da conversão de Resgate e `git diff --check`.
 
-- manter `Compra` como fonte histórica da venda;
-- recalcular e validar no backend os benefícios realmente aplicáveis;
-- impedir que o PDV envie nível, bônus, desconto, pontos ou saldo como decisões autoritativas;
-- preservar snapshots suficientes para explicar o resultado histórico;
-- reconciliar o valor elegível após desconto de Resgate sem inventar silenciosamente um vínculo relacional obrigatório `Resgate → Compra`;
-- preservar idempotência, tenancy, compatibilidade do contrato e equivalência entre simulação e operação real.
+Com a F3.06A–F3.06F integrada, o domínio e a API da rodada estão reconciliados. A Issue guarda-chuva #62 permanece aberta até a conclusão do Seed FATECalçados V2 (#72) e a revalidação do cenário de demonstração.
 
 ## Fase 4 — Dados e visualização
 
@@ -509,9 +516,23 @@ Entregue:
 
 A modelagem de dados vigente também está consolidada em `docs/MODELAGEM_DE_DADOS.md`, separando entidades persistidas de informações derivadas como saldo, pontos para nível, nível atual e atividade.
 
+### F4.01B — Seed FATECalçados V2 🟡 P0
+
+Issue: #72.
+
+Próxima etapa da rodada F3.06/F4.01.
+
+Objetivo:
+
+- evoluir o cenário one-shot já existente para demonstrar os contratos integrados da F3.06;
+- manter 12 Lojas e criar Clientes ativos/inativos, níveis com benefícios, retorno, campanha, Resgate/FEFO, expiração, estorno e dados coerentes para o Dashboard;
+- criar contas demo estáveis de Administrador, Gestor com exatamente duas Lojas e Cliente narrativo;
+- disponibilizar a credencial de integração do ambiente de demonstração por mecanismo operacional seguro, sem hardcode ou exposição pública do segredo;
+- preservar services reais, determinismo, rollback integral e `RETORNA_SEED_SENHA` como única fonte da senha demo.
+
 ### F4.02 — Dashboard do Gestor ⏳ P0
 
-O Dashboard continua sendo a entrega central da F4.02, mas a execução foi subdividida para evitar construir visualização final sobre HTML cru e depois refazer a base visual. A F3.06F é a próxima etapa antes de retomar o Dashboard funcional.
+O Dashboard continua sendo a entrega central da F4.02. Antes dele, o Seed FATECalçados V2 (#72) deve reconciliar o banco de demonstração com o domínio/API já integrados e fornecer dados coerentes para os indicadores.
 
 #### F4.02A — Base visual mínima + SCSS ✅ P0
 
