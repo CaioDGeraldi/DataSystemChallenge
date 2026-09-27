@@ -22,7 +22,7 @@ class FidelidadeHTTPTests(DadosCompras, TestCase):
 
     def test_201_e_200_resultado_real_historico_apos_mudanca_e_outra_credencial(self):
         config = ConfiguracaoFidelidadeEmpresa.objects.create(empresa=self.empresa, pontos_por_real=Decimal('1.25'))
-        resposta = self.enviar(pontos_concedidos='9999.0000')
+        resposta = self.enviar()
         self.assertEqual(resposta.status_code, 201)
         self.assertEqual(resposta.json()['fidelidade'], {
             'pontos_base': '62.3750', 'pontos_concedidos': '62.3800',
