@@ -1,0 +1,40 @@
+{% for serie in series_temporais %}
+<section id="{{ serie.ancora }}" class="panel" aria-labelledby="dashboard-{{ serie.chave }}">
+  {% if graficos %}<div class="retorna-dashboard-series-heading">{% endif %}
+  <h2 id="dashboard-{{ serie.chave }}">{{ serie.titulo }}</h2>
+  <nav aria-label="Período de {{ serie.titulo }}">
+    <p>Período desta série:
+      {% for opcao in serie.opcoes %}
+      <a href="{{ opcao.url }}"{% if opcao.selecionado %} aria-current="true"{% endif %}>{% if opcao.selecionado %}<strong>{{ opcao.meses }} meses</strong>{% else %}{{ opcao.meses }} meses{% endif %}</a>{% if not forloop.last %} · {% endif %}
+      {% endfor %}
+    </p>
+  </nav>
+  {% if graficos %}</div>{% endif %}
+  {% if serie.total is not None %}<p class="helptext">Total histórico nas lojas selecionadas até a atualização do Dashboard.</p><p class="retorna-dashboard-value">{% if serie.unidade %}{{ serie.unidade }} {% endif %}{{ serie.total|floatformat:serie.casas }}</p>{% endif %}
+  {% if graficos %}
+  <p id="descricao-{{ serie.chave }}" class="helptext">{{ serie.titulo }} nos últimos {{ serie.meses }} meses.{% if serie.chave == 'ticket' %} Meses sem dados aparecem como lacunas.{% elif serie.chave == 'pontos_concedidos' %} Volume histórico concedido, não saldo disponível.{% elif serie.chave == 'pontos_resgatados' %} Inclui resgates posteriormente estornados.{% endif %}</p>
+  {% with json_id='dashboard-json-'|add:serie.chave %}
+  {{ serie.linhas|json_script:json_id }}
+  <div class="retorna-dashboard-chart" hidden>
+    <canvas data-chart-type="line" data-chart-json="{{ json_id }}" data-chart-format="{% if serie.unidade %}currency{% elif serie.casas == '0' %}integer{% else %}decimal{% endif %}" data-chart-label="{{ serie.titulo }}" role="img" aria-labelledby="dashboard-{{ serie.chave }}" aria-describedby="descricao-{{ serie.chave }}"></canvas>
+  </div>
+  {% endwith %}
+  <details class="retorna-dashboard-chart-data"><summary>Ver dados</summary>
+  {% endif %}
+  <div class="table-scroll retorna-table-region retorna-desktop-presentation" role="region" aria-label="{{ serie.titulo }}" tabindex="0">
+    <table>
+      <caption>{{ serie.titulo }} — últimos {{ serie.meses }} meses</caption>
+      <thead><tr><th scope="col">Mês</th><th scope="col" class="numeric">{{ serie.titulo }}</th></tr></thead>
+      <tbody>
+        {% for linha in serie.linhas %}<tr><th scope="row">{{ linha.mes|date:"m/Y" }}</th><td class="numeric">{% include "datasystem/gestor/dashboard/valor_serie.html" %}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="retorna-mobile-presentation">
+    <ul class="retorna-mobile-list" aria-label="{{ serie.titulo }} — últimos {{ serie.meses }} meses">
+      {% for linha in serie.linhas %}<li class="retorna-mobile-card"><h3>{{ linha.mes|date:"m/Y" }}</h3><dl class="retorna-mobile-details"><dt>{{ serie.titulo }}</dt><dd>{% include "datasystem/gestor/dashboard/valor_serie.html" %}</dd></dl></li>{% endfor %}
+    </ul>
+  </div>
+  {% if graficos %}</details>{% endif %}
+</section>
+{% endfor %}

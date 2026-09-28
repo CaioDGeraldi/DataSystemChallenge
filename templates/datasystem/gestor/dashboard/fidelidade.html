@@ -1,0 +1,24 @@
+{% extends "datasystem/gestor/dashboard/base.html" %}
+{% block dashboard_conteudo %}
+{% include "datasystem/gestor/dashboard/recompra.html" %}
+{% include "datasystem/gestor/dashboard/series.html" with graficos=True %}
+{% if dashboard.niveis is not None %}
+<section id="distribuicao-niveis" class="panel" aria-labelledby="dashboard-niveis">
+<h2 id="dashboard-niveis">Distribuição por nível</h2>
+<p class="helptext">Nível corporativo atual dos clientes com compras nas lojas selecionadas.</p>
+<div class="retorna-dashboard-doughnut-layout">
+{% if niveis_com_dados %}
+{{ dashboard.niveis|json_script:"dashboard-json-niveis" }}
+<div class="retorna-dashboard-chart" hidden>
+  <canvas data-chart-type="doughnut" data-chart-legend="legenda-niveis" data-chart-json="dashboard-json-niveis" data-chart-value="quantidade" data-chart-format="integer" data-chart-label="Clientes" role="img" aria-labelledby="dashboard-niveis" aria-describedby="legenda-niveis"></canvas>
+</div>
+{% elif dashboard.niveis %}
+<p class="empty-state">Nenhum cliente nos níveis configurados nas lojas selecionadas.</p>
+{% endif %}
+<ul id="legenda-niveis" class="retorna-dashboard-legend" aria-label="Níveis e quantidade de clientes">
+{% for nivel in dashboard.niveis %}<li><span class="retorna-dashboard-legend-marker" data-chart-legend-marker aria-hidden="true" hidden></span><div><h3>{{ nivel.nome }}</h3><span>{{ nivel.quantidade }} cliente{{ nivel.quantidade|pluralize:"s" }}</span></div></li>
+{% empty %}<li class="empty-state">Nenhum nível configurado.</li>{% endfor %}</ul>
+</div>
+</section>
+{% endif %}
+{% endblock %}

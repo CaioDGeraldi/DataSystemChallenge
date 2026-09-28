@@ -1,0 +1,37 @@
+{% extends "datasystem/gestor/dashboard/base.html" %}
+{% block dashboard_conteudo %}
+<section id="atividade-clientes" class="panel" aria-labelledby="titulo-atividade-clientes">
+<h2 id="titulo-atividade-clientes">Atividade dos clientes</h2>
+<p id="resumo-atividade-clientes">Estado atual dos clientes distintos com pelo menos uma Compra nas lojas selecionadas. Janela de atividade: {{ dashboard.periodo_cliente_ativo_dias }} dias. Ativos: Compra dentro dessa janela. Inativos: sem Compra dentro dessa janela.</p>
+{% if atividade_clientes_grafico %}
+{{ atividade_clientes_grafico|json_script:"dashboard-json-atividade-clientes" }}
+<div class="retorna-dashboard-chart" hidden>
+<canvas data-chart-type="bar" data-chart-axis="y" data-chart-json="dashboard-json-atividade-clientes" data-chart-format="integer" data-chart-label="Clientes" role="img" aria-labelledby="titulo-atividade-clientes" aria-describedby="resumo-atividade-clientes"></canvas>
+</div>
+{% else %}<p class="empty-state">Nenhum cliente com Compra nas lojas selecionadas.</p>{% endif %}
+<details class="retorna-dashboard-chart-data"><summary>Ver dados</summary>
+<div class="retorna-dashboard-cards" aria-label="Indicadores de clientes">
+{% include "datasystem/gestor/dashboard/clientes_indicadores.html" %}
+<section class="panel"><h2>Clientes inativos</h2><p class="retorna-dashboard-value">{{ dashboard.clientes_inativos }}</p><p class="helptext">Sem Compra nos últimos {{ dashboard.periodo_cliente_ativo_dias }} dias, considerando os clientes com pelo menos uma Compra nas lojas selecionadas.</p></section>
+</div>
+</details>
+</section>
+<section class="panel retorna-dashboard-ranking" aria-labelledby="dashboard-ranking"><h2 id="dashboard-ranking">Top 10 clientes por pontos concedidos</h2>
+<p id="resumo-ranking">Progresso histórico: total de pontos concedidos nas lojas selecionadas, sem descontar Resgates, expiração ou Estorno. Não representa saldo atual ou pontos disponíveis.</p>
+{% if ranking_grafico %}
+{{ ranking_grafico|json_script:"dashboard-json-ranking" }}
+<div class="retorna-dashboard-chart retorna-dashboard-chart-ranking" hidden>
+<canvas data-chart-type="bar" data-chart-axis="y" data-chart-label-limit="20" data-chart-json="dashboard-json-ranking" data-chart-value="pontos" data-chart-format="decimal" data-chart-label="Pontos concedidos" role="img" aria-labelledby="dashboard-ranking" aria-describedby="resumo-ranking"></canvas>
+</div>
+{% endif %}
+<details class="retorna-dashboard-chart-data"{% if not ranking_grafico %} open{% endif %}><summary>Ver dados</summary>
+<div class="table-scroll retorna-table-region retorna-desktop-presentation" role="region" aria-label="Ranking de clientes" tabindex="0"><table>
+<caption>Pontos concedidos nas lojas selecionadas</caption><thead><tr><th scope="col">Cliente</th><th scope="col" class="numeric">Pontos</th></tr></thead><tbody>
+{% for cliente in dashboard.ranking %}<tr><td>{{ cliente.cliente__usuario__first_name }} {{ cliente.cliente__usuario__last_name }}</td><td class="numeric">{{ cliente.pontos|floatformat:"-4" }}</td></tr>
+{% empty %}<tr><td colspan="2" class="empty-state">Nenhum cliente no ranking.</td></tr>{% endfor %}</tbody></table></div>
+<div class="retorna-mobile-presentation"><ul class="retorna-mobile-list" aria-label="Ranking de clientes">
+{% for cliente in dashboard.ranking %}<li class="retorna-mobile-card"><h3>{{ cliente.cliente__usuario__first_name }} {{ cliente.cliente__usuario__last_name }}</h3><dl class="retorna-mobile-details"><dt>Pontos</dt><dd>{{ cliente.pontos|floatformat:"-4" }}</dd></dl></li>
+{% empty %}<li class="empty-state">Nenhum cliente no ranking.</li>{% endfor %}</ul></div>
+</details>
+</section>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "datasystem/gestao_base.html" %}
+{% block titulo %}{{ dashboard_secao }} — Dashboard — Retorna{% endblock %}
+{% block titulo_pagina %}Dashboard — {{ dashboard_secao }}{% endblock %}
+{% block conteudo %}
+<form class="panel retorna-dashboard-filter" method="get" data-store-search>
+  {% for parametro, meses in dashboard_periodos.items %}<input type="hidden" name="{{ parametro }}" value="{{ meses }}">{% endfor %}
+  <div class="retorna-dashboard-store-fields">
+    <div class="field"><label for="dashboard-loja">Loja</label>
+      <select id="dashboard-loja" name="loja">
+        <option value="">Todas as lojas</option>
+        {% for loja in escopo.lojas %}<option value="{{ loja.pk }}"{% if loja.pk == escopo.loja_selecionada.pk %} selected{% endif %}>{{ loja.nome }} — {{ loja.cidade }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  <button class="button" type="submit">Aplicar filtro</button>
+</form>
+<p class="helptext">{% if escopo.loja_selecionada %}{{ escopo.loja_selecionada.nome }} — {{ escopo.loja_selecionada.cidade }}{% else %}Todas as lojas{% endif %} · Atualizado em {{ dashboard.referencia|date:"d/m/Y H:i" }}</p>
+<nav class="retorna-dashboard-nav" aria-label="Seções do Dashboard">
+  <ul>
+    {% for secao in dashboard_secoes %}
+    <li><a href="{{ secao.url }}"{% if secao.ativa %} aria-current="page"{% endif %}>{{ secao.nome }}</a></li>
+    {% endfor %}
+  </ul>
+</nav>
+{% if not dashboard.compras %}<p class="empty-state">Nenhuma compra nas lojas selecionadas.</p>{% endif %}
+{% block dashboard_conteudo %}{% endblock %}
+{% endblock %}

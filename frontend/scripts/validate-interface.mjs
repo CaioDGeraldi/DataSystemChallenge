@@ -60,13 +60,22 @@ console.log('Preferências, bootstrap, fallback de armazenamento, precedência d
 for (const theme of ['system', 'light', 'dark']) {
   let onChange;
   const media = { matches: false, addEventListener: (_, callback) => { onChange = callback; } };
-  globalThis.document = { documentElement: { dataset: {} }, querySelector: () => null };
+  globalThis.CustomEvent = class { constructor(type, options) { this.type = type; this.detail = options.detail; } };
+  let events = 0;
+  globalThis.document = { documentElement: { dataset: {} }, querySelector: () => null,
+    dispatchEvent(event) {
+      assert.equal(event.type, 'retorna:appearance-change');
+      assert.equal(event.detail.theme, document.documentElement.dataset.retornaTheme);
+      events++;
+    },
+  };
   globalThis.window = { localStorage: { getItem: () => JSON.stringify({ theme }) }, matchMedia: () => media };
   bindAppearance();
   assert.equal(document.documentElement.dataset.retornaTheme, effectiveTheme(theme, false));
   media.matches = true;
   onChange();
   assert.equal(document.documentElement.dataset.retornaTheme, effectiveTheme(theme, true));
+  assert.equal(events, 2);
 }
 delete globalThis.document;
 delete globalThis.window;
@@ -104,6 +113,7 @@ await import('./validate-navigation.mjs');
 
 // Lightweight DOM doubles exercise the real combobox mouse/keyboard handlers.
 const { bindStoreSearch } = await import('../src/js/retorna/store-search.js');
+const { bindDashboardFilter } = await import('../src/js/retorna/dashboard-filter.js');
 class StoreElement {
   constructor() { this.children = []; this.attrs = {}; this.dataset = {}; this.events = {}; this.value = ''; this.hidden = false; this.textContent = ''; }
   setAttribute(key, value) { this.attrs[key] = value; }
@@ -125,7 +135,7 @@ const originalOptions = [
   { value: '2', textContent: 'Jardim Aurora — Araras' },
   { value: '3', textContent: 'Outlet — Limeira' },
 ];
-const dashboard = read('../../templates/datasystem/gestor/dashboard.html');
+const dashboard = read('../../templates/datasystem/gestor/dashboard/base.html');
 assert.ok(dashboard.includes('<select id="dashboard-loja" name="loja">'));
 assert.ok(dashboard.includes('<label for="dashboard-loja">Loja</label>'));
 assert.ok(!dashboard.includes('role="combobox"') && !dashboard.includes('Buscar loja'));
@@ -230,6 +240,37 @@ for (const selected of ['', '2']) {
   assert.equal(submits, 0);
   assert.equal(input.fire('keydown', { key: 'Enter' }).defaultPrevented, true);
   assert.deepEqual(select.options, originalOptions);
+
+  // Integrate the real combobox keyboard contract with Dashboard auto-submit.
+  const button = new StoreElement();
+  root.querySelector = selector => selector === 'select[name="loja"]' ? select
+    : selector === 'button[type="submit"]' ? button : label;
+  root.requestSubmit = () => root.fire('submit');
+  globalThis.window = {
+    location: { pathname: '/dashboard/vendas/' }, scrollY: 240,
+    sessionStorage: { getItem: () => null, setItem() {} },
+    addEventListener() {},
+  };
+  bindDashboardFilter();
+  bindDashboardFilter();
+  assert.equal(button.hidden, true);
+  input.fire('click');
+  input.fire('keydown', { key: 'ArrowDown' });
+  assert.equal(select.value, '');
+  assert.equal(submits, 0);
+  input.fire('keydown', { key: 'Enter' });
+  assert.equal(select.value, '1');
+  assert.equal(submits, 1);
+  assert.equal(popup.hidden, true);
+  input.fire('click');
+  input.fire('keydown', { key: 'Enter' });
+  assert.equal(submits, 1);
+  input.fire('click');
+  input.fire('keydown', { key: 'ArrowDown' });
+  input.fire('keydown', { key: 'Escape' });
+  assert.equal(select.value, '1');
+  assert.equal(submits, 1);
+  delete globalThis.window;
 }
 delete globalThis.document;
 console.log('Combobox de lojas: fallback, seleção inicial, pesquisa, ARIA, mouse, teclado e abandono: OK (DOM simulado).');

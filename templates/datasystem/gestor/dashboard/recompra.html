@@ -1,0 +1,11 @@
+  <section id="recompra" class="panel"><h2 id="titulo-recompra">Taxa de recompra em até {{ dashboard.recompra.periodo_recompra_dias }} dias</h2>
+    {% if dashboard.recompra.elegiveis %}<p class="retorna-dashboard-value">{{ dashboard.recompra.percentual|floatformat:0 }}%</p><p class="helptext">{{ dashboard.recompra.recompraram }} de {{ dashboard.recompra.elegiveis }} clientes elegíveis voltaram em até {{ dashboard.recompra.periodo_recompra_dias }} dias.</p>
+    {% else %}<p class="retorna-dashboard-value">Sem base suficiente</p><p class="helptext">A primeira compra precisa completar {{ dashboard.recompra.periodo_recompra_dias }} dias para entrar na avaliação.</p>{% endif %}
+    <p class="helptext">Elegíveis: {{ dashboard.recompra.elegiveis }} · Voltaram: {{ dashboard.recompra.recompraram }} · Não voltaram: {{ dashboard.recompra.nao_recompraram }}</p>
+    {% if recompra_grafico %}
+    {{ recompra_grafico|json_script:"dashboard-json-recompra" }}
+    <div class="retorna-dashboard-chart" hidden>
+      <canvas data-chart-type="bar" data-chart-palette="accent-neutral" data-chart-json="dashboard-json-recompra" data-chart-format="integer" data-chart-label="Clientes" role="img" aria-labelledby="titulo-recompra"></canvas>
+    </div>
+    {% endif %}
+  </section>
