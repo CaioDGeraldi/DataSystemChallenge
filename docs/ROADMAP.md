@@ -602,22 +602,40 @@ Entregue:
 - barras da seção Clientes corrigidas para usar o verde Retorna no estado normal, sem depender do hover para revelar a cor;
 - validação final com 633 testes completos, `npm run build`, `validate-interface.mjs`, `validate-dashboard-charts.mjs`, `validate-dashboard-filter.mjs`, `manage.py check`, `makemigrations --check`, OpenAPI com `spectacular --validate`, `uv lock --check`, `git diff --check` e revisão visual manual em desktop/mobile e temas suportados.
 
-### F4.03 — Área do Cliente 🟡 P1
+### F4.03 — Área do Cliente ✅ P1
 
-Próxima etapa funcional relevante após a conclusão do Dashboard da Gestão.
+Issue: #102. PR: #103.
 
-Direção:
+Entregue:
 
-- experiência mobile-first e visualmente separada do shell administrativo;
-- saldo atual de pontos;
-- pontos próximos de expirar;
-- nível atual e benefícios aplicáveis;
-- estado de atividade quando fizer sentido para a experiência;
-- histórico de Compras/pontos;
-- histórico de Resgates;
-- linguagem simples para o Cliente, sem jargão interno.
+- shell próprio do Cliente, visualmente distinto da Gestão;
+- experiência mobile-first em Django SSR;
+- navegação `Início / Pontos / Resgates`;
+- bottom navigation fixa no mobile, com `safe-area-inset-bottom`, e navegação convencional no desktop;
+- saldo disponível como principal informação da Home;
+- separação explícita entre saldo disponível e pontos usados para classificação de nível;
+- níveis configuráveis por Empresa, sem hardcode de Bronze/Prata/Ouro;
+- progresso para o próximo nível e estado próprio para o maior nível disponível;
+- benefícios de nível e promoção de retorno em linguagem voltada ao consumidor;
+- próxima expiração calculada sobre pontos ainda efetivamente disponíveis, respeitando consumo e Estornos;
+- histórico de Compras/pontos em feed paginado de 10 itens, usando snapshot histórico para explicar a concessão;
+- histórico de Resgates e Estornos em linguagem compreensível, preservando a regra histórica de devolução;
+- troca segura entre programas de Empresas diferentes do mesmo `Usuario`, sem novo login e sem enfraquecer o fluxo de contexto da Gestão;
+- somente um contexto de Cliente ativo por vez, com vínculo revalidado no backend;
+- ranking pessoal por pontos acumulados e pontos disponíveis, sempre dentro da Empresa ativa;
+- empates de ranking com semântica equivalente a `RANK()`, sem desempate artificial e sem exposição de outros Clientes;
+- consultas server-side sem carregar a população inteira para calcular ranking;
+- Área do Cliente acessando domínio/services diretamente, sem o servidor consumir a própria API REST;
+- JavaScript mantido fora das regras de saldo, nível, ranking, expiração, benefícios e autorização;
+- SCSS próprio da experiência Cliente;
+- fallback com `border-radius` e progressive enhancement para `corner-shape: squircle`;
+- suporte a temas, `forced-colors`, foco, navegação sem JavaScript e alvos de toque adequados;
+- validator frontend específico da Área do Cliente;
+- nenhuma migration necessária;
+- 19 testes focais da Área do Cliente;
+- validação final com 652 testes completos, `manage.py check`, `makemigrations --check`, OpenAPI com `spectacular --validate`, `uv lock --check`, build Vite, validators de interface, Dashboard, filtro e Cliente, além de `git diff --check`.
 
-A quantidade exata de subpáginas, QR/code de Cliente, paginação, notificações, push/email e gamificação ainda precisam de especificação própria antes de implementação. Relatórios/exportação do Dashboard permanecem fora desta fase e não são escopo atual.
+A F4.03 conclui a principal experiência funcional voltada ao consumidor prevista para esta etapa. A próxima etapa principal é a F5.00, com o deploy do ambiente de demonstração no Heroku já formalizado pela Issue #100. Relatórios/exportação, #96 e #75 permanecem pendências separadas e não foram incorporados à F4.03.
 
 ## Fase 5 — Qualidade da entrega
 
