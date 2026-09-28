@@ -119,6 +119,9 @@ for (const contrato of [
 ]) assert.ok(resgates.includes(contrato), contrato);
 
 assert.equal(declarations('.cliente-page .cliente-card--principal')['grid-column'], undefined);
+for (const selector of ['.cliente-page .cliente-card-cabecalho > div', '.cliente-page .cliente-resumo-linha > div', '.cliente-page .cliente-movimento-cabecalho > div']) {
+  assert.equal(declarations(selector)['min-width'], '0', selector);
+}
 assert.equal(declarations('.cliente-page .cliente-movimento-cabecalho').display, 'flex');
 assert.equal(declarations('.cliente-page .cliente-movimento-valor')['font-variant-numeric'], 'tabular-nums');
 assert.equal(declarations('.cliente-page .cliente-status--realizado').background, 'var(--success-surface)');

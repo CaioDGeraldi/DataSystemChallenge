@@ -53,13 +53,13 @@
     gap: 1rem;
   }
 
-  .cliente-card-rotulo {
   .cliente-card-cabecalho > div,
   .cliente-resumo-linha > div,
   .cliente-movimento-cabecalho > div {
     min-width: 0;
   }
 
+  .cliente-card-rotulo {
     margin: 0 0 .35rem;
     color: var(--text-muted);
     font-size: .75rem;
