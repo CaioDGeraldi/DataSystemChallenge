@@ -95,6 +95,7 @@ class ParametrosDominioTests(DadosParametros, TestCase):
                 "incremento_resgate_pontos": 100,
                 "valor_monetario_por_ponto": Decimal("0.05"),
                 "periodo_cliente_ativo_dias": 180,
+                "periodo_recompra_dias": 180,
                 "devolver_pontos_ao_estornar_resgate": True,
                 "inatividade_suspende_beneficios_nivel": False,
                 "promocao_retorno_ativa": False,

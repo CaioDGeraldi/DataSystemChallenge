@@ -21,7 +21,7 @@ class LoginForm(forms.Form):
 
 
 class SelecaoContextoForm(forms.Form):
-    contexto = forms.ChoiceField(label="Contexto", widget=forms.RadioSelect)
+    contexto = forms.ChoiceField(label="Acessar como", widget=forms.RadioSelect)
 
     def __init__(self, contextos, *args, **kwargs):
         super().__init__(*args, **kwargs)

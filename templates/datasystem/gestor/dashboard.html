@@ -1,0 +1,56 @@
+{% extends "datasystem/gestao_base.html" %}
+{% block titulo %}Dashboard — Retorna{% endblock %}
+{% block titulo_pagina %}Dashboard{% endblock %}
+{% block conteudo %}
+<form class="panel retorna-dashboard-filter" method="get" data-store-search>
+  <div class="retorna-dashboard-store-fields">
+    <div class="field"><label for="dashboard-loja">Loja</label>
+      <select id="dashboard-loja" name="loja">
+        <option value="">Todas as lojas</option>
+        {% for loja in escopo.lojas %}<option value="{{ loja.pk }}"{% if loja.pk == escopo.loja_selecionada.pk %} selected{% endif %}>{{ loja.nome }} — {{ loja.cidade }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  <button class="button" type="submit">Aplicar filtro</button>
+</form>
+<p class="helptext">{% if escopo.loja_selecionada %}{{ escopo.loja_selecionada.nome }} — {{ escopo.loja_selecionada.cidade }}{% else %}Todas as lojas{% endif %} · Atualizado em {{ dashboard.referencia|date:"d/m/Y H:i" }}</p>
+{% if not dashboard.compras %}<p class="empty-state">Nenhuma compra nas lojas selecionadas.</p>{% endif %}
+<div class="retorna-dashboard-cards" aria-label="Indicadores de fidelidade">
+  <section class="panel"><h2>Clientes nas lojas selecionadas</h2><p class="retorna-dashboard-value">{{ dashboard.clientes_no_escopo }}</p><p class="helptext">Clientes com ao menos uma compra nas lojas selecionadas.</p></section>
+  <section class="panel"><h2>Clientes ativos</h2><p class="retorna-dashboard-value">{{ dashboard.clientes_ativos }}</p><p class="helptext">Compra nos últimos {{ dashboard.periodo_cliente_ativo_dias }} dias.</p></section>
+  <section class="panel"><h2>Ticket médio</h2><p class="retorna-dashboard-value">R$ {{ dashboard.ticket_medio|floatformat:2 }}</p><p class="helptext">Valor bruto por compra.</p></section>
+  <section class="panel"><h2>Custo efetivo de resgates</h2><p class="retorna-dashboard-value">R$ {{ dashboard.custo_resgates|floatformat:2 }}</p><p class="helptext">Descontos concedidos, excluindo resgates estornados.</p></section>
+  <section class="panel"><h2>Taxa de recompra em até {{ dashboard.recompra.periodo_recompra_dias }} dias</h2>
+    {% if dashboard.recompra.elegiveis %}<p class="retorna-dashboard-value">{{ dashboard.recompra.percentual|floatformat:0 }}%</p><p class="helptext">{{ dashboard.recompra.recompraram }} de {{ dashboard.recompra.elegiveis }} clientes elegíveis voltaram em até {{ dashboard.recompra.periodo_recompra_dias }} dias.</p>
+    {% else %}<p class="retorna-dashboard-value">Sem base suficiente</p><p class="helptext">A primeira compra precisa completar {{ dashboard.recompra.periodo_recompra_dias }} dias para entrar na avaliação.</p>{% endif %}
+  </section>
+  <section class="panel"><h2>Pontos concedidos</h2><p class="retorna-dashboard-value">{{ dashboard.pontos_concedidos|floatformat:"-4" }}</p><p class="helptext">Total concedido pelas compras selecionadas.</p></section>
+  <section class="panel"><h2>Pontos resgatados</h2><p class="retorna-dashboard-value">{{ dashboard.pontos_resgatados|floatformat:"-4" }}</p><p class="helptext">Pontos usados em resgates, inclusive os que foram estornados.</p></section>
+</div>
+<div class="retorna-dashboard-blocks">
+{% if dashboard.niveis is not None %}
+<section class="panel" aria-labelledby="dashboard-niveis"><h2 id="dashboard-niveis">Distribuição por nível</h2>
+<p class="helptext">Nível corporativo atual dos clientes com compras nas lojas selecionadas.</p>
+<ul class="retorna-mobile-list">
+{% for nivel in dashboard.niveis %}<li class="retorna-mobile-card"><div class="retorna-mobile-card-header"><h3>{{ nivel.nome }}</h3><span>{{ nivel.quantidade }} cliente{{ nivel.quantidade|pluralize:"s" }}</span></div></li>
+{% empty %}<li class="empty-state">Nenhum nível configurado.</li>{% endfor %}</ul>
+</section>
+{% endif %}
+<section class="panel" aria-labelledby="dashboard-ranking"><h2 id="dashboard-ranking">Top 10 clientes por pontos concedidos</h2>
+<div class="table-scroll retorna-table-region retorna-desktop-presentation" role="region" aria-label="Ranking de clientes" tabindex="0"><table>
+<caption>Pontos concedidos nas lojas selecionadas</caption><thead><tr><th scope="col">Cliente</th><th scope="col" class="numeric">Pontos</th></tr></thead><tbody>
+{% for cliente in dashboard.ranking %}<tr><td>{{ cliente.cliente__usuario__first_name }} {{ cliente.cliente__usuario__last_name }}</td><td class="numeric">{{ cliente.pontos|floatformat:"-4" }}</td></tr>
+{% empty %}<tr><td colspan="2" class="empty-state">Nenhum cliente no ranking.</td></tr>{% endfor %}</tbody></table></div>
+<div class="retorna-mobile-presentation"><ul class="retorna-mobile-list" aria-label="Ranking de clientes">
+{% for cliente in dashboard.ranking %}<li class="retorna-mobile-card"><h3>{{ cliente.cliente__usuario__first_name }} {{ cliente.cliente__usuario__last_name }}</h3><dl class="retorna-mobile-details"><dt>Pontos</dt><dd>{{ cliente.pontos|floatformat:"-4" }}</dd></dl></li>
+{% empty %}<li class="empty-state">Nenhum cliente no ranking.</li>{% endfor %}</ul></div>
+</section>
+</div>
+<section class="panel" aria-labelledby="dashboard-evolucao"><h2 id="dashboard-evolucao">Evolução dos últimos 12 meses</h2>
+<div class="table-scroll retorna-table-region retorna-desktop-presentation" role="region" aria-label="Evolução mensal" tabindex="0"><table>
+<caption>Compras e volume bruto por mês</caption><thead><tr><th scope="col">Mês</th><th scope="col" class="numeric">Compras</th><th scope="col" class="numeric">Volume bruto</th></tr></thead><tbody>
+{% for mes in dashboard.serie %}<tr><th scope="row">{{ mes.mes|date:"m/Y" }}</th><td class="numeric">{{ mes.compras }}</td><td class="numeric">R$ {{ mes.volume|floatformat:2 }}</td></tr>{% endfor %}</tbody></table></div>
+<div class="retorna-mobile-presentation"><ul class="retorna-mobile-list" aria-label="Evolução mensal">
+{% for mes in dashboard.serie %}<li class="retorna-mobile-card"><h3>{{ mes.mes|date:"m/Y" }}</h3><dl class="retorna-mobile-details"><dt>Compras</dt><dd>{{ mes.compras }}</dd><dt>Volume bruto</dt><dd>R$ {{ mes.volume|floatformat:2 }}</dd></dl></li>{% endfor %}</ul></div>
+</section>
+{% endblock %}

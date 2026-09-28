@@ -100,3 +100,136 @@ assert.ok(!business.includes('illustration.html'));
 console.log('Landings, uso restrito ao onboarding, SVGs light/dark locais e linguagem pública: OK.');
 
 await import('./validate-navigation.mjs');
+
+
+// Lightweight DOM doubles exercise the real combobox mouse/keyboard handlers.
+const { bindStoreSearch } = await import('../src/js/retorna/store-search.js');
+class StoreElement {
+  constructor() { this.children = []; this.attrs = {}; this.dataset = {}; this.events = {}; this.value = ''; this.hidden = false; this.textContent = ''; }
+  setAttribute(key, value) { this.attrs[key] = value; }
+  removeAttribute(key) { delete this.attrs[key]; }
+  addEventListener(type, handler) { (this.events[type] ??= []).push(handler); }
+  append(...nodes) { this.children.push(...nodes); }
+  before(node) { this.enhancement = node; }
+  contains(node) { return this === node || this.children.some(child => child.contains(node)); }
+  scrollIntoView() {}
+  dispatchEvent(event) { for (const handler of this.events[event.type] ?? []) handler(event); }
+  fire(type, extras = {}) {
+    const event = { type, target: this, preventDefault() { this.defaultPrevented = true; }, ...extras };
+    this.dispatchEvent(event); return event;
+  }
+}
+const originalOptions = [
+  { value: '', textContent: 'Todas as lojas' },
+  { value: '1', textContent: 'Calçados Centro — São Paulo' },
+  { value: '2', textContent: 'Jardim Aurora — Araras' },
+  { value: '3', textContent: 'Outlet — Limeira' },
+];
+const dashboard = read('../../templates/datasystem/gestor/dashboard.html');
+assert.ok(dashboard.includes('<select id="dashboard-loja" name="loja">'));
+assert.ok(dashboard.includes('<label for="dashboard-loja">Loja</label>'));
+assert.ok(!dashboard.includes('role="combobox"') && !dashboard.includes('Buscar loja'));
+assert.ok(!/históric[oa]s?|Lojas permitidas|lojas autorizadas/i.test(dashboard));
+assert.ok(read('../../apps/fidelidade/seed_fatecalcados.py').includes("NOME_EMPRESA = 'FATECalçados'"));
+for (const selected of ['', '2']) {
+  const doc = new StoreElement();
+  doc.createElement = () => new StoreElement();
+  globalThis.document = doc;
+  const root = new StoreElement(), select = new StoreElement(), label = new StoreElement();
+  select.options = [...originalOptions]; select.id = 'dashboard-loja'; select.name = 'loja'; select.value = selected;
+  label.htmlFor = select.id;
+  doc.querySelector = () => root;
+  root.querySelector = selector => selector === 'select[name="loja"]' ? select : label;
+  let changes = 0, submits = 0;
+  select.addEventListener('change', () => changes++);
+  root.addEventListener('submit', () => submits++);
+  assert.equal(select.hidden, false);
+  assert.equal(select.enhancement, undefined);
+  bindStoreSearch();
+  const control = select.enhancement;
+  bindStoreSearch(); assert.equal(select.enhancement, control);
+  const [input, popup] = control.children, [list, status] = popup.children;
+  const shown = () => list.children.filter(option => !option.hidden).map(option => option.textContent);
+  const currentText = originalOptions.find(option => option.value === selected).textContent;
+  assert.equal(select.name, 'loja');
+  assert.deepEqual(select.options, originalOptions);
+  assert.equal(select.hidden, true);
+  assert.equal(input.value, currentText);
+  assert.equal(label.htmlFor, input.id);
+  assert.equal(input.attrs.role, 'combobox');
+  assert.equal(input.attrs['aria-autocomplete'], 'list');
+  assert.equal(input.attrs['aria-controls'], list.id);
+  assert.equal(input.attrs['aria-expanded'], 'false');
+  assert.equal(list.attrs.role, 'listbox');
+  assert.equal(status.attrs.role, 'status');
+  assert.equal(status.attrs['aria-live'], 'polite');
+  assert.ok(list.children.every(option => option.attrs.role === 'option'));
+  doc.activeElement = input;
+  input.fire('focus');
+  assert.equal(popup.hidden, false);
+  assert.equal(input.attrs['aria-expanded'], 'true');
+  assert.deepEqual(shown(), originalOptions.map(option => option.textContent));
+  assert.equal(list.children[Number(selected)].attrs['aria-selected'], 'true');
+  for (const query of ['CALÇADOS', 'calcados', 'sao paulo', 'Calçados Centro — São Paulo']) {
+    input.value = query; input.fire('input');
+    assert.deepEqual(shown(), ['Todas as lojas', originalOptions[1].textContent]);
+    assert.equal(select.value, selected);
+    assert.equal(status.textContent, '');
+    assert.equal(input.attrs['aria-activedescendant'], undefined);
+    assert.equal(doc.activeElement, input);
+  }
+  input.value = 'inexistente'; input.fire('input');
+  assert.deepEqual(shown(), ['Todas as lojas']);
+  assert.equal(status.textContent, 'Nenhuma loja encontrada.');
+  assert.equal(status.attrs.role, 'status');
+  assert.equal(input.fire('keydown', { key: 'Enter' }).defaultPrevented, true);
+  assert.equal(select.value, selected);
+  input.value = ''; input.fire('input');
+  assert.deepEqual(shown(), originalOptions.map(option => option.textContent));
+  assert.equal(status.textContent, '');
+  input.fire('keydown', { key: 'ArrowDown' });
+  assert.equal(input.attrs['aria-activedescendant'], list.children[0].id);
+  input.fire('keydown', { key: 'ArrowDown' });
+  assert.equal(input.attrs['aria-activedescendant'], list.children[1].id);
+  input.fire('keydown', { key: 'ArrowUp' });
+  assert.equal(input.attrs['aria-activedescendant'], list.children[0].id);
+  input.fire('keydown', { key: 'ArrowDown' });
+  input.fire('keydown', { key: 'Enter' });
+  assert.equal(select.value, '1');
+  assert.equal(input.value, originalOptions[1].textContent);
+  assert.equal(popup.hidden, true);
+  assert.equal(input.attrs['aria-activedescendant'], undefined);
+  assert.equal(changes, 1); assert.equal(submits, 0);
+  input.fire('keydown', { key: 'ArrowDown' });
+  assert.equal(popup.hidden, false);
+  assert.equal(input.attrs['aria-activedescendant'], list.children[2].id);
+  input.value = 'jardim'; input.fire('input');
+  assert.equal(select.value, '1');
+  input.fire('keydown', { key: 'Escape' });
+  assert.equal(input.value, originalOptions[1].textContent);
+  assert.equal(popup.hidden, true);
+  input.fire('click'); input.value = 'araras'; input.fire('input');
+  assert.deepEqual(shown(), ['Todas as lojas', originalOptions[2].textContent]);
+  assert.equal(list.children[2].fire('pointerdown').defaultPrevented, true);
+  list.children[2].fire('click');
+  assert.equal(select.value, '2');
+  assert.equal(input.value, originalOptions[2].textContent);
+  assert.equal(popup.hidden, true);
+  input.fire('click'); input.value = 'abandonar'; input.fire('input');
+  doc.fire('click', { target: new StoreElement() });
+  assert.equal(input.value, originalOptions[2].textContent);
+  assert.equal(select.value, '2'); assert.equal(popup.hidden, true);
+  input.fire('click'); input.value = 'outra busca'; input.fire('input');
+  assert.ok(!input.fire('keydown', { key: 'Tab' }).defaultPrevented);
+  assert.equal(input.value, originalOptions[2].textContent);
+  assert.equal(popup.hidden, true);
+  input.fire('focus'); input.value = 'outlet'; input.fire('input'); input.fire('blur');
+  assert.equal(input.value, originalOptions[2].textContent);
+  input.fire('click'); list.children[0].fire('click');
+  assert.equal(select.value, ''); assert.equal(input.value, 'Todas as lojas');
+  assert.equal(submits, 0);
+  assert.equal(input.fire('keydown', { key: 'Enter' }).defaultPrevented, true);
+  assert.deepEqual(select.options, originalOptions);
+}
+delete globalThis.document;
+console.log('Combobox de lojas: fallback, seleção inicial, pesquisa, ARIA, mouse, teclado e abandono: OK (DOM simulado).');
