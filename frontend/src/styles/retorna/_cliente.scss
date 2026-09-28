@@ -1,13 +1,30 @@
 .cliente-page {
   font-size: 1rem;
   .cliente-header, .cliente-nav { width: 100%; max-width: 70rem; margin-inline: auto; }
-  .cliente-header { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; padding: 1rem; }
-  .cliente-programas { flex: 1 1 16rem; }
-  summary { cursor: pointer; padding: .75rem; min-height: 44px; overflow-wrap: anywhere; }
-  .cliente-header details form { display: grid; gap: .75rem; padding: .75rem; }
-  .cliente-header select { width: 100%; min-height: 44px; color: var(--text); background: var(--surface); border: 1px solid var(--control-border); border-radius: .5rem; padding: .5rem; }
-  .cliente-header details { min-width: 0; }
-  .cliente-conta p { padding: .75rem; }
+  .cliente-header { position: relative; z-index: 110; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .5rem; padding: .75rem 1rem; }
+  .cliente-brand { width: 6.5rem; display: flex; align-items: center; min-height: 44px; }
+  .cliente-header .retorna-user-menu { position: static; min-width: 0; }
+  .cliente-header summary { display: flex; min-width: 44px; min-height: 44px; list-style: none; }
+  .cliente-header summary::-webkit-details-marker { display: none; }
+  .cliente-header details[open] > summary { background: var(--surface-secondary); }
+  .cliente-programas > summary { width: 100%; max-width: 22rem; justify-content: space-between; border: 1px solid var(--border); }
+  .cliente-programa-nome { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cliente-header .tb-avatar { flex-shrink: 0; }
+  .cliente-header .retorna-user-dropdown {
+    position: absolute; top: calc(100% + .25rem); left: 1rem; right: 1rem; width: auto;
+    max-height: min(60vh, 24rem); max-height: min(60dvh, 24rem); overflow-y: auto;
+    background: var(--surface); border-color: var(--border); color: var(--text);
+  }
+  .cliente-header .retorna-user-dropdown button { min-height: 44px; gap: .75rem; justify-content: space-between; overflow-wrap: anywhere; }
+  .cliente-menu-titulo { padding: .5rem .625rem; margin: 0; font-weight: 650; overflow-wrap: anywhere; }
+  .cliente-programa-atual { display: block; color: var(--text-muted); font-size: .75rem; }
+  @media (min-width: 48rem) {
+    .cliente-brand { width: 8.75rem; }
+    .cliente-header { gap: 1rem; }
+    .cliente-header .retorna-user-menu { position: relative; }
+    .cliente-header .retorna-user-dropdown { left: auto; right: 0; width: min(20rem, calc(100vw - 2rem)); }
+    .cliente-programas .retorna-user-dropdown { left: 0; right: auto; }
+  }
   // Reserva após o footer em fluxo para a navegação fixa somente no mobile.
   .cliente-main { padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px)); }
   .cliente-main > .page-wrapper { max-width: 70rem; margin-inline: auto; padding: 1rem; }

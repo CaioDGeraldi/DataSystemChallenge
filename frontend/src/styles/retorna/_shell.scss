@@ -414,7 +414,7 @@ body.sidebar-rail .retorna-brand-compact { display: block; }
 .sidebar-backdrop { background: var(--backdrop); }
 
 // Navigation and logout remain usable when enhancement is unavailable.
-html:not([data-retorna-user-menu-enhanced]) .retorna-user-trigger { display: none; }
+html:not([data-retorna-user-menu-enhanced]) button.retorna-user-trigger { display: none; }
 html:not([data-retorna-user-menu-enhanced]) .retorna-user-dropdown[hidden] { display: block !important; position: static; width: auto; box-shadow: none; }
 @media (max-width: 768px) {
   html:not([data-retorna-shell-enhanced]) .sidebar { position: static; width: 100%; height: auto; max-height: none; transform: none; visibility: visible; }

@@ -5,23 +5,33 @@
 {% block contexto_pagina %}{{ cliente.empresa }}{% endblock %}
 {% block estrutura %}
 <header class="cliente-header">
-  <a href="{% url 'clientes:area' %}" aria-label="Retorna — início"><img class="retorna-logo-light" src="{% static 'retorna/brand/retorna-logo-light.svg' %}" alt="Retorna" width="140"><img class="retorna-logo-dark" src="{% static 'retorna/brand/retorna-logo-dark.svg' %}" alt="Retorna" width="140"></a>
-  <details class="cliente-programas">
-    <summary>{{ cliente.empresa }} · Trocar programa</summary>
-    <form method="post" action="{% url 'clientes:trocar_programa' %}">
-      {% csrf_token %}
-      <label for="cliente-programa">Seu programa</label>
-      <select id="cliente-programa" name="cliente_id">
-        {% for programa in programas %}<option value="{{ programa.pk }}"{% if programa.pk == cliente.pk %} selected{% endif %}>{{ programa.empresa }}</option>{% endfor %}
-      </select>
-      <button class="button" type="submit">Acessar programa</button>
-    </form>
+  <a class="cliente-brand" href="{% url 'clientes:area' %}" aria-label="Retorna — início"><img class="retorna-logo-light" src="{% static 'retorna/brand/retorna-logo-light.svg' %}" alt="Retorna" width="140"><img class="retorna-logo-dark" src="{% static 'retorna/brand/retorna-logo-dark.svg' %}" alt="Retorna" width="140"></a>
+  <details class="cliente-programas retorna-user-menu" name="cliente-topbar">
+    <summary class="retorna-user-trigger" aria-label="Trocar programa — {{ cliente.empresa }}" aria-controls="cliente-programas-panel" data-user-menu-trigger>
+      <span class="cliente-programa-nome">{{ cliente.empresa }}</span><span aria-hidden="true">⌄</span>
+    </summary>
+    <div class="retorna-user-dropdown" id="cliente-programas-panel" data-user-menu>
+      <p class="cliente-menu-titulo">Seus programas</p>
+      {% for programa in programas %}
+      <form method="post" action="{% url 'clientes:trocar_programa' %}">
+        {% csrf_token %}
+        <button type="submit" name="cliente_id" value="{{ programa.pk }}"{% if programa.pk == cliente.pk %} aria-current="true"{% endif %}>
+          <span>{{ programa.empresa }}{% if programa.pk == cliente.pk %}<span class="cliente-programa-atual">Programa atual</span>{% endif %}</span>
+          {% if programa.pk == cliente.pk %}<span aria-hidden="true">✓</span>{% endif %}
+        </button>
+      </form>
+      {% endfor %}
+    </div>
   </details>
-  <details class="cliente-conta">
-    <summary>Minha conta</summary>
-    <p>{{ user.get_full_name }}</p>
-    <button class="button button--secondary" type="button" data-appearance-open hidden>Aparência e acessibilidade</button>
-    <form method="post" action="{% url 'usuarios:logout' %}">{% csrf_token %}<button class="button button--secondary" type="submit">Sair</button></form>
+  <details class="cliente-conta retorna-user-menu" name="cliente-topbar">
+    <summary class="retorna-user-trigger" aria-label="Minha conta — {{ user.get_full_name }}" aria-controls="cliente-conta-panel" data-user-menu-trigger>
+      <span class="tb-avatar" aria-hidden="true">{{ user.get_full_name|first|upper|default:'?' }}</span><span class="retorna-user-name">{{ user.get_full_name }}</span><span aria-hidden="true">⌄</span>
+    </summary>
+    <div class="retorna-user-dropdown" id="cliente-conta-panel" data-user-menu>
+      <p class="cliente-menu-titulo">{{ user.get_full_name }}</p>
+      <button type="button" data-appearance-open hidden>Aparência e acessibilidade</button>
+      <form method="post" action="{% url 'usuarios:logout' %}">{% csrf_token %}<button type="submit">Sair</button></form>
+    </div>
   </details>
 </header>
 <nav class="cliente-nav" aria-label="Seu programa de fidelidade">

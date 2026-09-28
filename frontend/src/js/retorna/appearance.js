@@ -1,3 +1,5 @@
+import { closeUserMenu } from './user-menu.js';
+
 export const STORAGE_KEY = 'retorna.interface.v1';
 export function normalizeAppearance(value = {}) {
   const state = value && typeof value === 'object' ? value : {};
@@ -49,10 +51,9 @@ export function bindAppearance() {
     button.hidden = false;
     button.addEventListener('click', () => {
       const menu = button.closest('[data-user-menu]');
-      opener = menu ? document.querySelector('[data-user-menu-trigger]') : button;
+      opener = menu ? menu.closest('.retorna-user-menu')?.querySelector('[data-user-menu-trigger]') : button;
       if (menu) {
-        menu.hidden = true;
-        opener?.setAttribute('aria-expanded', 'false');
+        closeUserMenu(menu);
       }
       panel.showModal();
       panel.querySelector('input:checked')?.focus();

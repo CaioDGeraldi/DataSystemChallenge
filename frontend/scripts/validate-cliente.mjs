@@ -57,3 +57,34 @@ assert.ok(base.includes('</div></div>\n    {% include \'datasystem/includes/foot
 assert.ok(read('../../templates/datasystem/gestao_base.html').includes('{% block main_class %}main{% endblock %}'));
 assert.ok(read('../../templates/datasystem/cliente/base.html').includes('{% block main_class %}cliente-main{% endblock %}'));
 console.log('Shell público/Gestão/Cliente: altura flex, conteúdo limitado, footer em fluxo/full width e reserva mobile OK (estático).');
+
+const cliente = read('../../templates/datasystem/cliente/base.html');
+for (const id of ['cliente-programas-panel', 'cliente-conta-panel']) {
+  assert.ok(cliente.includes(`aria-controls="${id}" data-user-menu-trigger`));
+  assert.ok(cliente.includes(`id="${id}" data-user-menu>`), 'Painel nativo não pode depender de hidden/JS');
+}
+assert.equal((cliente.match(/<details[^>]+retorna-user-menu/g) ?? []).length, 2);
+assert.equal((cliente.match(/name="cliente-topbar"/g) ?? []).length, 2);
+for (const text of ['<summary class="retorna-user-trigger"', 'class="tb-avatar" aria-hidden="true"',
+  'for programa in programas', 'aria-current="true"', 'Programa atual',
+  'name="cliente_id" value="{{ programa.pk }}"', 'data-appearance-open',
+  'method="post" action="{% url \'clientes:trocar_programa\' %}"',
+  'method="post" action="{% url \'usuarios:logout\' %}"']) assert.ok(cliente.includes(text), text);
+assert.equal((cliente.match(/{% csrf_token %}/g) ?? []).length, 2);
+assert.ok(!cliente.includes('role="menu"'));
+const header = declarations('.cliente-page .cliente-header');
+assert.equal(header.display, 'grid');
+assert.equal(header['grid-template-columns'], 'auto minmax(0, 1fr) auto');
+assert.ok(Number(header['z-index']) > Number(declarations('.cliente-page .cliente-nav')['z-index']));
+assert.equal(declarations('.cliente-page .cliente-programa-nome')['text-overflow'], 'ellipsis');
+const panels = rules.filter(rule => rule.selectors.includes('.cliente-page .cliente-header .retorna-user-dropdown'));
+assert.equal(panels[0].declarations.position, 'absolute');
+assert.equal(panels[0].declarations.left, '1rem');
+assert.equal(panels[0].declarations.right, '1rem');
+assert.equal(panels[0].declarations['overflow-y'], 'auto');
+assert.equal(declarations('.cliente-page .cliente-header summary')['min-height'], '44px');
+assert.ok(shell.includes('html:not([data-retorna-user-menu-enhanced]) button.retorna-user-trigger'));
+const management = read('../../templates/datasystem/includes/topbar.html');
+for (const text of ['class="retorna-user-menu"', 'data-user-menu-trigger', 'data-user-menu hidden',
+  'aria-controls="retorna-user-dropdown"', 'id="retorna-user-dropdown"']) assert.ok(management.includes(text));
+console.log('Topbar Cliente: disclosures nativos, POST/CSRF, conta, associação ARIA, overlay e largura mobile OK (estático).');
