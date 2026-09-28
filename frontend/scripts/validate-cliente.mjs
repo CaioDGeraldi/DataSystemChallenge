@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { compileString } from 'sass';
 const css = readFileSync(new URL('../src/styles/retorna/_cliente.scss', import.meta.url), 'utf8');
-for (const contrato of ['env(safe-area-inset-bottom, 0px)', 'position: fixed', 'position: static', 'min-width: 48rem', 'min-height: 56px', 'corner-shape: squircle', 'border-radius: 1.25rem', 'forced-colors', "a[aria-current='page']"]) {
+for (const contrato of ['env(safe-area-inset-bottom, 0px)', 'position: fixed', 'position: static', 'min-width: 48rem', 'min-height: 56px', 'corner-shape: squircle', 'border-radius: var(--radius-lg)', 'forced-colors', "a[aria-current='page']"]) {
   assert.ok(css.includes(contrato), contrato);
 }
 assert.ok(css.includes('calc(7rem + env(safe-area-inset-bottom, 0px))'));
@@ -87,4 +87,42 @@ assert.ok(shell.includes('html:not([data-retorna-user-menu-enhanced]) button.ret
 const management = read('../../templates/datasystem/includes/topbar.html');
 for (const text of ['class="retorna-user-menu"', 'data-user-menu-trigger', 'data-user-menu hidden',
   'aria-controls="retorna-user-dropdown"', 'id="retorna-user-dropdown"']) assert.ok(management.includes(text));
+
+const area = read('../../templates/datasystem/cliente/area.html');
+const pontos = read('../../templates/datasystem/cliente/pontos.html');
+const resgates = read('../../templates/datasystem/cliente/resgates.html');
+
+for (const contrato of [
+  'cliente-grid--inicio',
+  'cliente-card--principal',
+  'cliente-card--nivel',
+  'cliente-card--compacto',
+  'cliente-card--ranking',
+  'cliente-card-rotulo',
+]) assert.ok(area.includes(contrato), contrato);
+
+for (const contrato of [
+  'cliente-movimentos',
+  'cliente-movimento',
+  'cliente-movimento-cabecalho',
+  'cliente-movimento-valor',
+  'cliente-meta',
+]) assert.ok(pontos.includes(contrato), contrato);
+
+for (const contrato of [
+  'cliente-movimentos',
+  'cliente-movimento',
+  'cliente-movimento-cabecalho',
+  'cliente-movimento-resumo',
+  'cliente-status--realizado',
+  'cliente-status--cancelado',
+]) assert.ok(resgates.includes(contrato), contrato);
+
+assert.equal(declarations('.cliente-page .cliente-card--principal')['grid-column'], undefined);
+assert.equal(declarations('.cliente-page .cliente-movimento-cabecalho').display, 'flex');
+assert.equal(declarations('.cliente-page .cliente-movimento-valor')['font-variant-numeric'], 'tabular-nums');
+assert.equal(declarations('.cliente-page .cliente-status--realizado').background, 'var(--success-surface)');
+assert.equal(declarations('.cliente-page .cliente-status--cancelado').background, 'var(--danger-surface)');
+
+console.log('Área do Cliente: hierarquia da Home, movimentos de pontos e estados de resgate OK.');
 console.log('Topbar Cliente: disclosures nativos, POST/CSRF, conta, associação ARIA, overlay e largura mobile OK (estático).');

@@ -2,16 +2,45 @@
 {% block titulo %}Resgates — Retorna{% endblock %}
 {% block titulo_pagina %}Meus resgates{% endblock %}
 {% block conteudo %}
-<ol class="cliente-feed" aria-label="Histórico de resgates">
+<ol class="cliente-feed cliente-movimentos" aria-label="Histórico de resgates">
 {% for resgate in historico %}
-  <li class="cliente-card"><article>
-    <h2>{{ resgate.loja.nome }}</h2><p><time datetime="{{ resgate.resgatado_em|date:'c' }}">{{ resgate.resgatado_em|date:'d/m/Y H:i' }}</time></p>
-    <p>{{ resgate.pontos_resgatados|floatformat:'-4g' }} pontos usados</p><p class="cliente-destaque">R$ {{ resgate.valor_desconto|floatformat:'2g' }} de desconto</p>
-    {% if resgate.estorno %}<p>Resgate cancelado em {{ resgate.estorno.estornado_em|date:'d/m/Y H:i' }}.</p>
-      {% if resgate.estorno.devolve_pontos_aplicado %}<p>O uso dos pontos foi desfeito. A validade original continua valendo.</p>{% else %}<p>Este cancelamento não devolveu pontos, conforme a regra aplicada na ocasião.</p>{% endif %}
-    {% else %}<p>Resgate realizado.</p>{% endif %}
-  </article></li>
-{% empty %}<li class="cliente-card">Quando usar seus pontos, seus resgates aparecerão aqui.</li>{% endfor %}
+  <li class="cliente-card cliente-movimento">
+    <article>
+      <div class="cliente-movimento-cabecalho">
+        <div>
+          <h2>{{ resgate.loja.nome }}</h2>
+          <p class="cliente-meta"><time datetime="{{ resgate.resgatado_em|date:'c' }}">{{ resgate.resgatado_em|date:'d/m/Y H:i' }}</time></p>
+        </div>
+        <p class="cliente-movimento-valor">R$ {{ resgate.valor_desconto|floatformat:'2g' }} de desconto</p>
+      </div>
+
+      <div class="cliente-movimento-resumo">
+        <p>{{ resgate.pontos_resgatados|floatformat:'-4g' }} pontos usados</p>
+        {% if resgate.estorno %}
+          <span class="cliente-status cliente-status--cancelado">Cancelado</span>
+        {% else %}
+          <span class="cliente-status cliente-status--realizado">Realizado</span>
+        {% endif %}
+      </div>
+
+      {% if resgate.estorno %}
+      <div class="cliente-movimento-observacao">
+        <p>Resgate cancelado em {{ resgate.estorno.estornado_em|date:'d/m/Y H:i' }}.</p>
+        {% if resgate.estorno.devolve_pontos_aplicado %}
+          <p>O uso dos pontos foi desfeito. A validade original continua valendo.</p>
+        {% else %}
+          <p>Este cancelamento não devolveu pontos, conforme a regra aplicada na ocasião.</p>
+        {% endif %}
+      </div>
+      {% else %}
+        <p class="cliente-meta">Resgate realizado.</p>
+      {% endif %}
+    </article>
+  </li>
+{% empty %}
+  <li class="cliente-card cliente-vazio">Quando usar seus pontos, seus resgates aparecerão aqui.</li>
+{% endfor %}
 </ol>
+
 {% include 'datasystem/cliente/paginacao.html' %}
 {% endblock %}
