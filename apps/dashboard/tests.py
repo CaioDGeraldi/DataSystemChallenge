@@ -355,9 +355,11 @@ class DashboardTests(DadosDashboard, TestCase):
         self.compra(500, valor='100')  # Expirado e inativo.
         self.compra(500, self.segunda, valor='1000')
         self.assertEqual(classificar_cliente(self.cliente).nivel.nome, 'Ouro')
-        self.assertEqual(self.ler(loja=self.loja)['niveis'], [
-            dict(nome='Bronze', quantidade=0), dict(nome='Ouro', quantidade=1),
-        ])
+        for secao in (None, 'clientes'):
+            with self.subTest(secao=secao):
+                self.assertEqual(self.ler(loja=self.loja, secao=secao)['niveis'], [
+                    dict(nome='Bronze', quantidade=0), dict(nome='Ouro', quantidade=1),
+                ])
         with patch('apps.dashboard.services.clientes_com_nivel') as classificar:
             self.assertIsNone(self.ler(self.gestor)['niveis'])
         classificar.assert_not_called()
@@ -418,7 +420,7 @@ class DashboardTests(DadosDashboard, TestCase):
         self.entrar()
         resposta = self.client.get(reverse('dashboard:inicio'))
         self.assertNotContains(resposta, 'Distribuição por nível')
-        self.assertContains(self.client.get(reverse('dashboard:fidelidade')), 'Nenhum nível configurado')
+        self.assertContains(self.client.get(reverse('dashboard:clientes')), 'Nenhum nível configurado')
         for loja in (self.loja, self.segunda):
             self.assertContains(resposta, f'<option value="{loja.pk}">{loja.nome} — {loja.cidade}</option>', html=True)
         self.assertNotContains(resposta, self.externa.nome)
@@ -576,7 +578,7 @@ class DashboardTests(DadosDashboard, TestCase):
         self.entrar()
         exclusivos = {
             'vendas': 'Compras por mês',
-            'fidelidade': 'Distribuição por nível',
+            'fidelidade': 'Pontos concedidos por mês',
             'clientes': 'Top 10 clientes por pontos concedidos',
         }
         indicadores = {
@@ -602,6 +604,8 @@ class DashboardTests(DadosDashboard, TestCase):
                 if secao in ('vendas', 'clientes'):
                     self.assertContains(resposta, 'retorna-mobile-presentation')
                     self.assertContains(resposta, 'retorna-desktop-presentation')
+                verificar_niveis = self.assertContains if secao == 'clientes' else self.assertNotContains
+                verificar_niveis(resposta, 'Distribuição por nível')
                 if secao == 'clientes':
                     self.assertContains(resposta, 'Nenhum cliente no ranking')
                 if secao == 'vendas':
@@ -619,6 +623,7 @@ class DashboardTests(DadosDashboard, TestCase):
                 resposta = self.client.get(reverse(f'dashboard:{secao}'))
                 self.assertEqual(resposta.status_code, 200)
                 self.assertIsNone(resposta.context['dashboard']['niveis'])
+                self.assertNotIn('niveis_com_dados', resposta.context)
                 self.assertNotContains(resposta, 'Distribuição por nível')
                 self.assertNotContains(resposta, 'dashboard-niveis')
                 classificar.assert_not_called()
@@ -851,31 +856,57 @@ class SeriesDashboardTests(DadosDashboard, TestCase):
 
     def test_niveis_chart_admin_nomes_configuraveis_zero_e_gestor(self):
         self.entrar()
-        vazio = self.pagina('fidelidade')
+        vazio = self.pagina('clientes')
         self.assertContains(vazio, 'Nenhum nível configurado.')
         self.assertNotContains(vazio, 'dashboard-json-niveis')
         nome = 'Horizonte </script> & livre'
         criar_nivel(self.request(), nome=nome, pontos_minimos=Decimal('0'))
         criar_nivel(self.request(), nome='Constelação', pontos_minimos=Decimal('1000'))
-        zerado = self.pagina('fidelidade')
+        zerado = self.pagina('clientes')
         self.assertContains(zerado, 'Nenhum cliente nos níveis configurados')
         self.assertNotContains(zerado, 'data-chart-type="doughnut"')
         self.assertNotContains(zerado, 'dashboard-json-niveis')
         self.compra()
-        resposta = self.pagina('fidelidade')
+        resposta = self.pagina('clientes')
         self.assertContains(resposta, 'data-chart-type="doughnut"', count=1)
         self.assertContains(resposta, 'id="legenda-niveis"')
+        self.assertContains(resposta, 'Distribuição por nível', count=1)
+        self.assertContains(resposta, 'id="distribuicao-niveis"', count=1)
         self.assertContains(resposta, 'Horizonte &lt;/script&gt; &amp; livre')
         self.assertEqual(self.chart_json(resposta, 'niveis'), [
             {'nome': nome, 'quantidade': 1}, {'nome': 'Constelação', 'quantidade': 0},
         ])
-        self.entrar(self.gestor)
-        with patch('apps.dashboard.services.clientes_com_nivel') as classificar:
-            gestor = self.pagina('fidelidade')
-        classificar.assert_not_called()
-        for texto in ('dashboard-json-niveis', 'data-chart-type="doughnut"',
-                      'distribuicao-niveis', 'Distribuição por nível', nome):
-            self.assertNotContains(gestor, texto)
+        for membro, secoes in ((self.membro, ('fidelidade',)),
+                               (self.gestor, ('clientes', 'fidelidade'))):
+            self.entrar(membro)
+            for secao in secoes:
+                with self.subTest(papel=membro.papel, secao=secao), \
+                        patch('apps.dashboard.services.clientes_com_nivel') as classificar:
+                    sem_niveis = self.pagina(secao)
+                    classificar.assert_not_called()
+                    self.assertIsNone(sem_niveis.context['dashboard']['niveis'])
+                    self.assertNotIn('niveis_com_dados', sem_niveis.context)
+                    for texto in ('dashboard-json-niveis', 'data-chart-type="doughnut"',
+                                  'distribuicao-niveis', 'Distribuição por nível', nome):
+                        self.assertNotContains(sem_niveis, texto)
+
+    def test_distribuicao_clientes_filtra_universo_sem_classificacao_local_ou_outra_empresa(self):
+        criar_nivel(self.request(), nome='Entrada', pontos_minimos=Decimal('0'))
+        criar_nivel(self.request(), nome='Horizonte', pontos_minimos=Decimal('1000'))
+        criar_nivel(self.request(self.outro_membro), nome='Exclusivo externo', pontos_minimos=Decimal('0'))
+        self.compra(valor='100')
+        self.compra(loja=self.segunda, valor='1000')
+        self.compra(loja=self.segunda, cliente=self.outro_cliente, valor='100')
+        self.entrar()
+        for loja, quantidades in ((None, [1, 1]), (self.loja, [0, 1]), (self.segunda, [1, 1])):
+            with self.subTest(loja=loja):
+                resposta = self.pagina('clientes', {'loja': loja.pk} if loja else {})
+                self.assertEqual(self.chart_json(resposta, 'niveis'), [
+                    {'nome': 'Entrada', 'quantidade': quantidades[0]},
+                    {'nome': 'Horizonte', 'quantidade': quantidades[1]},
+                ])
+                self.assertNotContains(resposta, 'Exclusivo externo')
+                self.assertEqual(resposta.context['escopo'].loja_selecionada, loja)
 
     def test_links_visao_geral_fidelidade_preservam_so_loja(self):
         self.entrar()
@@ -1040,8 +1071,8 @@ class SeriesDashboardTests(DadosDashboard, TestCase):
                 dados = self.ler(self.gestor, secao=secao)
                 if secao != 'clientes':
                     self.assertEqual(dados['ranking'], [])
-            for secao in ('inicio', 'vendas', 'clientes'):
-                self.ler(secao=secao)
+            for secao in ('inicio', 'vendas', 'fidelidade'):
+                self.assertIsNone(self.ler(secao=secao)['niveis'])
         niveis.assert_not_called()
         serie.assert_not_called()
 

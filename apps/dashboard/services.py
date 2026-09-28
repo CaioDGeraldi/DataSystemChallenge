@@ -207,7 +207,7 @@ def ler_dashboard(escopo, *, referencia=None, secao=None):
             'cliente_id', 'cliente__usuario__first_name', 'cliente__usuario__last_name',
         ).annotate(pontos=Sum('pontos_concedidos')).order_by('-pontos', 'cliente_id')[:10])
     niveis = None
-    if secao in (None, 'fidelidade') and escopo.membro.papel == MembroEmpresa.Papel.ADMINISTRADOR:
+    if secao in (None, 'clientes') and escopo.membro.papel == MembroEmpresa.Papel.ADMINISTRADOR:
         distribuicao = dict(clientes_com_nivel(clientes).order_by().values('nivel_id').annotate(
             quantidade=Count('pk'),
         ).values_list('nivel_id', 'quantidade'))

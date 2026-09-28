@@ -1,6 +1,6 @@
 .cliente-page {
   font-size: 1rem;
-  .cliente-header, .cliente-nav, .cliente-main { max-width: 70rem; margin-inline: auto; }
+  .cliente-header, .cliente-nav { width: 100%; max-width: 70rem; margin-inline: auto; }
   .cliente-header { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; padding: 1rem; }
   .cliente-programas { flex: 1 1 16rem; }
   summary { cursor: pointer; padding: .75rem; min-height: 44px; overflow-wrap: anywhere; }
@@ -8,8 +8,9 @@
   .cliente-header select { width: 100%; min-height: 44px; color: var(--text); background: var(--surface); border: 1px solid var(--control-border); border-radius: .5rem; padding: .5rem; }
   .cliente-header details { min-width: 0; }
   .cliente-conta p { padding: .75rem; }
-  .cliente-main { padding: 1rem 1rem calc(7rem + env(safe-area-inset-bottom, 0px)); }
-  .page-wrapper { margin: 0; padding: 0; }
+  // Reserva após o footer em fluxo para a navegação fixa somente no mobile.
+  .cliente-main { padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px)); }
+  .cliente-main > .page-wrapper { max-width: 70rem; margin-inline: auto; padding: 1rem; }
   .retorna-main-content { padding: 0; }
   .retorna-page-header { margin-bottom: 1.5rem; }
   h1 { font-size: clamp(1.5rem, 4vw, 2rem); }
@@ -38,7 +39,7 @@
   }
   @supports (corner-shape: squircle) { .cliente-card { corner-shape: squircle; } }
   @media (min-width: 48rem) {
-    .cliente-main { padding-bottom: 2rem; }
+    .cliente-main { padding-bottom: 0; }
     .cliente-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .cliente-nav { position: static; border: 0; padding: .5rem 1rem; justify-content: flex-start; gap: .5rem; }
     .cliente-nav a { flex: 0 1 auto; flex-direction: row; gap: .5rem; min-width: 8rem; }
