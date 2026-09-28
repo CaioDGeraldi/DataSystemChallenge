@@ -1,10 +1,34 @@
-{% extends "datasystem/base.html" %}
-{% block titulo %}Área do Cliente — Retorna{% endblock %}
-{% block contexto_pagina %}{{ cliente.empresa }}{% endblock %}
-{% block titulo_pagina %}Área do Cliente{% endblock %}
+{% extends 'datasystem/cliente/base.html' %}
+{% load l10n %}
+{% block titulo %}Início — Retorna{% endblock %}
+{% block titulo_pagina %}Olá, {{ user.first_name|default:'que bom ter você aqui' }}!{% endblock %}
 {% block conteudo %}
-<div class="panel">
-<p>Olá, {{ user.get_full_name }}.</p>
-<p>Seu vínculo de Cliente está confirmado nesta Empresa.</p>
+<div class="cliente-grid">
+  <section class="cliente-card cliente-saldo" aria-labelledby="saldo-titulo">
+    <h2 id="saldo-titulo">Seus pontos disponíveis</h2>
+    <p class="cliente-saldo-valor">{{ saldo|floatformat:'-4g' }}</p>
+    {% if expiracao %}<p>{{ expiracao.pontos|floatformat:'-4g' }} pontos expiram em {{ expiracao.dias }} dia{{ expiracao.dias|pluralize }}.</p><p>Em {{ expiracao.expira_em|date:'d/m/Y' }} às {{ expiracao.expira_em|date:'H:i' }}.</p>{% else %}<p>Você não tem pontos com vencimento pela frente.</p>{% endif %}
+    <a href="{% url 'clientes:pontos' %}">Ver meus pontos</a>
+  </section>
+  <section class="cliente-card" aria-labelledby="nivel-titulo">
+    <h2 id="nivel-titulo">Seu nível{% if nivel %}: {{ nivel.nome }}{% endif %}</h2>
+    <p>{{ pontos_nivel|floatformat:'-4g' }} pontos para nível</p>
+    {% if proximo_nivel %}
+      <label for="progresso-nivel">{{ pontos_nivel|floatformat:'-4g' }} / {{ proximo_nivel.pontos_minimos|floatformat:'-4g' }} pontos</label>
+      <progress id="progresso-nivel" value="{{ pontos_nivel|unlocalize }}" max="{{ proximo_nivel.pontos_minimos|unlocalize }}">{{ pontos_nivel|floatformat:'-4g' }} de {{ proximo_nivel.pontos_minimos|floatformat:'-4g' }}</progress>
+      <p>Faltam {{ faltam|floatformat:'-4g' }} pontos para {{ proximo_nivel.nome }}.</p>
+    {% elif nivel %}<p>Seu nível atual é o mais alto disponível.</p>{% else %}<p>Este programa ainda não possui níveis.</p>{% endif %}
+    {% if nivel %}
+      <h3>Benefícios do seu nível</h3>
+      {% if beneficios.beneficios_nivel_aplicaveis %}
+        {% if nivel.bonus_pontos_percentual %}<p>+{{ nivel.bonus_pontos_percentual|floatformat:'-4g' }}% em pontos</p>{% endif %}
+        {% if nivel.desconto_percentual %}<p>{{ nivel.desconto_percentual|floatformat:'-4g' }}% de desconto</p>{% endif %}
+        {% if not nivel.bonus_pontos_percentual and not nivel.desconto_percentual %}<p>Seu nível ainda não oferece benefícios adicionais.</p>{% endif %}
+      {% else %}<p>Os benefícios do seu nível estão suspensos pelo tempo sem comprar.</p>{% endif %}
+    {% endif %}
+  </section>
+  {% if retorno %}<section class="cliente-card cliente-retorno"><h2>Sentimos sua falta.</h2><p>Temos um benefício especial para sua próxima compra.</p>{% if beneficios.bonus_retorno %}<p>+{{ beneficios.bonus_retorno|floatformat:'-4g' }}% em pontos</p>{% endif %}{% if beneficios.desconto_retorno %}<p>+{{ beneficios.desconto_retorno|floatformat:'-4g' }}% de desconto</p>{% endif %}</section>{% endif %}
+  <section class="cliente-card"><h2>Última compra</h2>{% if ultima_compra %}<p>{{ ultima_compra.ocorrida_em|date:'d/m/Y H:i' }} · {{ ultima_compra.loja.nome }}</p><p>R$ {{ ultima_compra.valor|floatformat:'2g' }}</p><p>+{{ ultima_compra.lote_pontos.pontos_concedidos|floatformat:'-4g' }} pontos</p>{% else %}<p>Sua primeira compra aparecerá aqui.</p>{% endif %}</section>
+  <section class="cliente-card"><h2>Seu lugar</h2><p>Dentro de {{ cliente.empresa }}</p><dl class="cliente-ranking"><dt>Pontos acumulados</dt><dd>{% if ranking.acumulado %}#{{ ranking.acumulado }}{% else %}Acumule pontos para ver sua posição.{% endif %}</dd><dt>Pontos disponíveis</dt><dd>{% if ranking.disponivel %}#{{ ranking.disponivel }}{% else %}Quando tiver pontos disponíveis, sua posição aparecerá aqui.{% endif %}</dd></dl></section>
 </div>
 {% endblock %}

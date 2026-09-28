@@ -1,0 +1,32 @@
+{% extends 'datasystem/base.html' %}
+{% load static %}
+{% block classe_corpo %}cliente-page{% endblock %}
+{% block main_class %}cliente-main{% endblock %}
+{% block contexto_pagina %}{{ cliente.empresa }}{% endblock %}
+{% block estrutura %}
+<header class="cliente-header">
+  <a href="{% url 'clientes:area' %}" aria-label="Retorna — início"><img class="retorna-logo-light" src="{% static 'retorna/brand/retorna-logo-light.svg' %}" alt="Retorna" width="140"><img class="retorna-logo-dark" src="{% static 'retorna/brand/retorna-logo-dark.svg' %}" alt="Retorna" width="140"></a>
+  <details class="cliente-programas">
+    <summary>{{ cliente.empresa }} · Trocar programa</summary>
+    <form method="post" action="{% url 'clientes:trocar_programa' %}">
+      {% csrf_token %}
+      <label for="cliente-programa">Seu programa</label>
+      <select id="cliente-programa" name="cliente_id">
+        {% for programa in programas %}<option value="{{ programa.pk }}"{% if programa.pk == cliente.pk %} selected{% endif %}>{{ programa.empresa }}</option>{% endfor %}
+      </select>
+      <button class="button" type="submit">Acessar programa</button>
+    </form>
+  </details>
+  <details class="cliente-conta">
+    <summary>Minha conta</summary>
+    <p>{{ user.get_full_name }}</p>
+    <button class="button button--secondary" type="button" data-appearance-open hidden>Aparência e acessibilidade</button>
+    <form method="post" action="{% url 'usuarios:logout' %}">{% csrf_token %}<button class="button button--secondary" type="submit">Sair</button></form>
+  </details>
+</header>
+<nav class="cliente-nav" aria-label="Seu programa de fidelidade">
+  <a href="{% url 'clientes:area' %}"{% if pagina == 'inicio' %} aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m3 10 9-7 9 7v11h-7v-7h-4v7H3Z"/></svg><span>Início</span></a>
+  <a href="{% url 'clientes:pontos' %}"{% if pagina == 'pontos' %} aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M7 12h10"/></svg><span>Pontos</span></a>
+  <a href="{% url 'clientes:resgates' %}"{% if pagina == 'resgates' %} aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 8h18v5H3zM5 13v8h14v-8M12 8v13M12 8C2 8 6 0 12 8Zm0 0c10 0 6-8 0 0Z"/></svg><span>Resgates</span></a>
+</nav>
+{% endblock %}

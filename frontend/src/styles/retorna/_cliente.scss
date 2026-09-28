@@ -1,0 +1,51 @@
+.cliente-page {
+  font-size: 1rem;
+  .cliente-header, .cliente-nav, .cliente-main { max-width: 70rem; margin-inline: auto; }
+  .cliente-header { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; padding: 1rem; }
+  .cliente-programas { flex: 1 1 16rem; }
+  summary { cursor: pointer; padding: .75rem; min-height: 44px; overflow-wrap: anywhere; }
+  .cliente-header details form { display: grid; gap: .75rem; padding: .75rem; }
+  .cliente-header select { width: 100%; min-height: 44px; color: var(--text); background: var(--surface); border: 1px solid var(--control-border); border-radius: .5rem; padding: .5rem; }
+  .cliente-header details { min-width: 0; }
+  .cliente-conta p { padding: .75rem; }
+  .cliente-main { padding: 1rem 1rem calc(7rem + env(safe-area-inset-bottom, 0px)); }
+  .page-wrapper { margin: 0; padding: 0; }
+  .retorna-main-content { padding: 0; }
+  .retorna-page-header { margin-bottom: 1.5rem; }
+  h1 { font-size: clamp(1.5rem, 4vw, 2rem); }
+  h3 { font-size: 1rem; margin-block: 1.5rem .75rem; }
+  .cliente-grid { display: grid; gap: 1rem; }
+  .cliente-card { min-width: 0; padding: 1.5rem; border: 1px solid var(--border); border-radius: 1.25rem; background: var(--surface); overflow-wrap: anywhere; }
+  .cliente-saldo { border: 2px solid var(--accent); }
+  .cliente-saldo-valor { font-size: clamp(2.5rem, 8vw, 4rem); line-height: 1.2; font-weight: 750; letter-spacing: -.04em; }
+  .cliente-retorno { background: var(--success-surface); color: var(--success); }
+  .cliente-retorno h2 { color: inherit; }
+  .cliente-destaque { font-size: 1.25rem; font-weight: 650; }
+  progress { display: block; width: 100%; height: 1rem; accent-color: var(--primary); margin-block: .75rem; }
+  .cliente-ranking { margin: 0; }
+  .cliente-ranking dt { color: var(--text-muted); }
+  .cliente-ranking dd { margin: .25rem 0 1rem; font-weight: 650; }
+  .cliente-feed { display: grid; gap: 1rem; padding: 0; margin: 0; list-style: none; }
+  .cliente-paginacao { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 1rem; margin-top: 1.5rem; }
+  .cliente-paginacao a, .cliente-saldo a { display: inline-flex; align-items: center; min-height: 44px; padding: .5rem; }
+  .cliente-nav {
+    position: fixed; z-index: 100; inset: auto 0 0; display: flex; justify-content: space-around;
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding: .5rem .5rem calc(.5rem + env(safe-area-inset-bottom, 0px));
+    a { display: flex; flex: 1; flex-direction: column; gap: .25rem; align-items: center; justify-content: center; min-height: 56px; padding: .5rem; text-decoration: none; border-radius: .75rem; color: var(--text-muted); }
+    a[aria-current='page'] { color: var(--text); background: var(--surface-secondary); font-weight: 750; text-decoration: underline; text-underline-offset: .3em; }
+    svg { width: 1.5rem; height: 1.5rem; fill: none; stroke: currentColor; stroke-width: 1.6; }
+  }
+  @supports (corner-shape: squircle) { .cliente-card { corner-shape: squircle; } }
+  @media (min-width: 48rem) {
+    .cliente-main { padding-bottom: 2rem; }
+    .cliente-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cliente-nav { position: static; border: 0; padding: .5rem 1rem; justify-content: flex-start; gap: .5rem; }
+    .cliente-nav a { flex: 0 1 auto; flex-direction: row; gap: .5rem; min-width: 8rem; }
+    .cliente-feed { max-width: 50rem; margin-inline: auto; }
+  }
+  @media (forced-colors: active) {
+    .cliente-nav a[aria-current='page'] { outline: 2px solid Highlight; }
+    .cliente-card { border-color: CanvasText; }
+  }
+}
