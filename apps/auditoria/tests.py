@@ -180,7 +180,7 @@ class ContextoAuditoriaTests(TransactionTestCase):
 
 class MigrationAuditoriaTests(TransactionTestCase):
     def test_reversao_remove_trigger_funcao_tabela_e_reaplicacao_funciona(self):
-        destino = [("auditoria", "0001_initial")]
+        destino = MigrationExecutor(connection).loader.graph.leaf_nodes()
         self.addCleanup(lambda: MigrationExecutor(connection).migrate(destino))
         MigrationExecutor(connection).migrate([("auditoria", None)])
         with connection.cursor() as cursor:

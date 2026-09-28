@@ -7,6 +7,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.auditoria.contexto import contexto_auditoria
+from apps.auditoria.models import EventoAuditoria
 from apps.empresas.services import lojas_autorizadas
 from apps.fidelidade.consultas import consultar_fidelidade_cliente
 from apps.fidelidade.services import registrar_compra
@@ -180,7 +182,8 @@ class CompraView(APIView):
     def post(self, request):
         entrada = RegistrarCompraSerializer(data=request.data)
         entrada.is_valid(raise_exception=True)
-        compra, criada = registrar_compra(credencial=request.auth, **entrada.validated_data)
+        with contexto_auditoria(origem=EventoAuditoria.Origem.API, credencial_id=request.auth.pk):
+            compra, criada = registrar_compra(credencial=request.auth, **entrada.validated_data)
         return Response(CompraSerializer(compra).data, status=201 if criada else 200)
 
 
@@ -232,7 +235,8 @@ class ResgateView(APIView):
     def post(self, request):
         entrada = RegistrarResgateSerializer(data=request.data)
         entrada.is_valid(raise_exception=True)
-        resgate, criado = registrar_resgate(credencial=request.auth, **entrada.validated_data)
+        with contexto_auditoria(origem=EventoAuditoria.Origem.API, credencial_id=request.auth.pk):
+            resgate, criado = registrar_resgate(credencial=request.auth, **entrada.validated_data)
         return Response(ResgateSerializer(resgate).data, status=201 if criado else 200)
 
 
@@ -267,5 +271,6 @@ class EstornoResgateView(APIView):
     def post(self, request):
         entrada = EstornarResgateSerializer(data=request.data)
         entrada.is_valid(raise_exception=True)
-        estorno, criado = estornar_resgate(credencial=request.auth, **entrada.validated_data)
+        with contexto_auditoria(origem=EventoAuditoria.Origem.API, credencial_id=request.auth.pk):
+            estorno, criado = estornar_resgate(credencial=request.auth, **entrada.validated_data)
         return Response(EstornoResgateSerializer(estorno).data, status=201 if criado else 200)
