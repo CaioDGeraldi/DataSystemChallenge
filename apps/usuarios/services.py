@@ -107,3 +107,12 @@ def resolver_identidade(*, cpf, senha, confirmacao, first_name="", last_name="",
                 raise ValidationError("Não foi possível autenticar com o CPF e a senha informados.")
             usuario = autenticado
         return usuario
+
+
+def trocar_programa_cliente(request, vinculo_id):
+    """Exceção restrita Cliente → Cliente, sem ampliar ativar_contexto."""
+    validar_contexto_ativo(request, 'cliente')
+    vinculo = _buscar_vinculo(request.user, 'cliente', vinculo_id)
+    request.session[CONTEXTO_SESSAO] = {
+        'tipo_contexto': 'cliente', 'empresa_id': vinculo.empresa_id, 'vinculo_id': vinculo.pk,
+    }

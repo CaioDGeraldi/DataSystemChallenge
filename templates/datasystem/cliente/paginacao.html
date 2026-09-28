@@ -1,0 +1,7 @@
+{% if historico.has_other_pages %}
+<nav class="cliente-paginacao" aria-label="Páginas do histórico">
+  {% if historico.has_previous %}<a href="?page={{ historico.previous_page_number }}" rel="prev">Anterior</a>{% endif %}
+  <span aria-current="page">Página {{ historico.number }} de {{ historico.paginator.num_pages }}</span>
+  {% if historico.has_next %}<a href="?page={{ historico.next_page_number }}" rel="next">Próxima</a>{% endif %}
+</nav>
+{% endif %}

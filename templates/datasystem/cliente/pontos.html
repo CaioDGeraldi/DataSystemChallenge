@@ -1,0 +1,20 @@
+{% extends 'datasystem/cliente/base.html' %}
+{% block titulo %}Pontos — Retorna{% endblock %}
+{% block titulo_pagina %}Meus pontos{% endblock %}
+{% block conteudo %}
+<ol class="cliente-feed" aria-label="Histórico de compras">
+{% for compra in historico %}
+  <li class="cliente-card">
+    <article><h2>{{ compra.loja.nome }}</h2><p><time datetime="{{ compra.ocorrida_em|date:'c' }}">{{ compra.ocorrida_em|date:'d/m/Y H:i' }}</time></p>
+    <p>Compra de R$ {{ compra.valor|floatformat:'2g' }}</p><p class="cliente-destaque">+{{ compra.lote_pontos.pontos_concedidos|floatformat:'-4g' }} pontos ganhos</p>
+    {% if compra.detalhes_pontos %}<details><summary>De onde vieram seus pontos</summary>
+      <p>{{ compra.detalhes_pontos.apos_campanha|floatformat:'-4g' }} pontos da compra{% if compra.detalhes_pontos.apos_campanha != compra.detalhes_pontos.base %}, incluindo a campanha{% endif %}</p>
+      {% if compra.detalhes_pontos.bonus_nivel %}<p>+{{ compra.detalhes_pontos.bonus_nivel|floatformat:'-4g' }} pelo seu nível</p>{% endif %}
+      {% if compra.detalhes_pontos.bonus_retorno %}<p>+{{ compra.detalhes_pontos.bonus_retorno|floatformat:'-4g' }} de benefício de retorno</p>{% endif %}
+      <p>Total: {{ compra.detalhes_pontos.total|floatformat:'-4g' }} pontos</p>
+    </details>{% endif %}</article>
+  </li>
+{% empty %}<li class="cliente-card">Suas compras e os pontos ganhos aparecerão aqui.</li>{% endfor %}
+</ol>
+{% include 'datasystem/cliente/paginacao.html' %}
+{% endblock %}
