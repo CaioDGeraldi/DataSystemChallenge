@@ -621,6 +621,42 @@ A quantidade exata de subpáginas, QR/code de Cliente, paginação, notificaçõ
 
 ## Fase 5 — Qualidade da entrega
 
+### F5.00 — Deploy do ambiente de demonstração no Heroku ⏳ P0
+
+Issue: #100.
+
+Objetivo: publicar o produto em um ambiente estável de demonstração antes do acabamento e da validação final, para que as últimas etapas sejam verificadas também no ambiente real de apresentação.
+
+Decisões e requisitos:
+
+- **Heroku** é a plataforma escolhida para o ambiente público de demonstração, aproveitando o benefício disponível ao responsável pelo projeto por meio do **GitHub Student Developer Pack**;
+- PostgreSQL permanece como banco do ambiente de demonstração;
+- migrations devem ser aplicadas antes da carga do cenário;
+- build do frontend e static assets devem seguir o fluxo de produção do ambiente;
+- configuração e segredos devem ser fornecidos por variáveis/configuração do ambiente, sem hardcode no repositório;
+- `RETORNA_SEED_SENHA` deve existir somente em runtime durante o provisionamento das contas demo;
+- o **Seed FATECalçados V2 é obrigatório no site público de demonstração**;
+- `seed_fatecalcados` deve rodar somente no provisionamento inicial de um banco de demonstração vazio, nunca como etapa automática de todo redeploy;
+- a `--data-base` do Seed V2 deve ser escolhida próxima da data de provisionamento/apresentação para manter coerentes atividade, inatividade, expiração, campanha e demais estados temporais;
+- após o provisionamento, executar smoke tests do site, autenticação das contas demo, escopos de Administrador/Gestor/Cliente, Dashboard e fluxos principais da API;
+- F5.01, F5.02 e F5.03 devem considerar o ambiente publicado como alvo adicional de validação, sem substituir os gates locais/CI.
+
+Sequência operacional do ambiente:
+
+```text
+provisionar Heroku + PostgreSQL
+↓
+aplicar migrations
+↓
+configurar secrets/runtime
+↓
+executar Seed FATECalçados V2 uma única vez
+↓
+validar contas demo, API e Dashboard
+↓
+seguir para acabamento, documentação e pitch
+```
+
 ### F5.01 — Acessibilidade e acabamento ⏳ P1
 
 A F4.02A já entregou a base responsiva, temas claro/escuro/automático, escala de texto, foco visível, reduced motion e forced-colors. A F5.01 concentra o refinamento que não precisa bloquear a vertical P0:
@@ -684,6 +720,7 @@ A equipe deve conseguir explicar arquitetura, parâmetros, segurança, API, uso 
 - seed coerente;
 - base visual mínima necessária ao Dashboard;
 - dashboard com os requisitos essenciais;
+- ambiente público de demonstração no Heroku com Seed FATECalçados V2 aplicado;
 - testes dos fluxos críticos e isolamento entre Empresas.
 
 ### P1 — importante se P0 estiver seguro
