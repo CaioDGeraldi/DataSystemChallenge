@@ -61,7 +61,9 @@ uv run python manage.py runserver
 
 ## Staticfiles e marca
 
-Django encontra os bundles em `frontend/dist/`. Os assets públicos mantidos pelo frontend ficam em `frontend/public/`; a identidade visual da Retorna fica em `frontend/public/retorna/brand/` e é copiada pelo Vite para `frontend/dist/retorna/brand/` durante o build. `STATIC_ROOT` é `staticfiles/`, saída gerada para `collectstatic`. Configuração de servidor de produção fica fora desta entrega.
+Django encontra os bundles em `frontend/dist/`. Os assets públicos mantidos pelo frontend ficam em `frontend/public/`; a identidade visual da Retorna fica em `frontend/public/retorna/brand/` e é copiada pelo Vite para `frontend/dist/retorna/brand/` durante o build. `STATIC_ROOT` é `staticfiles/`, saída gerada para `collectstatic`. Em produção, WhiteNoise serve essa saída com compressão, preservando os nomes estáveis dos bundles (sem manifesto de hashes e com cache curto padrão de 60 segundos).
+
+No Heroku, `package.json` e `package-lock.json` da raiz são apenas um adaptador de build, sem dependências frontend duplicadas. O buildpack Node 22 executa `npm run heroku-postbuild`: instalação determinística via `npm --prefix frontend ci --include=dev`, seguida do build Vite. O buildpack Python executa depois e roda `collectstatic`. Veja [Deploy no Heroku](DEPLOY_HEROKU.md).
 
 Navy `#0D1426`, verde `#5EC33D` como acento e branco permanecem próprios da Retorna. Logo dark na sidebar navy; logo light na base pública; icon no favicon e no rail. Tipografia system-ui. Tokens semânticos mapeiam a paleta às primitivas Gentelella e sustentam os temas Automático, Claro e Escuro, além das preferências locais de escala de texto e modo dos formulários.
 
