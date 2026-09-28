@@ -534,9 +534,9 @@ Entregue:
 - nenhuma migration nova e nenhum Dashboard introduzido nesta subfase;
 - validação final com 41 testes focados e 580 testes na suíte completa, além de `manage.py check`, `makemigrations --check`, OpenAPI com `spectacular --validate`, `uv lock --check` e `git diff --check`.
 
-### F4.02 — Dashboard da Gestão 🟡 P0
+### F4.02 — Dashboard da Gestão ✅ P0
 
-Com a F4.02B integrada, o Dashboard funcional já opera sobre os dados reais e autorizados. A próxima entrega P0 é a F4.02C, responsável por transformar as séries e agregados já calculados no backend em visualizações gráficas e filtros avançados sem mover regra de negócio para o frontend.
+Com a F4.02B e a F4.02C integradas, o Dashboard da Gestão está consolidado sobre os dados reais e autorizados, com leitura server-side, navegação por seções, visualizações gráficas e filtros progressivamente aprimorados sem deslocar regra de negócio para o frontend.
 
 #### F4.02A — Base visual mínima + SCSS ✅ P0
 
@@ -582,30 +582,42 @@ Entregue:
 - `docs/FRONTEND.md`, validators Node e testes de interface atualizados para o Dashboard e o combobox;
 - validação final com 607 testes na suíte completa, além de `manage.py check`, `makemigrations --check`, OpenAPI com `spectacular --validate`, `uv lock --check`, build Vite, `validate-interface.mjs`, `git diff --check` e revisão visual manual em navegador.
 
-#### F4.02C — Gráficos, filtros e refinamentos do Dashboard 🟡 P0
+#### F4.02C — Gráficos, filtros e refinamentos do Dashboard ✅ P0
 
-Próxima etapa P0: consolidar a leitura operacional da F4.02 com visualizações gráficas reais sobre os dados já calculados no backend.
+Issue: #95. PR: #97.
+
+Entregue:
+
+- quatro páginas SSR reais para `Visão geral`, `Vendas`, `Fidelidade` e `Clientes`, com navegação própria, URL real por seção e preservação do filtro global de Loja;
+- Chart.js 4.5.1 integrado via npm/Vite somente como camada de apresentação, recebendo dados preparados pelo backend via `json_script`, sem regra de negócio, autorização ou cálculo de fidelidade no JavaScript;
+- períodos independentes de 3, 6 ou 12 meses por série temporal, com default de 12 meses e parâmetros próprios para cada gráfico sem redefinir outros gráficos ou KPIs;
+- seção Vendas com gráficos de Compras por mês, volume bruto por mês e ticket médio por mês, preservando lacuna visual e fallback `Sem dados` quando não existe Compra no mês;
+- seção Fidelidade com recompra `Voltaram × Não voltaram`, séries de pontos concedidos, pontos resgatados e custo efetivo de Resgates, além da distribuição por nível somente para Administrador;
+- seção Clientes com ativos × inativos e Top 10 por pontos históricos concedidos, sem reordenar no frontend e sem expor CPF, PK ou identificadores internos no JSON público;
+- filtro global de Loja com autoaplicação por GET via `requestSubmit()`, `<select>` nativo preservado como fonte de verdade, botão de fallback sem JavaScript e restauração de scroll por seção;
+- semântica temporal `as-of` corrigida para Resgate/Estorno: pontos resgatados contam fatos ocorridos até a referência e custo efetivo só exclui Resgate quando o Estorno já existia nessa mesma referência;
+- temas claro/escuro/automático refletidos nos gráficos, atualização em modo system sem reload, animação desativada com `prefers-reduced-motion` e fallback textual priorizado em `forced-colors`;
+- distribuição por nível com categorias dinâmicas, legenda HTML e marcador coerente com a cor do segmento, sem hardcode de Bronze/Prata/Ouro;
+- links `Ver gráfico` da Visão geral apontando para a seção e âncora corretas, incluindo `Ticket médio → Vendas#ticket`;
+- barras da seção Clientes corrigidas para usar o verde Retorna no estado normal, sem depender do hover para revelar a cor;
+- validação final com 633 testes completos, `npm run build`, `validate-interface.mjs`, `validate-dashboard-charts.mjs`, `validate-dashboard-filter.mjs`, `manage.py check`, `makemigrations --check`, OpenAPI com `spectacular --validate`, `uv lock --check`, `git diff --check` e revisão visual manual em desktop/mobile e temas suportados.
+
+### F4.03 — Área do Cliente 🟡 P1
+
+Próxima etapa funcional relevante após a conclusão do Dashboard da Gestão.
 
 Direção:
 
-- gráficos de linha para evolução temporal de Compras e volume bruto, preservando séries server-side e meses sem movimento;
-- visualização adequada da distribuição por nível para Administrador e do Top 10 de Clientes por pontos concedidos;
-- biblioteca de gráficos apenas como camada de apresentação, sem calcular métricas, autorização ou regra de fidelidade no JavaScript;
-- filtros avançados de período quando aplicáveis, sempre revalidados no backend e sem ampliar escopo de Loja;
-- refinamento dos cards/tabelas e manutenção de alternativas acessíveis/legíveis aos gráficos;
-- manter autorização, tenancy e toda regra de domínio no backend.
-
-### F4.03 — Área do Cliente ⏳ P1
-
-Direção:
-
-- saldo;
+- experiência mobile-first e visualmente separada do shell administrativo;
+- saldo atual de pontos;
 - pontos próximos de expirar;
-- nível e benefícios somente quando cada capacidade estiver implementada;
-- histórico de compras/pontos;
-- histórico de resgates.
+- nível atual e benefícios aplicáveis;
+- estado de atividade quando fizer sentido para a experiência;
+- histórico de Compras/pontos;
+- histórico de Resgates;
+- linguagem simples para o Cliente, sem jargão interno.
 
-Interface mobile-first e separada visualmente do painel administrativo.
+A quantidade exata de subpáginas, QR/code de Cliente, paginação, notificações, push/email e gamificação ainda precisam de especificação própria antes de implementação. Relatórios/exportação do Dashboard permanecem fora desta fase e não são escopo atual.
 
 ## Fase 5 — Qualidade da entrega
 
