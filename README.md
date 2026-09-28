@@ -45,6 +45,7 @@ Para editar os estilos, execute `cd frontend`, `npm ci` e `npm run build`. Veja 
 - [Responsabilidade da integração por API](docs/INTEGRACAO_API.md)
 - [Identidade visual da Retorna](docs/IDENTIDADE_VISUAL.md)
 - [Guia vivo da apresentação](docs/APRESENTACAO.md)
+- [Deploy de demonstração no Heroku](docs/DEPLOY_HEROKU.md)
 
 A direção arquitetural é manter um monólito modular Django, com PostgreSQL como banco de referência e API REST versionada como interface de primeira classe para integrações externas. Regras de domínio devem ser compartilhadas entre a interface web e a API.
 

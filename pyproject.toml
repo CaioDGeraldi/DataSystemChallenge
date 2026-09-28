@@ -4,10 +4,13 @@ version = "0.1.0"
 description = "Base Django do DataSystemChallenge"
 requires-python = ">=3.12"
 dependencies = [
+    "dj-database-url>=3,<4",
     "django>=5.2,<5.3",
     "djangorestframework>=3.18.1",
     "drf-spectacular>=0.30.0",
+    "gunicorn>=23,<24",
     "psycopg[binary]>=3.2,<4",
+    "whitenoise>=6.12,<7",
 ]
 
 [tool.uv]

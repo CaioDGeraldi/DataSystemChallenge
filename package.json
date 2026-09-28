@@ -1,0 +1,12 @@
+{
+  "name": "retorna-heroku-build",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Adaptador do buildpack Node; dependências reais ficam em frontend/.",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "heroku-postbuild": "npm --prefix frontend ci --include=dev && npm --prefix frontend run build"
+  }
+}

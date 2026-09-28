@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # Versão escolhida somente para CI, sem impor versão ao Heroku.
+        image: postgres:17
+        env:
+          POSTGRES_DB: datasystemchallenge_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d datasystemchallenge_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # Valores descartáveis; os testes HTTP seguem o ambiente local.
+      DJANGO_SECRET_KEY: ci-only-not-secret
+      DJANGO_DEBUG: "true"
+      DJANGO_SECURE_SSL_REDIRECT: "false"
+      POSTGRES_DB: datasystemchallenge_ci
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: "5432"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: false
+      - name: Sincronizar dependências Python
+        run: uv sync --locked
+      - name: Validar lockfile
+        run: uv lock --check
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      # Os testes de interface verificam assets reais em frontend/dist.
+      - name: Preparar assets para os testes Django
+        run: |
+          npm ci
+          npm run heroku-postbuild
+      - name: Verificar Django
+        run: uv run python manage.py check
+      - name: Verificar migrations
+        run: uv run python manage.py makemigrations --check
+      - name: Validar OpenAPI
+        run: uv run python manage.py spectacular --file /tmp/datasystem-openapi.yml --validate
+      - name: Executar suíte completa
+        run: uv run python manage.py test --noinput
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Build pelo wrapper Heroku
+        run: |
+          npm ci
+          npm run heroku-postbuild
+      - name: Validar interface
+        run: node frontend/scripts/validate-interface.mjs
+      - name: Validar gráficos do Dashboard
+        run: node frontend/scripts/validate-dashboard-charts.mjs
+      - name: Validar filtro do Dashboard
+        run: node frontend/scripts/validate-dashboard-filter.mjs
+      - name: Validar Área do Cliente
+        run: node frontend/scripts/validate-cliente.mjs
