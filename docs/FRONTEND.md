@@ -17,7 +17,7 @@ frontend/
 ├── src/
 │   ├── styles/
 │   │   ├── retorna.scss
-│   │   ├── retorna/{_tokens,_base,_shell,_components}.scss
+│   │   ├── retorna/{_tokens,_base,_shell,_components,_dashboard}.scss
 │   │   └── vendor/_gentelella.scss
 │   └── js/
 │       ├── retorna.js
@@ -69,7 +69,7 @@ Navy `#0D1426`, verde `#5EC33D` como acento e branco permanecem próprios da Ret
 
 O namespace `datasystem` foi preservado. `base.html` é a base pública; `gestao_base.html` especializa a estrutura empresarial com sidebar, topbar, backdrop e main/page-wrapper/footer. Includes concentram navegação, topbar, retorno, mensagens e campos de formulário.
 
-As views fornecem apresentação a partir do membro já validado. Administrador recebe seis entradas reais; Gestor somente Lojas permitidas. Cliente, cadastro e aceite público não recebem shell empresarial. O menu da identidade contém apenas logout POST com CSRF.
+As views fornecem apresentação a partir do membro já validado. Administrador recebe sete entradas reais, incluindo Dashboard; Gestor recebe Dashboard e Lojas. O Dashboard usa filtro de Loja via GET. Com JavaScript, um único combobox pesquisável substitui visualmente o select nativo, que permanece como fonte do valor enviado. A lista filtra localmente por nome ou cidade, sem distinguir maiúsculas ou acentos, usando apenas as opções originais e mantendo “Todas as lojas” disponível. Digitar não muda a seleção; clique ou Enter confirma a opção destacada, e o botão “Aplicar filtro” envia o GET. As setas navegam pelas sugestões; Escape, Tab ou saída do campo restauram o texto da seleção real. Sem JavaScript, somente o select é exibido e continua funcional. Usa cards e tabelas/listas SSR; gráficos e filtros avançados ficam para F4.02C. Cliente, cadastro e aceite público não recebem shell empresarial. O menu da identidade contém apenas logout POST com CSRF.
 
 Breadcrumbs são dados server-side: ancestrais navegáveis possuem URL; o item atual é texto com aria-current. Configuração de Loja usa `Lojas / Configuração — <nome>` e `Voltar para Lojas`, sem página de detalhe fictícia. Telas filhas possuem back_url/back_label determinísticos.
 

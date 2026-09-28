@@ -79,7 +79,7 @@ def cancelar_evento_view(request, evento_id):
     cancelar_evento(request, evento_id)
     messages.success(
         request,
-        'Campanha cancelada. O histórico concedido foi preservado.',
+        'Campanha cancelada. Os pontos já concedidos foram preservados.',
     )
     return redirect('fidelidade:eventos')
 

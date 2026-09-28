@@ -6,7 +6,7 @@ from .models import MembroEmpresa
 
 def contexto_gestao(membro, secao, pagina=None):
     """Recebe exclusivamente o vínculo já validado pela view/service chamador."""
-    entradas = [('lojas', 'Lojas permitidas', 'empresas:area')]
+    entradas = [('lojas', 'Lojas', 'empresas:area')]
     if membro.papel == MembroEmpresa.Papel.ADMINISTRADOR:
         entradas = [
             ('lojas', 'Lojas', 'empresas:area'),
@@ -16,6 +16,7 @@ def contexto_gestao(membro, secao, pagina=None):
             ('campanhas', 'Campanhas', 'fidelidade:eventos'),
             ('integracoes', 'Integrações', 'empresas:integracoes'),
         ]
+    entradas.insert(0, ('dashboard', 'Dashboard', 'dashboard:inicio'))
     navegacao = [dict(chave=chave, nome=nome, url=reverse(rota), ativo=chave == secao)
                 for chave, nome, rota in entradas]
     atual = next(item for item in navegacao if item['ativo'])

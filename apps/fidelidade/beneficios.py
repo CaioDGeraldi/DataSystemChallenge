@@ -223,10 +223,11 @@ def snapshot_beneficios(avaliacao, politica, progresso, ultima_compra, *, descon
         for n in (avaliacao.nivel_anterior, avaliacao.nivel_bonus)
         if n
     }
-    # Estorno não participa da Compra; v1 preserva o formato anterior ao limite.
+    # Estorno e janela de recompra não participam do cálculo da Compra.
+    # v1 preserva o formato anterior ao limite.
     campos = (
         nome for nome in ParametrosFidelidade.__dataclass_fields__
-        if nome != 'devolver_pontos_ao_estornar_resgate'
+        if nome not in ('devolver_pontos_ao_estornar_resgate', 'periodo_recompra_dias')
         and (versao >= 2 or nome != 'limite_resgate_percentual')
     )
     return _json(

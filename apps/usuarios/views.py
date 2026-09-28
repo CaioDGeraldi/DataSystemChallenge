@@ -47,7 +47,7 @@ def selecionar_contexto(request):
     if request.method == "POST" and form.is_valid():
         tipo, vinculo_id = form.cleaned_data["contexto"].split(":")
         return redirect(ativar_contexto(request, tipo, vinculo_id))
-    return render(request, "datasystem/formulario.html", {"form": form, "titulo": "Selecionar contexto", "botao": "Continuar"})
+    return render(request, "datasystem/formulario.html", {"form": form, "titulo": "Como deseja acessar?", "botao": "Continuar"})
 
 
 @require_POST

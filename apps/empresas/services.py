@@ -363,6 +363,7 @@ def salvar_configuracao_empresa(
     periodo_cliente_ativo_dias,
     precisao_pontos,
     modo_arredondamento_pontos,
+    periodo_recompra_dias=None,
     limite_resgate_percentual=None,
     devolver_pontos_ao_estornar_resgate=None,
     inatividade_suspende_beneficios_nivel=None,
@@ -397,6 +398,8 @@ def salvar_configuracao_empresa(
         configuracao.incremento_resgate_pontos = incremento_resgate_pontos
         configuracao.valor_monetario_por_ponto = valor_monetario_por_ponto
         configuracao.periodo_cliente_ativo_dias = periodo_cliente_ativo_dias
+        if periodo_recompra_dias is not None:
+            configuracao.periodo_recompra_dias = periodo_recompra_dias
         if inatividade_suspende_beneficios_nivel is not None:
             configuracao.inatividade_suspende_beneficios_nivel = (
                 inatividade_suspende_beneficios_nivel

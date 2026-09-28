@@ -81,7 +81,7 @@ const doc=new Element(); globalThis.document=doc;
 const root=new Element(), panel=new Element(), trigger=new Element(), input=new Element(), status=new Element();
 panel.hidden=true;
 for(const [key,value] of Object.entries({panel,trigger,input,status})) root.one[`[data-navigation-search-${key}]`]=value;
-const links=['Lojas permitidas','Configuração','Níveis'].map(label=> {const link=new Element();link.textContent=label;return link;});
+const links=['Lojas','Configuração','Níveis'].map(label=> {const link=new Element();link.textContent=label;return link;});
 const items=links.map(link=>{const item=new Element();item.one.a=link;return item;});
 root.many['[data-navigation-search-item]']=items;
 root.contains=e=>[root,panel,trigger,input,status,...links].includes(e);

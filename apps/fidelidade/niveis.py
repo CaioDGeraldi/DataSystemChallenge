@@ -4,7 +4,8 @@ from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import DecimalField, OuterRef, Subquery, Sum, Value
+from django.db.models.functions import Coalesce
 
 from apps.clientes.models import Cliente
 from apps.empresas.models import Empresa
@@ -35,11 +36,32 @@ def classificar_cliente(cliente: Cliente) -> ClassificacaoNivel:
     )['total']
     if pontos is None:
         pontos = Decimal('0.0000')
-    nivel = NivelFidelidade.objects.filter(empresa_id=persistido.empresa_id,
-                                         pontos_minimos__lte=pontos).order_by(
-        '-pontos_minimos',
-    ).first()
+    nivel = _niveis_para_pontos(persistido.empresa_id, pontos).first()
     return ClassificacaoNivel(nivel=nivel, pontos_para_nivel=pontos)
+
+
+def _niveis_para_pontos(empresa_id, pontos):
+    """Regra única de classificação, também utilizável por expressões ORM."""
+    return NivelFidelidade.objects.filter(
+        empresa_id=empresa_id, pontos_minimos__lte=pontos,
+    ).order_by('-pontos_minimos')
+
+
+def clientes_com_nivel(clientes):
+    """Anota o nível corporativo canônico sem carregar clientes/lotes em Python.
+
+    O chamador deve autorizar a leitura corporativa e limitar o universo.
+    Concessões históricas não são reduzidas por consumo, expiração ou atividade.
+    """
+    pontos = LotePontos.objects.filter(cliente_id=OuterRef('pk')).order_by().values(
+        'cliente_id',
+    ).annotate(total=Sum('pontos_concedidos')).values('total')
+    clientes = clientes.annotate(pontos_para_nivel=Coalesce(
+        Subquery(pontos), Value(Decimal('0')), output_field=DecimalField(),
+    ))
+    return clientes.annotate(nivel_id=Subquery(_niveis_para_pontos(
+        OuterRef('empresa_id'), OuterRef('pontos_para_nivel'),
+    ).values('pk')[:1]))
 
 
 def listar_niveis(request):

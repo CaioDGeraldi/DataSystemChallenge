@@ -1,0 +1,74 @@
+.retorna-dashboard-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-3);
+  .retorna-dashboard-store-fields {
+    flex: 1 1 16rem;
+    min-width: 0;
+    display: grid;
+    gap: var(--space-3);
+  }
+}
+.retorna-dashboard-cards, .retorna-dashboard-blocks {
+  display: grid;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  .panel { margin-bottom: 0; }
+}
+.retorna-dashboard-cards {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  h2 { font-size: .9375rem; }
+}
+.retorna-dashboard-value {
+  font-size: 1.75rem;
+  font-weight: 650;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+@media (min-width: 75rem) {
+  .retorna-dashboard-blocks { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+}
+
+.retorna-store-combobox {
+  position: relative;
+  &::after {
+    content: '▾';
+    position: absolute;
+    inset-inline-end: var(--space-3);
+    top: .65rem;
+    pointer-events: none;
+    color: var(--text-muted);
+  }
+  input[role='combobox'] { padding-inline-end: 2rem; }
+}
+.retorna-store-popup {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  inset-inline: 0;
+  z-index: 20;
+  max-height: 18rem;
+  max-height: min(18rem, 45dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-floating);
+  [role='option'] {
+    padding: var(--space-3);
+    min-height: 2.75rem;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+    &[aria-selected='true'] { font-weight: 650; }
+    &:hover, &[data-active='true'] {
+      background: var(--surface-secondary);
+      outline: 2px solid var(--focus);
+      outline-offset: -2px;
+    }
+  }
+  .helptext { padding: var(--space-3); margin: 0; }
+  .helptext:empty { display: none; }
+}

@@ -1,5 +1,5 @@
 """Valores padrão e contratos tipados da política de fidelidade do MVP."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 
@@ -18,6 +18,7 @@ class ParametrosFidelidade:
     resgate_minimo_pontos: int
     incremento_resgate_pontos: int
     valor_monetario_por_ponto: Decimal
+    periodo_recompra_dias: int = field(default=180, kw_only=True)
     periodo_cliente_ativo_dias: int
     inatividade_suspende_beneficios_nivel: bool
     promocao_retorno_ativa: bool
@@ -41,6 +42,7 @@ PADROES_FIDELIDADE = ParametrosFidelidade(
     resgate_minimo_pontos=100,
     incremento_resgate_pontos=100,
     valor_monetario_por_ponto=Decimal("0.05"),
+    periodo_recompra_dias=180,
     periodo_cliente_ativo_dias=180,
     inatividade_suspende_beneficios_nivel=False,
     promocao_retorno_ativa=False,

@@ -136,6 +136,7 @@ class ConfiguracaoFidelidadeEmpresaForm(FormularioCompostoMixin, forms.ModelForm
             (
                 'validade_pontos_meses',
                 'periodo_cliente_ativo_dias',
+                'periodo_recompra_dias',
                 'inatividade_suspende_beneficios_nivel',
                 'beneficio_primeira_compra_apos_inatividade',
                 'promocao_retorno_ativa',
@@ -159,6 +160,7 @@ class ConfiguracaoFidelidadeEmpresaForm(FormularioCompostoMixin, forms.ModelForm
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         rotulos = {
+            'periodo_recompra_dias': 'Período de recompra (dias)',
             'devolver_pontos_ao_estornar_resgate': 'Devolver pontos válidos ao estornar resgate',
             'modo_aplicacao_nivel': 'Nível usado para bônus de pontos',
             'base_calculo_pontos': 'Valor usado para gerar pontos',
@@ -197,6 +199,7 @@ class ConfiguracaoFidelidadeEmpresaForm(FormularioCompostoMixin, forms.ModelForm
             "valor_monetario_por_ponto",
             "limite_resgate_percentual",
             "periodo_cliente_ativo_dias",
+            "periodo_recompra_dias",
             "modo_aplicacao_nivel",
             "base_calculo_pontos",
             "inatividade_suspende_beneficios_nivel",

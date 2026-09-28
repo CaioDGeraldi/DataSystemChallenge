@@ -77,7 +77,7 @@ class NivelFidelidadeForm(forms.Form):
         max_digits=24,
         decimal_places=4,
         min_value=Decimal('0'),
-        help_text='Total histórico de pontos concedidos. O primeiro nível deve começar em zero.',
+        help_text='Total de pontos concedidos. O primeiro nível deve começar em zero.',
     )
 
     bonus_pontos_percentual = forms.DecimalField(

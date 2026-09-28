@@ -364,6 +364,11 @@ class ConfiguracaoFidelidadeEmpresa(models.Model):
         default=PADROES_FIDELIDADE.valor_monetario_por_ponto,
         validators=[MinValueValidator(Decimal("0.01"))],
     )
+    periodo_recompra_dias = models.PositiveIntegerField(
+        default=PADROES_FIDELIDADE.periodo_recompra_dias,
+        validators=[MinValueValidator(1)],
+        help_text="Janela em dias para avaliar a recompra dos clientes da empresa.",
+    )
     periodo_cliente_ativo_dias = models.PositiveIntegerField(
         default=PADROES_FIDELIDADE.periodo_cliente_ativo_dias,
         validators=[MinValueValidator(1)],
@@ -510,6 +515,10 @@ class ConfiguracaoFidelidadeEmpresa(models.Model):
             models.CheckConstraint(
                 condition=models.Q(valor_monetario_por_ponto__gt=0),
                 name="cfg_empresa_valor_positivo",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(periodo_recompra_dias__gt=0),
+                name="cfg_empresa_recompra_positiva",
             ),
             models.CheckConstraint(
                 condition=models.Q(periodo_cliente_ativo_dias__gt=0),

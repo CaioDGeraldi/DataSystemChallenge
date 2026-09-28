@@ -22,3 +22,6 @@ bindNavigationSearch();
 
 import { bindConversaoResgate } from './retorna/conversao-resgate.js';
 bindConversaoResgate();
+
+import { bindStoreSearch } from "./retorna/store-search.js";
+bindStoreSearch();

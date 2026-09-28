@@ -79,6 +79,7 @@ class Elementos(HTMLParser):
 
 class InterfaceTests(TestCase):
     rotas_admin = (
+        'dashboard:inicio',
         'empresas:area', 'empresas:membros', 'empresas:configuracao_empresa',
         'fidelidade:niveis', 'fidelidade:eventos', 'empresas:integracoes',
     )
@@ -222,6 +223,8 @@ class InterfaceTests(TestCase):
             with self.subTest(usuario=usuario.pk):
                 self.entrar(usuario=usuario, vinculo=membro)
                 resposta, html = self.pagina('empresas:area')
+                self.assertContains(resposta, '<h1>Lojas</h1>', html=True)
+                self.assertNotContains(resposta, 'Lojas permitidas')
                 links_busca = []
                 # Parser da região isolada mantém o contrato sem depender de estilos.
                 fragmento = resposta.content.decode().split('id="navigation-search-results"', 1)[1].split('</ul>', 1)[0]
@@ -230,7 +233,7 @@ class InterfaceTests(TestCase):
                 self.assertTrue(any(a.get('aria-keyshortcuts') == 'Alt+K' for _, a in html.tags))
                 self.assertTrue(any(t == 'input' and a.get('type') == 'search' for t, a in html.tags))
                 if usuario == self.gestor:
-                    self.assertEqual(links_busca, [reverse('empresas:area')])
+                    self.assertEqual(links_busca, [reverse('dashboard:inicio'), reverse('empresas:area')])
 
     def test_preferencias_locais_landmarks_e_logout(self):
         self.entrar()
@@ -254,7 +257,7 @@ class InterfaceTests(TestCase):
         self.assertTrue(any(i.get('name') == 'csrfmiddlewaretoken' for i in logout[0]['inputs']))
         self.assertContains(resposta, 'Aparência e acessibilidade')
 
-    def test_admin_tem_seis_entradas_e_secao_ativa(self):
+    def test_admin_tem_sete_entradas_e_secao_ativa(self):
         self.entrar()
         for rota in self.rotas_admin:
             with self.subTest(rota=rota):
@@ -264,16 +267,40 @@ class InterfaceTests(TestCase):
                 self.assertEqual([a['href'] for a in html.navegacao if a.get('aria-current') == 'page'], [reverse(rota)])
                 self.assertNotContains(resposta, reverse('empresas:onboarding'))
 
-    def test_gestor_so_recebe_lojas_permitidas(self):
+    def test_gestor_recebe_dashboard_e_lojas(self):
         self.entrar(self.gestor, self.membro_gestor)
         resposta, html = self.pagina('empresas:area')
-        self.assertEqual([a['href'] for a in html.navegacao], [reverse('empresas:area')])
+        self.assertEqual([a['href'] for a in html.navegacao], [reverse('dashboard:inicio'), reverse('empresas:area')])
+        self.assertContains(resposta, 'Estas são as Lojas disponíveis para você.')
+        self.assertNotContains(resposta, 'no seu contexto')
         self.assertContains(resposta, self.loja.nome)
         self.assertNotContains(resposta, self.restrita.nome)
-        for rota in self.rotas_admin[1:]:
+        for rota in self.rotas_admin[2:]:
             self.assertNotContains(resposta, reverse(rota))
             self.assertEqual(self.client.get(reverse(rota)).status_code, 403)
         self.assertNotContains(resposta, reverse('empresas:onboarding'))
+
+    def test_lojas_vazias_sem_jargao_contexto(self):
+        AcessoLoja.objects.all().delete()
+        Loja.objects.all().delete()
+        for usuario, membro in ((self.admin, self.membro), (self.gestor, self.membro_gestor)):
+            with self.subTest(papel=membro.papel):
+                self.entrar(usuario, membro)
+                resposta, _ = self.pagina('empresas:area')
+                self.assertContains(resposta, 'Nenhuma Loja disponível.', count=2)
+                self.assertNotContains(resposta, 'neste contexto')
+
+    def test_copy_niveis_e_marca_publica(self):
+        from apps.fidelidade.forms import NivelFidelidadeForm
+        self.empresa.nome = 'FATECalçados'
+        self.empresa.save(update_fields=['nome'])
+        self.entrar()
+        resposta, _ = self.pagina('fidelidade:niveis')
+        self.assertContains(resposta, 'FATECalçados')
+        self.assertContains(resposta, 'O nível representa o total de pontos concedidos.')
+        self.assertNotContains(resposta, 'histórico')
+        self.assertEqual(NivelFidelidadeForm().fields['pontos_minimos'].help_text,
+                         'Total de pontos concedidos. O primeiro nível deve começar em zero.')
 
     def test_lojas_em_duas_apresentacoes_com_engrenagem_acessivel(self):
         self.entrar()
@@ -578,6 +605,9 @@ class InterfaceTests(TestCase):
                         self.assertIn('529.982.247-25', ''.join(regiao['texto']))
                 self.assertEqual(protegido.get(url).status_code, 405)
                 self.assertEqual(protegido.post(url).status_code, 403)
+        resposta = self.client.post(reverse('fidelidade:cancelar_evento', args=[evento.pk]), follow=True)
+        self.assertContains(resposta, 'Campanha cancelada. Os pontos já concedidos foram preservados.')
+        self.assertNotContains(resposta, 'histórico')
         resposta, _ = self.pagina('fidelidade:editar_nivel', nivel_id=nivel.pk)
         self.assertTemplateUsed(resposta, 'datasystem/gestao_base.html')
 
