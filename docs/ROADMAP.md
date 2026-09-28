@@ -536,7 +536,7 @@ Entregue:
 
 ### F4.02 — Dashboard da Gestão 🟡 P0
 
-Com o Seed FATECalçados V2 integrado, a próxima entrega P0 é a F4.02B. O Dashboard deve nascer sobre os dados reais já reconciliados, mantendo autorização e cálculo no backend e usando a FATECalçados somente como dataset de validação.
+Com a F4.02B integrada, o Dashboard funcional já opera sobre os dados reais e autorizados. A próxima entrega P0 é a F4.02C, responsável por transformar as séries e agregados já calculados no backend em visualizações gráficas e filtros avançados sem mover regra de negócio para o frontend.
 
 #### F4.02A — Base visual mínima + SCSS ✅ P0
 
@@ -559,45 +559,41 @@ Entregue:
 
 `Criar empresa` permanece como ação de onboarding/contexto, fora da navegação operacional geral. O Cliente continua sem shell administrativo. A F4.02A não introduziu Dashboard nem alterou regras de domínio, models, migrations ou contratos da API.
 
-#### F4.02B — Dashboard funcional 🟡 P0
+#### F4.02B — Dashboard funcional ✅ P0
 
-Issue: #65.
+Issue: #65. PR: #92.
 
-Objetivo: entregar métricas corretas, autorizadas e server-side sobre a vertical real.
+Entregue:
 
-Indicadores P0 fechados:
+- rota real de Dashboard na Gestão e navegação disponível para Administrador e Gestor;
+- serviço de leitura dedicado com agregações PostgreSQL, uma única referência temporal por execução e cutoff `Compra.ocorrida_em <= referencia` para impedir que fatos futuros afetem as métricas;
+- filtro por Loja derivado exclusivamente das Lojas autorizadas, recusando IDs inexistentes, de outra Empresa ou fora do acesso antes das queries das métricas;
+- Administrador com visão corporativa ou por Loja; Gestor restrito às suas `AcessoLoja`; Cliente sem acesso ao Dashboard;
+- combobox pesquisável de Loja com progressive enhancement: pesquisa local por nome/cidade, case/accent-insensitive, teclado/ARIA, `<select name="loja">` preservado como fonte canônica do GET e fallback completo sem JavaScript;
+- `Clientes nas lojas selecionadas` como Clientes distintos com ao menos uma Compra no escopo e `Clientes ativos` como dimensão distinta baseada em `periodo_cliente_ativo_dias`;
+- ticket médio calculado sobre `Compra.valor` bruto e custo efetivo de Resgates excluindo Resgates com Estorno efetivo;
+- novo parâmetro corporativo `periodo_recompra_dias`, inteiro positivo, default 180, sem override por Loja e FATECalçados configurada em 180 dias;
+- taxa de recompra considerando somente Clientes cuja primeira Compra no escopo já completou a janela e uma segunda Compra em data local posterior dentro do limite; ausência de denominador aparece como `Sem base suficiente`;
+- pontos concedidos e pontos resgatados derivados dos fatos do escopo, sem materializar métricas;
+- distribuição corporativa por nível exibida somente para Administrador; para Gestor o bloco não é consultado nem renderizado, evitando inventar classificação local divergente;
+- Top 10 de Clientes por pontos concedidos no escopo, com desempate determinístico e sem expor PK na interface;
+- série server-side de 12 meses de calendário, incluindo o atual, com quantidade de Compras, volume bruto e meses sem movimento preenchidos com zero;
+- copy pública revisada para linguagem de negócio, removendo jargões internos como `contexto`, `Lojas permitidas` e `histórico` quando não agregavam significado para o usuário;
+- `docs/FRONTEND.md`, validators Node e testes de interface atualizados para o Dashboard e o combobox;
+- validação final com 607 testes na suíte completa, além de `manage.py check`, `makemigrations --check`, OpenAPI com `spectacular --validate`, `uv lock --check`, build Vite, `validate-interface.mjs`, `git diff --check` e revisão visual manual em navegador.
 
-- clientes ativos: Clientes distintos com Compra recente dentro do escopo efetivo, usando `periodo_cliente_ativo_dias` e uma única referência temporal por request;
-- ticket médio: `SUM(Compra.valor) / COUNT(Compra)` sobre o valor bruto histórico no escopo efetivo;
-- custo efetivo de Resgates: soma de `valor_desconto` dos Resgates sem Estorno efetivo;
-- Top 10 de Clientes por `SUM(LotePontos.pontos_concedidos)` histórico originado de Compras das Lojas visíveis, sem descontar Resgates ou expiração;
-- evolução temporal contínua dos últimos 12 meses de calendário, incluindo o atual, com quantidade de Compras e volume bruto e meses sem movimento preenchidos com zero.
+#### F4.02C — Gráficos, filtros e refinamentos do Dashboard 🟡 P0
 
-Escopo:
-
-- Administrador: visão agregada da Empresa ativa e, se houver filtro mínimo de Loja, somente uma Loja pertencente ao tenant;
-- Gestor: mesmas métricas, restritas exclusivamente às suas `AcessoLoja` autorizadas;
-- Cliente: sem acesso ao Dashboard de Gestão;
-- qualquer `loja_id` recebido do cliente deve ser revalidado contra o conjunto autorizado antes de executar as métricas.
-
-Direção de implementação:
-
-- serviço de leitura dedicado e queries agregadas PostgreSQL;
-- Django Templates SSR e JavaScript apenas de apresentação;
-- nenhuma nova tabela de métricas e nenhuma regra de negócio duplicada no frontend;
-- indicadores complementares não bloqueiam a entrega P0;
-- gráficos e filtros avançados permanecem para a F4.02C.
-
-#### F4.02C — Gráficos, filtros e refinamentos do Dashboard ⏳ P0
-
-Objetivo: consolidar a leitura operacional da F4.02 após os indicadores funcionais.
+Próxima etapa P0: consolidar a leitura operacional da F4.02 com visualizações gráficas reais sobre os dados já calculados no backend.
 
 Direção:
 
-- gráficos de linha/barra para evolução temporal e demais visualizações que agreguem leitura real;
-- filtros por período e Loja quando aplicável;
-- refinamento dos cards/tabelas do Dashboard sem duplicar regra de negócio no frontend;
-- manter toda autorização e cálculo de domínio no backend.
+- gráficos de linha para evolução temporal de Compras e volume bruto, preservando séries server-side e meses sem movimento;
+- visualização adequada da distribuição por nível para Administrador e do Top 10 de Clientes por pontos concedidos;
+- biblioteca de gráficos apenas como camada de apresentação, sem calcular métricas, autorização ou regra de fidelidade no JavaScript;
+- filtros avançados de período quando aplicáveis, sempre revalidados no backend e sem ampliar escopo de Loja;
+- refinamento dos cards/tabelas e manutenção de alternativas acessíveis/legíveis aos gráficos;
+- manter autorização, tenancy e toda regra de domínio no backend.
 
 ### F4.03 — Área do Cliente ⏳ P1
 
