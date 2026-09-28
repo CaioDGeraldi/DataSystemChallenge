@@ -488,7 +488,7 @@ Entregue:
 - migrations incrementais de configuração e relação Compra–Resgate, além de OpenAPI e documentação atualizados;
 - validação final com 103 testes focados e 556 testes na suíte completa aprovados, além de `manage.py check`, `makemigrations --check`, validator da conversão de Resgate e `git diff --check`.
 
-Com a F3.06A–F3.06F integrada e o Seed FATECalçados V2 concluído, o domínio, a API e o cenário de demonstração da rodada estão reconciliados. A Issue guarda-chuva #62 permanece aberta durante a conclusão da vertical de Dashboard e sua revalidação final.
+Com a F3.06A–F3.06F integrada e o Seed FATECalçados V2 concluído, o domínio, a API e o cenário de demonstração da rodada estão reconciliados. A Issue guarda-chuva #62 foi encerrada como concluída após a integração das subfases e do Seed V2; Dashboard e acabamento permanecem em fases posteriores.
 
 ## Fase 4 — Dados e visualização
 
@@ -635,47 +635,62 @@ Entregue:
 - 19 testes focais da Área do Cliente;
 - validação final com 652 testes completos, `manage.py check`, `makemigrations --check`, OpenAPI com `spectacular --validate`, `uv lock --check`, build Vite, validators de interface, Dashboard, filtro e Cliente, além de `git diff --check`.
 
-A F4.03 conclui a principal experiência funcional voltada ao consumidor prevista para esta etapa. A próxima etapa principal é a F5.00, com o deploy do ambiente de demonstração no Heroku já formalizado pela Issue #100. Relatórios/exportação, #96 e #75 permanecem pendências separadas e não foram incorporados à F4.03.
+A F4.03 conclui a principal experiência funcional voltada ao consumidor prevista para esta etapa. A F5.00 foi concluída posteriormente com o ambiente de demonstração publicado no Heroku; a próxima etapa de produto é a F5.01. Relatórios/exportação, #96 e #75 permanecem pendências separadas e não foram incorporados à F4.03.
 
 ## Fase 5 — Qualidade da entrega
 
-### F5.00 — Deploy do ambiente de demonstração no Heroku ⏳ P0
+### F5.00 — Deploy do ambiente de demonstração no Heroku ✅ P0
 
-Issue: #100.
+Issue: #106. Decisão documental anterior: #100. PR: #107.
 
-Objetivo: publicar o produto em um ambiente estável de demonstração antes do acabamento e da validação final, para que as últimas etapas sejam verificadas também no ambiente real de apresentação.
+Entregue:
 
-Decisões e requisitos:
+- ambiente público de demonstração publicado no Heroku Cedar com stack `heroku-26`;
+- buildpacks oficiais em ordem Node → Python, com Vite gerando os assets antes do build/runtime Django;
+- Python 3.12 mantido com `uv`, sem `requirements.txt` paralelo;
+- PostgreSQL do Heroku provisionado no plano `essential-0`, com `DATABASE_URL` em produção e fallback local `POSTGRES_*`;
+- Gunicorn como processo web, WhiteNoise para static assets e migrations executadas no release phase;
+- configuração de `ALLOWED_HOSTS`, CSRF, HTTPS e secrets por ambiente, sem credenciais versionadas;
+- CI em GitHub Actions para Pull Requests e `main`, com jobs Backend e Frontend; Backend usa PostgreSQL real e valida lock, Django, migrations, OpenAPI e suíte completa;
+- CD pela integração nativa GitHub → Heroku, conectado à `main` e configurado para aguardar CI verde antes do Automatic Deploy;
+- Seed FATECalçados V2 executado uma única vez no provisionamento com `--data-base 2026-09-28`; `RETORNA_SEED_SENHA` foi removida do ambiente após a carga;
+- smoke funcional das contas Administrador, Gestor e Cliente, Dashboard e Área do Cliente no ambiente publicado;
+- OpenAPI, Swagger e ReDoc validados em produção;
+- credencial de integração criada pelo fluxo real de Gestão e smoke autenticado aprovado em `/api/v1/contexto/` e `/api/v1/clientes/fidelidade/`;
+- deploy automático da `main` comprovado após o merge da PR #107, com dyno web ativo, `/api/v1/health/` respondendo `200` e logs finais sem erro material;
+- runbook operacional preservado em `docs/DEPLOY_HEROKU.md`.
 
-- **Heroku** é a plataforma escolhida para o ambiente público de demonstração, aproveitando o benefício disponível ao responsável pelo projeto por meio do **GitHub Student Developer Pack**;
-- PostgreSQL permanece como banco do ambiente de demonstração;
-- migrations devem ser aplicadas antes da carga do cenário;
-- build do frontend e static assets devem seguir o fluxo de produção do ambiente;
-- configuração e segredos devem ser fornecidos por variáveis/configuração do ambiente, sem hardcode no repositório;
-- `RETORNA_SEED_SENHA` deve existir somente em runtime durante o provisionamento das contas demo;
-- o **Seed FATECalçados V2 é obrigatório no site público de demonstração**;
-- `seed_fatecalcados` deve rodar somente no provisionamento inicial de um banco de demonstração vazio, nunca como etapa automática de todo redeploy;
-- a `--data-base` do Seed V2 deve ser escolhida próxima da data de provisionamento/apresentação para manter coerentes atividade, inatividade, expiração, campanha e demais estados temporais;
-- após o provisionamento, executar smoke tests do site, autenticação das contas demo, escopos de Administrador/Gestor/Cliente, Dashboard e fluxos principais da API;
-- F5.01, F5.02 e F5.03 devem considerar o ambiente publicado como alvo adicional de validação, sem substituir os gates locais/CI.
-
-Sequência operacional do ambiente:
+Fluxo consolidado:
 
 ```text
-provisionar Heroku + PostgreSQL
+feature branch
 ↓
-aplicar migrations
+Pull Request
 ↓
-configurar secrets/runtime
+GitHub Actions CI
 ↓
-executar Seed FATECalçados V2 uma única vez
+review
 ↓
-validar contas demo, API e Dashboard
+Squash and merge
 ↓
-seguir para acabamento, documentação e pitch
+main
+↓
+GitHub Actions CI
+↓
+Heroku Automatic Deploy
+↓
+build Node → Python
+↓
+release: migrate
+↓
+Gunicorn
 ```
 
-### F5.01 — Acessibilidade e acabamento ⏳ P1
+F5.01, F5.02 e F5.03 passam a considerar o ambiente publicado como alvo adicional de validação, sem substituir gates locais/CI.
+
+### F5.01 — Acessibilidade e acabamento 🟡 P1
+
+Issue principal de refinamento atual: #108.
 
 A F4.02A já entregou a base responsiva, temas claro/escuro/automático, escala de texto, foco visível, reduced motion e forced-colors. A F5.01 concentra o refinamento que não precisa bloquear a vertical P0:
 
