@@ -25,3 +25,9 @@ bindConversaoResgate();
 
 import { bindStoreSearch } from "./retorna/store-search.js";
 bindStoreSearch();
+
+import { bindDashboardCharts } from "./retorna/dashboard-charts.js";
+bindDashboardCharts();
+
+import { bindDashboardFilter } from "./retorna/dashboard-filter.js";
+bindDashboardFilter();

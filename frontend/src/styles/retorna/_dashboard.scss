@@ -10,7 +10,7 @@
     gap: var(--space-3);
   }
 }
-.retorna-dashboard-cards, .retorna-dashboard-blocks {
+.retorna-dashboard-cards {
   display: grid;
   gap: var(--space-4);
   margin-bottom: var(--space-4);
@@ -26,9 +26,6 @@
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
-}
-@media (min-width: 75rem) {
-  .retorna-dashboard-blocks { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
 }
 
 .retorna-store-combobox {
@@ -71,4 +68,104 @@
   }
   .helptext { padding: var(--space-3); margin: 0; }
   .helptext:empty { display: none; }
+}
+.retorna-dashboard-nav {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  margin-bottom: var(--space-4);
+  ul {
+    display: flex;
+    width: max-content;
+    min-width: 100%;
+    list-style: none;
+    padding: var(--space-1);
+    margin: 0;
+    gap: var(--space-2);
+  }
+  a {
+    display: flex;
+    align-items: center;
+    min-height: 2.75rem;
+    padding: var(--space-2) var(--space-3);
+    white-space: nowrap;
+    color: var(--text);
+    border-bottom: 3px solid transparent;
+    &[aria-current='page'] {
+      font-weight: 700;
+      border-bottom-color: currentColor;
+      background: var(--surface-secondary);
+    }
+    &:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: -2px;
+    }
+  }
+}
+
+.retorna-dashboard-series-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.retorna-dashboard-chart {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: clamp(15rem, 35vw, 22rem);
+  margin-block: var(--space-4);
+  background: var(--surface);
+  canvas { max-width: 100%; }
+}
+.retorna-dashboard-chart-data summary {
+  cursor: pointer;
+  padding-block: var(--space-3);
+}
+@media (forced-colors: active) {
+  .retorna-dashboard-chart { display: none; }
+}
+
+.retorna-dashboard-chart-ranking { height: 32rem; }
+.retorna-dashboard-ranking {
+  min-width: 0;
+  .retorna-mobile-card h3 { overflow-wrap: anywhere; }
+}
+
+.retorna-dashboard-doughnut-layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5);
+  .retorna-dashboard-chart {
+    flex: 1 1 18rem;
+    max-width: 24rem;
+    margin-inline: auto;
+  }
+}
+.retorna-dashboard-legend {
+  flex: 1 1 16rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding-block: var(--space-2);
+    overflow-wrap: anywhere;
+  }
+  li > div { min-width: 0; }
+  h3 { margin: 0; font-size: 1rem; }
+}
+.retorna-dashboard-legend-marker {
+  flex: 0 0 .75rem;
+  width: .75rem;
+  height: .75rem;
+  border-radius: var(--radius-sm);
+}
+@media (forced-colors: active) {
+  .retorna-dashboard-legend-marker { display: none; }
 }

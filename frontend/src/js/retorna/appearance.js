@@ -34,6 +34,9 @@ export function bindAppearance() {
     root.dataset.retornaTheme = effectiveTheme(state.theme, media.matches);
     root.dataset.retornaFontScale = String(state.fontScale);
     root.dataset.retornaFormMode = state.formMode;
+    document.dispatchEvent(new CustomEvent('retorna:appearance-change', {
+      detail: { theme: root.dataset.retornaTheme },
+    }));
     panel?.querySelectorAll('input[type="radio"]').forEach(input => {
       input.checked = String(state[input.name]) === input.value;
     });
