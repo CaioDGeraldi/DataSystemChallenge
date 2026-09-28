@@ -61,6 +61,8 @@ def _renderizar_dashboard(request, secao, template):
     contexto_series = _contexto_series(request, secao, escopo, dados['referencia'])
     graficos = {}
     if secao == 'clientes':
+        if dados['niveis'] is not None:
+            graficos['niveis_com_dados'] = any(n['quantidade'] for n in dados['niveis'])
         if dados['clientes_no_escopo']:
             graficos['atividade_clientes_grafico'] = [
                 dict(nome='Ativos', valor=dados['clientes_ativos']),
@@ -78,8 +80,6 @@ def _renderizar_dashboard(request, secao, template):
                 dict(nome='Voltaram', valor=recompra['recompraram']),
                 dict(nome='Não voltaram', valor=recompra['nao_recompraram']),
             ]
-        if dados['niveis'] is not None:
-            graficos['niveis_com_dados'] = any(n['quantidade'] for n in dados['niveis'])
         for serie in contexto_series['series_temporais']:
             serie['total'] = dados[serie['chave']]
     return render(request, template, {

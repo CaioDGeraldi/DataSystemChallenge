@@ -274,3 +274,125 @@ for (const selected of ['', '2']) {
 }
 delete globalThis.document;
 console.log('Combobox de lojas: fallback, seleção inicial, pesquisa, ARIA, mouse, teclado e abandono: OK (DOM simulado).');
+
+// Exercise the real shared controller with multiple disclosures and Management's
+// existing button/panel. DOM doubles keep this suite dependency-free.
+const { bindUserMenu } = await import('../src/js/retorna/user-menu.js');
+class MenuElement {
+  constructor(tagName = 'DIV') {
+    this.tagName = tagName; this.dataset = {}; this.attrs = {}; this.events = {};
+    this.hidden = false; this.open = false; this.children = []; this.id = '';
+  }
+  addEventListener(type, fn) { (this.events[type] ??= []).push(fn); }
+  fire(type, extra = {}) {
+    const event = { target: this, preventDefault() { this.defaultPrevented = true; }, ...extra };
+    for (const fn of this.events[type] ?? []) fn(event);
+    return event;
+  }
+  setAttribute(key, value) { this.attrs[key] = value; }
+  getAttribute(key) { return this.attrs[key]; }
+  focus() { document.activeElement = this; }
+  append(child) { child.parent = this; this.children.push(child); return child; }
+  contains(node) { return this === node || this.children.some(child => child.contains(node)); }
+  closest(selector) {
+    if (selector === '.retorna-user-menu' && this.menuRoot) return this;
+    if (selector === '[data-user-menu]' && this.menuPanel) return this;
+    return this.parent?.closest(selector) ?? null;
+  }
+  querySelector(selector) {
+    if (selector === '[data-user-menu-trigger]') return this.trigger;
+    if (selector === '[data-user-menu]') return this.panel;
+    // The controller's focus selector must skip unavailable Appearance controls.
+    assert.ok(selector.includes('button:not([hidden]):not(:disabled)'));
+    return this.children.find(child => child.tagName === 'BUTTON' && !child.hidden);
+  }
+}
+const menuDocument = new MenuElement();
+menuDocument.documentElement = new MenuElement('HTML');
+const makeMenu = (id, native) => {
+  const root = new MenuElement(native ? 'DETAILS' : 'DIV'); root.menuRoot = true;
+  root.trigger = root.append(new MenuElement(native ? 'SUMMARY' : 'BUTTON'));
+  root.panel = root.append(new MenuElement()); root.panel.menuPanel = true; root.panel.id = id;
+  root.trigger.setAttribute('aria-controls', id);
+  root.panel.hidden = !native;
+  root.appearance = root.panel.append(new MenuElement('BUTTON')); root.appearance.hidden = true;
+  root.action = root.panel.append(new MenuElement('BUTTON'));
+  return root;
+};
+const managementMenu = makeMenu('management', false);
+const programsMenu = makeMenu('programs', true);
+const accountMenu = makeMenu('account', true);
+const menuRoots = [managementMenu, programsMenu, accountMenu];
+menuDocument.querySelectorAll = () => [];
+globalThis.document = menuDocument;
+bindUserMenu();
+assert.equal(menuDocument.documentElement.dataset.retornaUserMenuEnhanced, undefined);
+menuDocument.querySelectorAll = selector => { assert.equal(selector, '.retorna-user-menu'); return menuRoots; };
+bindUserMenu(); bindUserMenu();
+assert.equal(menuDocument.events.click.length, 1);
+assert.equal(menuDocument.events.keydown.length, 1);
+const expanded = root => root.trigger.getAttribute('aria-expanded');
+const clickMenu = root => {
+  const event = root.trigger.fire('click');
+  assert.equal(event.defaultPrevented, true);
+  menuDocument.fire('click', { target: root.trigger });
+};
+for (const root of menuRoots) {
+  assert.equal(expanded(root), 'false');
+  assert.equal(root.trigger.events.click.length, 1);
+  clickMenu(root);
+  assert.equal(expanded(root), 'true');
+  assert.equal(document.activeElement, root.action);
+  assert.equal(root.tagName === 'DETAILS' ? root.open : !root.panel.hidden, true);
+  menuDocument.fire('click', { target: root.action });
+  assert.equal(expanded(root), 'true');
+  assert.equal(menuDocument.fire('keydown', { key: 'Tab' }).defaultPrevented, undefined);
+  assert.equal(menuDocument.fire('keydown', { key: 'Escape' }).defaultPrevented, true);
+  assert.equal(expanded(root), 'false');
+  assert.equal(document.activeElement, root.trigger);
+  clickMenu(root); clickMenu(root);
+  assert.equal(expanded(root), 'false');
+  clickMenu(root);
+  menuDocument.fire('click', { target: new MenuElement() });
+  assert.equal(expanded(root), 'false');
+}
+clickMenu(programsMenu); clickMenu(accountMenu);
+assert.equal(programsMenu.open, false);
+assert.equal(expanded(programsMenu), 'false');
+clickMenu(programsMenu);
+assert.equal(accountMenu.open, false);
+assert.equal(expanded(accountMenu), 'false');
+clickMenu(managementMenu);
+assert.equal(programsMenu.open, false);
+programsMenu.open = true; programsMenu.fire('toggle');
+assert.equal(managementMenu.panel.hidden, true);
+assert.equal(expanded(programsMenu), 'true');
+programsMenu.open = false; programsMenu.fire('toggle');
+assert.equal(expanded(programsMenu), 'false');
+
+// Appearance must close its own menu and return to its own trigger, not the first.
+const dialog = new MenuElement('DIALOG');
+const appearanceControl = new MenuElement('INPUT');
+dialog.querySelector = () => appearanceControl;
+dialog.querySelectorAll = () => [];
+dialog.showModal = () => { dialog.open = true; };
+dialog.close = () => { dialog.open = false; dialog.fire('close'); };
+menuDocument.querySelector = () => dialog;
+menuDocument.dispatchEvent = () => {};
+menuDocument.querySelectorAll = () => [managementMenu.appearance, accountMenu.appearance];
+globalThis.window = { localStorage: { getItem: () => null }, matchMedia: () => ({ matches: false, addEventListener() {} }) };
+bindAppearance();
+for (const root of [managementMenu, accountMenu]) {
+  assert.equal(root.appearance.hidden, false);
+  clickMenu(root);
+  root.appearance.fire('click');
+  assert.equal(expanded(root), 'false');
+  assert.equal(root.tagName === 'DETAILS' ? root.open : !root.panel.hidden, false);
+  assert.equal(dialog.open, true);
+  assert.equal(document.activeElement, appearanceControl);
+  dialog.close();
+  assert.equal(document.activeElement, root.trigger);
+}
+delete globalThis.document;
+delete globalThis.window;
+console.log('Menus compartilhados: Gestão + dois disclosures, idempotência, pares, Escape, clique fora, Tab e foco de Aparência OK (DOM simulado).');

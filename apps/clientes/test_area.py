@@ -1,5 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
+from html.parser import HTMLParser
 from unittest.mock import patch
 
 from django.db import connection
@@ -14,6 +15,28 @@ from apps.usuarios.services import CONTEXTO_SESSAO
 
 from .consultas import proxima_expiracao, ranking_pessoal, resumo_cliente
 from .models import Cliente
+
+
+class ControlesTopbarParser(HTMLParser):
+    def __init__(self, html):
+        super().__init__()
+        self.forms = []
+        self.controls = []
+        self.form = None
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        self.controls.append((tag, attrs))
+        if tag == 'form':
+            self.form = {**attrs, 'fields': {}}
+            self.forms.append(self.form)
+        elif tag in ('input', 'button') and self.form is not None and attrs.get('name'):
+            self.form['fields'][attrs['name']] = attrs.get('value', '')
+
+    def handle_endtag(self, tag):
+        if tag == 'form':
+            self.form = None
 
 
 class AreaClienteTests(DadosEstornos, TestCase):
@@ -50,8 +73,9 @@ class AreaClienteTests(DadosEstornos, TestCase):
             self.assertContains(resposta, 'class="cliente-nav"')
             self.assertContains(resposta, 'aria-current="page"', count=1)
             self.assertContains(resposta, 'aria-label="Seu programa de fidelidade"')
-            self.assertContains(resposta, 'aria-hidden="true"', count=3)
-            self.assertContains(resposta, 'for="cliente-programa"')
+            nav = resposta.content.decode().split('<nav class="cliente-nav"', 1)[1].split('</nav>', 1)[0]
+            self.assertEqual(nav.count('aria-hidden="true"'), 3)
+            self.assertContains(resposta, 'aria-controls="cliente-programas-panel"')
             self.assertContains(resposta, 'href="#conteudo"')
             self.assertContains(resposta, 'csrfmiddlewaretoken')
             for termo in ('FEFO', 'snapshot', 'tenant', 'LotePontos', 'pontos históricos', 'ATINGIDO_NA_COMPRA'):
@@ -60,6 +84,57 @@ class AreaClienteTests(DadosEstornos, TestCase):
         self.assertEqual(resposta.context['saldo'], 0)
         self.assertEqual(resposta.context['ranking'], {'acumulado': None, 'disponivel': None})
         self.assertContains(resposta, 'ainda não possui níveis')
+
+    def test_topbar_um_programa_conta_e_contrato_nativo(self):
+        resposta = self.home()
+        markup = ControlesTopbarParser(resposta.content.decode())
+        summaries = [attrs for tag, attrs in markup.controls if tag == 'summary' and 'data-user-menu-trigger' in attrs]
+        self.assertEqual([attrs['aria-controls'] for attrs in summaries],
+                         ['cliente-programas-panel', 'cliente-conta-panel'])
+        for trigger in summaries:
+            painel = next(attrs for _, attrs in markup.controls if attrs.get('id') == trigger['aria-controls'])
+            self.assertIn('data-user-menu', painel)
+            self.assertNotIn('hidden', painel)  # details oferece fallback sem JS.
+        programas = [form for form in markup.forms if form.get('action') == reverse('clientes:trocar_programa')]
+        self.assertEqual(len(programas), 1)
+        self.assertEqual(programas[0]['fields']['cliente_id'], str(self.cliente.pk))
+        self.assertEqual(programas[0]['method'], 'post')
+        self.assertTrue(programas[0]['fields']['csrfmiddlewaretoken'])
+        ativo = next(attrs for tag, attrs in markup.controls if tag == 'button' and attrs.get('name') == 'cliente_id')
+        self.assertEqual(ativo['aria-current'], 'true')
+        self.assertContains(resposta, 'Programa atual', count=1)
+        self.assertContains(resposta, 'Minha conta — Ana Silva')
+        self.assertContains(resposta, 'data-appearance-open')
+        logout = next(form for form in markup.forms if form.get('action') == reverse('usuarios:logout'))
+        self.assertEqual(logout['method'], 'post')
+        self.assertTrue(logout['fields']['csrfmiddlewaretoken'])
+        self.assertNotContains(resposta, 'href="/gestao/')
+        self.assertNotContains(resposta, 'role="menu"')
+
+    def test_topbar_multiplos_programas_post_renderizado_com_csrf_e_logout(self):
+        proprio = Cliente.objects.create(usuario=self.usuario, empresa=self.outra)
+        navegador = Client(enforce_csrf_checks=True)
+        navegador.cookies = self.client.cookies.copy()
+        resposta = navegador.get(reverse('clientes:area'))
+        markup = ControlesTopbarParser(resposta.content.decode())
+        programas = [form for form in markup.forms if form.get('action') == reverse('clientes:trocar_programa')]
+        self.assertEqual({form['fields']['cliente_id'] for form in programas},
+                         {str(self.cliente.pk), str(proprio.pk)})
+        self.assertContains(resposta, self.empresa.nome)
+        self.assertContains(resposta, self.outra.nome)
+        self.assertEqual(resposta.context['cliente'], self.cliente)
+        destino = next(form for form in programas if form['fields']['cliente_id'] == str(proprio.pk))
+        self.assertRedirects(navegador.post(destino['action'], destino['fields']), reverse('clientes:area'))
+        resposta = navegador.get(reverse('clientes:area'))
+        markup = ControlesTopbarParser(resposta.content.decode())
+        ativos = [attrs['value'] for tag, attrs in markup.controls
+                  if tag == 'button' and attrs.get('name') == 'cliente_id' and attrs.get('aria-current') == 'true']
+        self.assertEqual(ativos, [str(proprio.pk)])
+        self.assertEqual(resposta.context['cliente'], proprio)
+        logout = next(form for form in markup.forms if form.get('action') == reverse('usuarios:logout'))
+        self.assertEqual(navegador.post(logout['action'], logout['fields']).status_code, 302)
+        self.assertNotIn(CONTEXTO_SESSAO, navegador.session)
+        self.assertNotIn('_auth_user_id', navegador.session)
 
     def test_saldo_consumo_parcial_e_proxima_expiracao_agrupada(self):
         lote = self.lote('300.00')

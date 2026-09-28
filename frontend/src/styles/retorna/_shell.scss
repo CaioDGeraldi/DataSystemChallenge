@@ -249,9 +249,22 @@
   margin: 0;
 }
 
-.main {
-  display: flex;
+// A altura pertence ao documento; o main cresce sem duplicar o viewport.
+.management-shell,
+.retorna-public-page,
+.cliente-page {
+  min-height: 100vh;
   min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.main,
+.retorna-public-main,
+.cliente-main {
+  display: flex;
+  flex: 1 0 auto;
+  min-height: 0;
   min-width: 0;
   flex-direction: column;
 }
@@ -377,20 +390,18 @@ body.sidebar-rail .retorna-brand-compact { display: block; }
 .tb-avatar { background: var(--primary); }
 .sidebar-backdrop { position: fixed; inset: 0; z-index: 95; background: rgb(13 20 38 / 45%); }
 [hidden] { display: none !important; }
-.retorna-footer { padding: 16px 24px; border-top: 1px solid var(--border); color: var(--text-muted); background: var(--surface); font-size: .75rem; }
+.retorna-footer { flex-shrink: 0; width: 100%; padding: 16px 24px; border-top: 1px solid var(--border); color: var(--text-muted); background: var(--surface); font-size: .75rem; }
 .retorna-back-navigation { margin-bottom: 16px; font-size: .8125rem; }
 .retorna-back-navigation a { text-decoration: none; }
 .retorna-back-navigation a:hover { text-decoration: underline; }
-.retorna-public-page { min-height: 100dvh; display: flex; flex-direction: column; }
 .retorna-public-header { background: var(--surface); border-bottom: 1px solid var(--border); }
 .retorna-public-header-inner { display: flex; align-items: center; justify-content: space-between; width: min(1180px, calc(100% - 48px)); min-height: 72px; margin: auto; }
 .retorna-public-logo { width: 175px; height: auto; }
-.retorna-public-main { display: flex; flex: 1; flex-direction: column; min-width: 0; }
 .retorna-public-main > .page-wrapper { width: min(820px, 100%); margin-inline: auto; padding-block: 32px; }
 @media (max-width: 768px) {
   .sidebar:not(.open) { visibility: hidden; }
   .sidebar.open { visibility: visible; }
-  .retorna-footer { padding: 12px; }
+  .retorna-footer { flex-shrink: 0; width: 100%; padding: 12px; }
 }
 
 .sidebar-toggle, .retorna-user-trigger, .retorna-user-dropdown button, .nav-section-toggle, .sidebar .nav-link { min-height: 44px; }
@@ -403,7 +414,7 @@ body.sidebar-rail .retorna-brand-compact { display: block; }
 .sidebar-backdrop { background: var(--backdrop); }
 
 // Navigation and logout remain usable when enhancement is unavailable.
-html:not([data-retorna-user-menu-enhanced]) .retorna-user-trigger { display: none; }
+html:not([data-retorna-user-menu-enhanced]) button.retorna-user-trigger { display: none; }
 html:not([data-retorna-user-menu-enhanced]) .retorna-user-dropdown[hidden] { display: block !important; position: static; width: auto; box-shadow: none; }
 @media (max-width: 768px) {
   html:not([data-retorna-shell-enhanced]) .sidebar { position: static; width: 100%; height: auto; max-height: none; transform: none; visibility: visible; }
