@@ -635,7 +635,7 @@ Entregue:
 - 19 testes focais da Área do Cliente;
 - validação final com 652 testes completos, `manage.py check`, `makemigrations --check`, OpenAPI com `spectacular --validate`, `uv lock --check`, build Vite, validators de interface, Dashboard, filtro e Cliente, além de `git diff --check`.
 
-A F4.03 conclui a principal experiência funcional voltada ao consumidor prevista para esta etapa. A F5.00 foi concluída posteriormente com o ambiente de demonstração publicado no Heroku; a próxima etapa de produto é a F5.01. Relatórios/exportação, #96 e #75 permanecem pendências separadas e não foram incorporados à F4.03.
+A F4.03 conclui a principal experiência funcional voltada ao consumidor prevista para esta etapa. A F5.00 foi concluída posteriormente com o ambiente de demonstração publicado no Heroku. A auditoria PostgreSQL v1 da #75 também foi integrada depois da F4.03; sua expansão para configuração e autorização permanece separada na #111. A F5.01 está implementada na branch própria e em revisão na PR #114. Relatórios/exportação e #96 permanecem pendências separadas e não foram incorporados à F4.03.
 
 ## Fase 5 — Qualidade da entrega
 
@@ -688,17 +688,45 @@ Gunicorn
 
 F5.01, F5.02 e F5.03 passam a considerar o ambiente publicado como alvo adicional de validação, sem substituir gates locais/CI.
 
+### Auditoria PostgreSQL v1 ✅ P1
+
+Issue: #75. PR: #112. Expansão futura: #111.
+
+Entregue:
+
+- app `apps.auditoria` com `EventoAuditoria` append-only para evidência histórica;
+- contexto transacional de origem/ator por GUCs PostgreSQL `retorna.auditoria_origem`, `retorna.auditoria_usuario_id` e `retorna.auditoria_credencial_id`;
+- triggers PostgreSQL para fatos históricos de `Compra`, `Resgate` e `EstornoResgate` em `INSERT/UPDATE/DELETE`;
+- `LotePontos` auditado em `UPDATE/DELETE`, sem `INSERT` redundante com o evento da `Compra`;
+- payloads JSON com allowlists explícitas, sem serialização indiscriminada de linhas;
+- tenant e registro de `UPDATE/DELETE` ancorados no estado persistido anterior (`OLD`), evitando que uma alteração inválida desloque a evidência para outro tenant;
+- contexto da API aplicado apenas na borda das operações efetivas de Compra, Resgate e Estorno;
+- auditoria e fato de domínio participando da mesma transação: rollback da operação também elimina a evidência correspondente;
+- retries idempotentes sem produção de um novo fato de auditoria quando não há nova operação persistida;
+- expansão de auditoria para configuração, autorização e outros eventos administrativos mantida fora da v1 na Issue #111.
+
+A auditoria complementa, mas não substitui, as invariantes de domínio, services, constraints, locks e testes existentes.
+
 ### F5.01 — Acessibilidade e acabamento 🟡 P1
 
-Issue principal de refinamento atual: #108.
+Issue: #108. PR em revisão: #114.
 
-A F4.02A já entregou a base responsiva, temas claro/escuro/automático, escala de texto, foco visível, reduced motion e forced-colors. A F5.01 concentra o refinamento que não precisa bloquear a vertical P0:
+A implementação foi concluída na branch `001/feat/108-refinamento-visual` e está em revisão antes da integração à `main`.
 
-- auditoria e correção fina de responsividade nas superfícies finais;
-- validação ampliada de navegação por teclado e tecnologias assistivas;
-- refinamento de contraste, mensagens, estados e hierarquia visual conforme o produto completo;
-- ajustes de alto contraste e forced-colors em casos especiais identificados durante a validação final;
-- acabamento de densidade, espaçamento e consistência visual após Dashboard e Área do Cliente.
+Implementado:
+
+- `Distribuição por nível` movida de Dashboard → Fidelidade para Dashboard → Clientes, preservando cálculo, filtro por Loja e visibilidade exclusiva de Administrador; Gestor continua sem consultar nem renderizar o bloco;
+- footer corrigido estruturalmente nos shells aplicáveis, com conteúdo flexível, largura global e reserva da bottom navigation do Cliente no mobile;
+- topbar da Área do Cliente compactada com seletor de programa e Minha conta em disclosures/popovers, sem deslocar o conteúdo ao abrir;
+- progressive enhancement preservado com `<details>` nativo e POST/CSRF real para troca de programa e logout;
+- controller de menus compartilhado entre Gestão e Cliente com Escape, clique fora, restauração de foco e fechamento coordenado;
+- hierarquia visual da Home do Cliente refinada para priorizar saldo, nível/progresso, benefício de retorno, última Compra e ranking;
+- históricos de Pontos e Resgates reorganizados para leitura mais rápida, com estados de Resgate claros sem alterar fatos ou regras do domínio;
+- validators de frontend ampliados e testes da Área do Cliente atualizados;
+- smoke visual manual aprovado em desktop/mobile pelo responsável do projeto;
+- nenhuma mudança de model, migration, regra de fidelidade ou contrato REST/OpenAPI.
+
+Enquanto a PR #114 não for integrada, a F5.01 permanece marcada como em revisão, não como concluída na `main`.
 
 ### F5.02 — Documentação final e API ⏳ P0
 
@@ -763,7 +791,7 @@ A equipe deve conseguir explicar arquitetura, parâmetros, segurança, API, uso 
 - taxa de recompra;
 - área do Cliente mais completa;
 - acessibilidade ampliada;
-- auditoria inicial.
+- expansão da auditoria para configuração/autorização (#111).
 
 ### P2 — depois da entrega
 
