@@ -635,7 +635,7 @@ Entregue:
 - 19 testes focais da Área do Cliente;
 - validação final com 652 testes completos, `manage.py check`, `makemigrations --check`, OpenAPI com `spectacular --validate`, `uv lock --check`, build Vite, validators de interface, Dashboard, filtro e Cliente, além de `git diff --check`.
 
-A F4.03 conclui a principal experiência funcional voltada ao consumidor prevista para esta etapa. A F5.00 foi concluída posteriormente com o ambiente de demonstração publicado no Heroku. A auditoria PostgreSQL v1 da #75 também foi integrada depois da F4.03; sua expansão para configuração e autorização permanece separada na #111. A F5.01 está implementada na branch própria e em revisão na PR #114. Relatórios/exportação e #96 permanecem pendências separadas e não foram incorporados à F4.03.
+A F4.03 conclui a principal experiência funcional voltada ao consumidor prevista para esta etapa. A F5.00 foi concluída posteriormente com o ambiente de demonstração publicado no Heroku. A auditoria PostgreSQL v1 da #75 também foi integrada depois da F4.03; sua expansão para configuração e autorização permanece separada na #111. A F5.01 da #108 foi integrada pela PR #114. Relatórios/exportação e #96 permanecem pendências separadas e não foram incorporados à F4.03.
 
 ## Fase 5 — Qualidade da entrega
 
@@ -707,13 +707,13 @@ Entregue:
 
 A auditoria complementa, mas não substitui, as invariantes de domínio, services, constraints, locks e testes existentes.
 
-### F5.01 — Acessibilidade e acabamento 🟡 P1
+### F5.01 — Acessibilidade e acabamento ✅ P1
 
-Issue: #108. PR em revisão: #114.
+Issue: #108. PR: #114.
 
-A implementação foi concluída na branch `001/feat/108-refinamento-visual` e está em revisão antes da integração à `main`.
+A implementação foi integrada à `main` pela PR #114 após revisão final e CI verde nos jobs Backend e Frontend.
 
-Implementado:
+Entregue:
 
 - `Distribuição por nível` movida de Dashboard → Fidelidade para Dashboard → Clientes, preservando cálculo, filtro por Loja e visibilidade exclusiva de Administrador; Gestor continua sem consultar nem renderizar o bloco;
 - footer corrigido estruturalmente nos shells aplicáveis, com conteúdo flexível, largura global e reserva da bottom navigation do Cliente no mobile;
@@ -724,9 +724,10 @@ Implementado:
 - históricos de Pontos e Resgates reorganizados para leitura mais rápida, com estados de Resgate claros sem alterar fatos ou regras do domínio;
 - validators de frontend ampliados e testes da Área do Cliente atualizados;
 - smoke visual manual aprovado em desktop/mobile pelo responsável do projeto;
-- nenhuma mudança de model, migration, regra de fidelidade ou contrato REST/OpenAPI.
+- nenhuma mudança de model, migration, regra de fidelidade ou contrato REST/OpenAPI;
+- CI da PR #114 aprovado nos jobs Backend e Frontend, com `check`, migrations, OpenAPI, suíte Django completa, build Vite e validators de frontend.
 
-Enquanto a PR #114 não for integrada, a F5.01 permanece marcada como em revisão, não como concluída na `main`.
+A F5.01 está concluída na `main`; refinamentos adicionais devem ser tratados em Issues próprias.
 
 ### F5.02 — Documentação final e API ⏳ P0
 
