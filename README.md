@@ -1,67 +1,104 @@
-# DataSystem Challenge
+# Retorna | Multi-company Loyalty Platform
 
-<p align="center">
-  <img src="assets/retorna/retorna-logo-light.svg" alt="Retorna" width="520">
-</p>
+**Retorna** is a team-developed, configurable loyalty platform built for the Data System Challenge. It connects point-of-sale, ERP or commerce systems to a loyalty domain through a versioned API.
 
-**Retorna** é a marca fictícia da plataforma de fidelidade multiempresa desenvolvida para o desafio da Data System.
+> **Scope:** This repository contains a demonstrator and its development history. It is not presented as a production service with real customers. **FATECalçados** is a fictitious demonstration tenant.
 
-A nomenclatura do projeto é separada assim:
+## What it does
 
-- **DataSystemChallenge**: projeto, repositório e contexto do desafio;
-- **Retorna**: produto de fidelidade desenvolvido pela equipe;
-- **FATECalçados**: empresa fictícia usada como cenário e conjunto de dados de demonstração.
+- Supports companies with multiple stores and store-level policy overrides.
+- Records purchases, point accrual and expiration, events/campaigns, loyalty tiers, redemptions and reversals.
+- Exposes versioned REST endpoints and OpenAPI documentation for external integrations.
+- Includes customer-facing pages, dashboards, permissions and a PostgreSQL audit trail.
 
-O produto é tratado como ferramenta independente: Empresas podem possuir `1..N` Lojas, políticas configuráveis, overrides por Loja, eventos/campanhas temporárias e integrações por API. A FATECalçados não é regra fixa do domínio.
+## Technical highlights
 
-O repositório reúne:
-- código da aplicação;
-- arquitetura e decisões de produto;
-- documentação da API e integração;
-- identidade visual da Retorna;
-- coordenação da equipe;
-- convenções de trabalho no GitHub;
-- Issues, Pull Requests e histórico do projeto;
-- orientação para uso do GitHub Projects em formato Kanban.
+| Area | Implementation |
+| --- | --- |
+| Backend | Python, Django, Django REST Framework |
+| Persistence | PostgreSQL, constraints, explicit transactions and locking |
+| API | Versioned endpoints, OpenAPI through drf-spectacular |
+| Concurrency | Idempotency keys, row locking and PostgreSQL advisory locks in redemption flows |
+| Frontend | Django templates, JavaScript, Sass, Chart.js and Vite |
+| Quality | Backend/frontend GitHub Actions, Django tests, PostgreSQL concurrency scenarios |
 
-## Desenvolvimento local
+See the [technical case study](docs/RECRUITER_CASE_STUDY.md) for concrete source links and the problems addressed.
 
-Requisitos: `uv`, Docker com Compose e acesso ao repositório `FractawModulesInfrastructure` para usar o Compose de referência. O banco do DataSystemChallenge usa um projeto Compose e um volume próprios.
+## Run locally (standalone setup)
 
-1. Execute `uv sync`.
-2. Copie `.env.example` para `.env.datasystem` e preencha `DJANGO_SECRET_KEY` e `POSTGRES_PASSWORD` com valores locais. O arquivo local é ignorado pelo Git.
-3. Suba o PostgreSQL com `docker compose -f ../FractawModulesInfrastructure/compose.yml --env-file .env.datasystem -p datasystemchallenge up -d db`.
-4. Carregue as variáveis com `set -a; . ./.env.datasystem; set +a` e execute `uv run python manage.py migrate` e `uv run python manage.py runserver`.
+**Requirements:** Python 3.12+, [uv](https://docs.astral.sh/uv/), Docker, Node.js 22 and npm. You do **not** need access to the private `FractawModulesInfrastructure` repository for the standalone database setup below.
 
-Use `POSTGRES_HOST=127.0.0.1` e `POSTGRES_PORT=5434` para o acesso local conforme o exemplo. O projeto `datasystemchallenge` mantém o volume do PostgreSQL separado do projeto `fractawmodules`. Para validar a base, execute `uv run python manage.py check`, `uv run python manage.py makemigrations --check` e `uv run python manage.py test` após carregar as variáveis.
+1. Prepare local environment variables:
 
-## Arquitetura, integração e identidade
+   ```sh
+   cp .env.example .env.datasystem
+   ```
 
-Para editar os estilos, execute `cd frontend`, `npm ci` e `npm run build`. Veja a [arquitetura visual e o build SCSS](docs/FRONTEND.md).
+   Edit `.env.datasystem` with your **own** `DJANGO_SECRET_KEY` and `POSTGRES_PASSWORD`. Use `POSTGRES_HOST=127.0.0.1`, `POSTGRES_PORT=5434`, and keep `DJANGO_DEBUG=true` and `DJANGO_SECURE_SSL_REDIRECT=false` for local HTTP only. Never commit this file.
 
-- [Roadmap do produto](docs/ROADMAP.md)
-- [Arquitetura do produto](docs/ARQUITETURA_PRODUTO.md)
-- [Estratégia e convenções da API](docs/API.md)
-- [Responsabilidade da integração por API](docs/INTEGRACAO_API.md)
-- [Identidade visual da Retorna](docs/IDENTIDADE_VISUAL.md)
-- [Guia vivo da apresentação](docs/APRESENTACAO.md)
-- [Deploy de demonstração no Heroku](docs/DEPLOY_HEROKU.md)
+2. Start an isolated PostgreSQL 17 instance:
 
-A direção arquitetural é manter um monólito modular Django, com PostgreSQL como banco de referência e API REST versionada como interface de primeira classe para integrações externas. Regras de domínio devem ser compartilhadas entre a interface web e a API.
+   ```sh
+   docker run -d --name retorna-postgres \
+     --env-file .env.datasystem \
+     -p 127.0.0.1:5434:5432 \
+     -v retorna-postgres-data:/var/lib/postgresql/data \
+     postgres:17
+   ```
 
-A API não substitui PDV, ERP ou e-commerce. Esses sistemas enviam fatos da operação; a Retorna aplica as regras de fidelidade, persiste o histórico e devolve o resultado correspondente conforme cada fase da vertical é implementada.
+   This is a Bash example. For Windows, use WSL/Git Bash or adapt the line continuations. The PostgreSQL volume persists independently of the container.
 
-## Kanban
+3. Install Python dependencies and build the frontend assets:
 
-[DataSystem Kanban](https://github.com/users/CaioDGeraldi/projects/6/views/1)
+   ```sh
+   uv sync --locked
+   npm ci
+   npm run heroku-postbuild
+   ```
 
-Estados oficiais: `Backlog` → `Em andamento` → `Revisão` → `Concluído`.
+4. Load the local configuration and migrate the database:
 
-## Modelos e processo
+   ```sh
+   set -a
+   . ./.env.datasystem
+   set +a
+   uv run python manage.py migrate
+   uv run python manage.py runserver
+   ```
 
-- [MVP](docs/modelos/MVP.md)
-- [Sprint](docs/modelos/SPRINT.md)
-- [Workflow de desenvolvimento](docs/workflow-desenvolvimento.md)
-- [Uso de IA](docs/USO_DE_IA.md)
-- [Coordenação da equipe](docs/COORDENACAO.md)
-- [Guia de contribuição](CONTRIBUTING.md)
+   Open `http://127.0.0.1:8000/`. The environment variables above apply to the current shell. Do not treat these development settings as production defaults.
+
+### Run checks and tests
+
+With the same environment variables loaded and PostgreSQL running:
+
+```sh
+uv run python manage.py check
+uv run python manage.py makemigrations --check
+uv run python manage.py spectacular --file /tmp/retorna-openapi.yml --validate
+uv run python manage.py test --noinput
+```
+
+Continuous integration additionally builds frontend assets and runs interface validations. See [the CI workflow](.github/workflows/ci.yml) and the [Actions history](https://github.com/CaioDGeraldi/DataSystemChallenge/actions).
+
+## Architecture and documentation
+
+The application follows a **modular Django monolith**. Domain rules are shared by the web interface and API, and PostgreSQL is the reference database. Integration clients provide business events; Retorna owns loyalty calculations and history.
+
+- [Technical case study for reviewers](docs/RECRUITER_CASE_STUDY.md)
+- [Product architecture](docs/ARQUITETURA_PRODUTO.md) (PT-BR)
+- [API design and conventions](docs/API.md) (PT-BR)
+- [Data model](docs/MODELAGEM_DE_DADOS.md) (PT-BR)
+- [API integration contract](docs/INTEGRACAO_API.md) (PT-BR)
+- [Frontend documentation](docs/FRONTEND.md) (PT-BR)
+- [Roadmap](docs/ROADMAP.md) (PT-BR)
+- [Heroku demonstration runbook](docs/DEPLOY_HEROKU.md) (PT-BR)
+- [Development workflow](docs/workflow-desenvolvimento.md) (PT-BR)
+- [AI-assisted development disclosure](docs/USO_DE_IA.md) (PT-BR)
+- [Contributing](CONTRIBUTING.md) (PT-BR)
+
+## Team and authorship
+
+Retorna was built as a **collaborative team project**. The repository includes issues, pull requests and development notes. It also openly documents the team's use of AI assistance. Architecture, implementation and testing claims should be evaluated against the source, rather than attributed to any one participant without examining the contribution history.
+
+**Naming:** `DataSystemChallenge` refers to the repository and challenge; `Retorna` to the product; `FATECalçados` to the fictitious demo company.
